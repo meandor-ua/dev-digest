@@ -1,13 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { PrMeta, PrDetail, GitHubClient, PrReviewComment } from '@devdigest/shared';
 import { PrCommentInput } from '@devdigest/shared';
 import * as t from '../../db/schema.js';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
-import { deriveReviewStatus } from './status.js';
+import { deriveReviewStatus, rollupSeverities } from './status.js';
+import { replacePrFiles } from '../_shared/pr-files.js';
 
 /**
  * F1 — pulls module. PR import via Octokit (list + per-PR detail).
@@ -113,19 +114,76 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
 
     // Latest-review SCORE per PR for the list's score ring. Computed on read
     // from reviews (no FK denorm); the list is small, so one IN-query + JS
-    // grouping is cheap. (The per-severity FINDINGS breakdown is intentionally
-    // not surfaced on the list — findings live on the PR detail page.)
+    // grouping is cheap.
     const prIds = rows.map((r) => r.id);
-    const latestReviewByPr = new Map<string, { score: number | null }>();
+    const latestReviewByPr = new Map<
+      string,
+      { id: string; score: number | null; runId: string | null }
+    >();
     if (prIds.length > 0) {
       const reviewRows = await container.db
-        .select({ prId: t.reviews.prId, score: t.reviews.score })
+        .select({ id: t.reviews.id, prId: t.reviews.prId, score: t.reviews.score, runId: t.reviews.runId })
         .from(t.reviews)
         .where(and(inArray(t.reviews.prId, prIds), eq(t.reviews.kind, 'review')))
         .orderBy(desc(t.reviews.createdAt));
       // Rows are newest-first → first seen per PR is the latest review.
       for (const rv of reviewRows) {
-        if (!latestReviewByPr.has(rv.prId)) latestReviewByPr.set(rv.prId, { score: rv.score });
+        if (!latestReviewByPr.has(rv.prId))
+          latestReviewByPr.set(rv.prId, { id: rv.id, score: rv.score, runId: rv.runId });
+      }
+    }
+
+    // Per-severity FINDINGS breakdown for the list's FINDINGS column —
+    // active (non-dismissed) findings on each PR's latest review ONLY (not
+    // aggregated across every historical review), mirroring the "latest
+    // review" scope SCORE already uses above. A plain COUNT/filter grouped in
+    // JS, same cheap one-IN-query pattern as the score lookup — no LLM call.
+    const latestReviewIds = [...latestReviewByPr.values()]
+      .map((r) => r.id)
+      .filter((id): id is string => id != null);
+    const severityByPr = new Map<string, ReturnType<typeof rollupSeverities>>();
+    if (latestReviewIds.length > 0) {
+      const findingRows = await container.db
+        .select({ prId: t.reviews.prId, severity: t.findings.severity })
+        .from(t.findings)
+        .innerJoin(t.reviews, eq(t.findings.reviewId, t.reviews.id))
+        .where(and(inArray(t.reviews.id, latestReviewIds), isNull(t.findings.dismissedAt)));
+      const byPr = new Map<string, { severity: string }[]>();
+      for (const fr of findingRows) {
+        const list = byPr.get(fr.prId) ?? [];
+        list.push({ severity: fr.severity });
+        byPr.set(fr.prId, list);
+      }
+      // A PR whose latest review exists but produced zero (active) findings
+      // is a KNOWN all-zero state, not "unknown" — default every PR that has
+      // a latest review, then overwrite with real counts where findings exist.
+      for (const prId of latestReviewByPr.keys()) severityByPr.set(prId, rollupSeverities([]));
+      for (const [prId, list] of byPr) severityByPr.set(prId, rollupSeverities(list));
+    }
+
+    // Cost of every SUCCESSFUL run ever recorded against each PR (all-time,
+    // not scoped to a single batch or review) for the list's cost badge.
+    // "Successful" = status 'done'; failed/cancelled/running runs are
+    // excluded regardless of any partial cost they happened to record. Runs
+    // with no cost data are skipped, not summed as $0 — the total is null
+    // only when every successful run lacks cost data. A PR with zero runs at
+    // all has no entry in `hasRunsByPr`, so `cost_usd` is left `undefined`
+    // below (omitted from the response) — the client shows no badge, not a
+    // "—" (acceptance criterion: "no runs — no badge"). A "—" is still
+    // correct once at least one run exists but no successful run has a known
+    // cost.
+    const costByPr = new Map<string, number | null>();
+    const hasRunsByPr = new Set<string>();
+    if (prIds.length > 0) {
+      const runRows = await container.db
+        .select({ prId: t.agentRuns.prId, status: t.agentRuns.status, costUsd: t.agentRuns.costUsd })
+        .from(t.agentRuns)
+        .where(and(eq(t.agentRuns.workspaceId, workspaceId), inArray(t.agentRuns.prId, prIds)));
+      for (const rr of runRows) {
+        if (!rr.prId) continue;
+        hasRunsByPr.add(rr.prId);
+        if (rr.status !== 'done' || rr.costUsd == null) continue;
+        costByPr.set(rr.prId, (costByPr.get(rr.prId) ?? 0) + rr.costUsd);
       }
     }
 
@@ -153,6 +211,12 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         opened_at: r.openedAt?.toISOString() ?? null,
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
+        cost_usd: hasRunsByPr.has(r.id) ? (costByPr.get(r.id) ?? null) : undefined,
+        findings_by_severity: (() => {
+          const sc = severityByPr.get(r.id);
+          if (!sc) return undefined;
+          return { CRITICAL: sc.critical, WARNING: sc.warning, SUGGESTION: sc.suggestion };
+        })(),
       };
     });
   });
@@ -179,18 +243,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       const gh = await container.github();
       const detail = await gh.getPullRequest({ owner: repo.owner, name: repo.name }, pr.number);
 
-      await container.db.delete(t.prFiles).where(eq(t.prFiles.prId, pr.id));
-      if (detail.files.length > 0) {
-        await container.db.insert(t.prFiles).values(
-          detail.files.map((f) => ({
-            prId: pr.id,
-            path: f.path,
-            additions: f.additions,
-            deletions: f.deletions,
-            patch: f.patch ?? null,
-          })),
-        );
-      }
+      await replacePrFiles(container.db, pr.id, detail.files);
       await container.db.delete(t.prCommits).where(eq(t.prCommits.prId, pr.id));
       if (detail.commits.length > 0) {
         await container.db.insert(t.prCommits).values(
@@ -212,10 +265,29 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
           additions: detail.additions,
           deletions: detail.deletions,
           filesCount: detail.files_count,
+          // Same freshness fields the list route upserts on every load, so the
+          // list and this page derive their review status from identical data.
+          headSha: detail.head_sha,
+          status: detail.status,
+          updatedAt: detail.updated_at ? new Date(detail.updated_at) : pr.updatedAt,
         })
         .where(eq(t.pullRequests.id, pr.id));
 
-      return { ...detail, id: pr.id };
+      // `detail.status` is GitHub's MERGE state (open/merged/closed). Derive the
+      // review status exactly like the PR list does — returning the raw merge
+      // state made every open PR read "Needs review" here while the list said
+      // "Reviewed".
+      return {
+        ...detail,
+        id: pr.id,
+        status: deriveReviewStatus({
+          ghStatus: detail.status,
+          lastReviewedSha: pr.lastReviewedSha,
+          headSha: detail.head_sha,
+          updatedAt: detail.updated_at ? new Date(detail.updated_at) : pr.updatedAt,
+          now: Date.now(),
+        }),
+      };
     } catch (err) {
       app.log.warn({ err }, 'GitHub PR detail refresh skipped (no token / offline); serving persisted detail');
       const files = await container.db.select().from(t.prFiles).where(eq(t.prFiles.prId, pr.id));
@@ -231,7 +303,13 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         additions: pr.additions,
         deletions: pr.deletions,
         files_count: pr.filesCount,
-        status: pr.status as PrDetail['status'],
+        status: deriveReviewStatus({
+          ghStatus: pr.status,
+          lastReviewedSha: pr.lastReviewedSha,
+          headSha: pr.headSha,
+          updatedAt: pr.updatedAt,
+          now: Date.now(),
+        }),
         opened_at: pr.openedAt?.toISOString() ?? null,
         updated_at: pr.updatedAt?.toISOString() ?? null,
         body: pr.body ?? null,

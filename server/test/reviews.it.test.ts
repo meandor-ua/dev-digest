@@ -4,7 +4,7 @@ import { waitForPrRuns } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
-import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
+import { MockLLMProvider, MockEmbedder, MockGitClient, MockGitHubClient } from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Review } from '@devdigest/shared';
@@ -159,7 +159,13 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
 
   it('runs a review: map-reduce + grounding drops the hallucinated finding, keeps the valid one', async () => {
     const app = await appWith(REVIEW_FIXTURE);
-    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+
+    // Before any run exists, the PR list omits cost_usd entirely (no badge),
+    // not null (which would mean "a run exists, cost unknown").
+    const beforeRun = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
+    const prBeforeRun = beforeRun.find((p: { id: string }) => p.id === pr.id);
+    expect('cost_usd' in prBeforeRun).toBe(false);
 
     const agent = (
       await app.inject({
@@ -201,6 +207,7 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     const trace = (await app.inject({ method: 'GET', url: `/runs/${runId}/trace` })).json();
     expect(trace.config.model).toBe('gpt-4.1');
     expect(trace.stats.grounding).toBe('1/2 passed');
+    expect(trace.stats.cost_usd).toBe(0.001);
     expect(trace.log.length).toBeGreaterThan(0);
 
     // agent_runs row populated for A5 to aggregate
@@ -208,6 +215,13 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(run!.status).toBe('done');
     expect(run!.findingsCount).toBe(1);
     expect(run!.grounding).toBe('1/2 passed');
+    expect(run!.costUsd).toBe(0.001);
+
+    // PR-list COST column: all-time sum of the PR's successful runs (only
+    // one run here, so it's just this run's cost).
+    const pulls = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
+    const listedPr = pulls.find((p: { id: string }) => p.id === pr.id);
+    expect(listedPr.cost_usd).toBe(0.001);
 
     await app.close();
   });
@@ -297,6 +311,298 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     ).json();
     // seed has 2 enabled agents; we may have created more above in this PR's ws.
     expect(body.runs.length).toBeGreaterThanOrEqual(2);
+    await app.close();
+  });
+
+  it('PR-list COST sums every run of a multi-agent "Review all", not just one', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+
+    // Disable every agent left enabled by earlier tests in this file (agents
+    // are workspace-scoped, not PR-scoped) so `all: true` below targets
+    // EXACTLY the two we create next.
+    await pg.handle.db.update(t.agents).set({ enabled: false }).where(eq(t.agents.workspaceId, workspaceId));
+
+    await app.inject({
+      method: 'POST',
+      url: '/agents',
+      payload: { name: 'BatchA', provider: 'openai', model: 'gpt-4.1', system_prompt: 'a' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/agents',
+      payload: { name: 'BatchB', provider: 'openai', model: 'gpt-4.1', system_prompt: 'b' },
+    });
+
+    // ONE "Review all" click — service.runReview() creates one agent_runs
+    // row per enabled agent; the PR-list cost must include both.
+    const body = (
+      await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { all: true } })
+    ).json();
+    expect(body.runs).toHaveLength(2);
+    await waitForPrRuns(pg.handle.db, pr.id, { expected: 2 });
+
+    const pulls = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
+    const listedPr = pulls.find((p: { id: string }) => p.id === pr.id);
+    expect(listedPr.cost_usd).toBeCloseTo(0.002, 6);
+
+    await app.close();
+  });
+
+  it('PR-list COST is a true all-time sum across separate historical batches, not just the latest', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+
+    // Two runs recorded hours apart — under the old batch-window logic these
+    // would NOT have been summed together; the all-time sum must include both.
+    await pg.handle.db.insert(t.agentRuns).values([
+      {
+        workspaceId,
+        prId: pr.id,
+        status: 'done',
+        costUsd: 0.001,
+        ranAt: new Date('2026-01-01T00:00:00Z'),
+      },
+      {
+        workspaceId,
+        prId: pr.id,
+        status: 'done',
+        costUsd: 0.004,
+        ranAt: new Date('2026-01-02T00:00:00Z'),
+      },
+    ]);
+
+    const pulls = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
+    const listedPr = pulls.find((p: { id: string }) => p.id === pr.id);
+    expect(listedPr.cost_usd).toBeCloseTo(0.005, 6);
+
+    await app.close();
+  });
+
+  it('PR-list COST is null (not summed as $0) when every run failed, even if one recorded partial cost', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+
+    await pg.handle.db.insert(t.agentRuns).values([
+      { workspaceId, prId: pr.id, status: 'failed', costUsd: 0.0002, ranAt: new Date() },
+      { workspaceId, prId: pr.id, status: 'failed', costUsd: null, ranAt: new Date() },
+    ]);
+
+    const pulls = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
+    const listedPr = pulls.find((p: { id: string }) => p.id === pr.id);
+    expect(listedPr.cost_usd).toBeNull();
+
+    await app.close();
+  });
+
+  /**
+   * `has_trace` on GET /pulls/:id/runs — a narrow EXISTS flag from a LEFT JOIN
+   * against run_traces (never the jsonb `trace` column itself). It gates the
+   * timeline's trace button so a run that can never produce a trace document
+   * doesn't advertise one.
+   */
+  it('GET /pulls/:id/runs reports has_trace: true once a trace was saved, false for a reaped run', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = (
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: { name: 'Sec-trace', provider: 'openai', model: 'gpt-4.1', system_prompt: 'sec' },
+      })
+    ).json();
+
+    // A real run writes a run_traces document as part of finishing.
+    const started = (
+      await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } })
+    ).json();
+    const tracedRunId = started.runs[0].run_id as string;
+    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+
+    // A run reaped by reapStaleRunningRuns() never calls saveRunTrace: insert
+    // a stuck 'running' row, then reap it exactly the way boot does.
+    const [stale] = await pg.handle.db
+      .insert(t.agentRuns)
+      .values({ workspaceId, prId: pr.id, status: 'running', ranAt: new Date() })
+      .returning();
+    // buildApp() awaits reapStaleRunningRuns() during boot — booting a second
+    // app is the real code path, not a hand-rolled UPDATE.
+    const rebooted = await appWith(REVIEW_FIXTURE);
+    await rebooted.close();
+
+    const runs = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/runs` })).json();
+    const traced = runs.find((r: { run_id: string }) => r.run_id === tracedRunId);
+    const reapedRun = runs.find((r: { run_id: string }) => r.run_id === stale!.id);
+    expect(traced.has_trace).toBe(true);
+    expect(reapedRun.status).toBe('failed');
+    expect(reapedRun.has_trace).toBe(false);
+
+    // The list endpoint must never ship the trace jsonb itself — only the flag.
+    for (const r of runs) expect('trace' in r).toBe(false);
+
+    await app.close();
+  });
+
+  it('PR-list COST sums only the successful run when mixed with a failed one', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+
+    await pg.handle.db.insert(t.agentRuns).values([
+      { workspaceId, prId: pr.id, status: 'done', costUsd: 0.003, ranAt: new Date() },
+      { workspaceId, prId: pr.id, status: 'failed', costUsd: 0.0009, ranAt: new Date() },
+    ]);
+
+    const pulls = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
+    const listedPr = pulls.find((p: { id: string }) => p.id === pr.id);
+    expect(listedPr.cost_usd).toBeCloseTo(0.003, 6);
+
+    await app.close();
+  });
+
+  async function makeAgent(app: Awaited<ReturnType<typeof appWith>>, name: string) {
+    return (
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: { name, provider: 'openai', model: 'gpt-4.1', system_prompt: 'sec' },
+      })
+    ).json();
+  }
+
+  it('a run reported done (absent from /runs/active) already has its trace', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = await makeAgent(app, 'Sec-order');
+    const started = (
+      await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } })
+    ).json();
+    const runId = started.runs[0].run_id as string;
+
+    // Poll the same signal the client uses; the instant the run leaves the
+    // active set its trace must exist (never a 404 window).
+    for (let i = 0; i < 400; i++) {
+      const active = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/runs/active` })).json();
+      if (!active.some((r: { run_id: string }) => r.run_id === runId)) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    const trace = await app.inject({ method: 'GET', url: `/runs/${runId}/trace` });
+    expect(trace.statusCode).toBe(200);
+    const runs = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/runs` })).json();
+    expect(runs.find((r: { run_id: string }) => r.run_id === runId).has_trace).toBe(true);
+
+    await app.close();
+  });
+
+  it('an empty diff fails the run closed: no review, no LLM call, PR untouched', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: '' }),
+        llm: { openai: llm },
+        // GitHub unreachable too — the last-resort patch fetch must not rescue it.
+        github: { getPullRequest: async () => { throw new Error('offline'); } } as never,
+      },
+    });
+    const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    // No stored patch and (empty git diff) no clone → nothing to review.
+    await pg.handle.db.update(t.prFiles).set({ patch: null }).where(eq(t.prFiles.prId, pr.id));
+    const agent = await makeAgent(app, 'Sec-empty');
+
+    const res = await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().runs).toHaveLength(1);
+
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('failed');
+    expect(runs[0]!.error).toContain('No reviewable diff');
+    expect(runs[0]!.error).toContain('GitHub could not be reached');
+    expect(runs[0]!.costUsd).toBeNull();
+
+    const reviews = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/reviews` })).json();
+    expect(reviews).toHaveLength(0);
+    const listed = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` }))
+      .json()
+      .find((p: { id: string }) => p.id === pr.id);
+    expect(listed.score ?? null).toBeNull();
+    expect(listed.cost_usd).toBeNull();
+    expect(llm.calls.filter((c) => c.method !== 'listModels')).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('a PR with a stored patch still reviews normally (empty-diff guard does not regress it)', async () => {
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: '' }),
+        llm: { openai: new MockLLMProvider('openai', { structured: REVIEW_FIXTURE }) },
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId); // has a patch in pr_files
+    const agent = await makeAgent(app, 'Sec-patched');
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+    const reviews = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/reviews` })).json();
+    expect(reviews).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it('a PR imported without patches fetches them from GitHub and reviews normally', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: '' }), // clone has no diff for the PR head
+        github: new MockGitHubClient(), // serves src/config.ts with a patch
+        llm: { openai: llm },
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    // As the PR list leaves it: no pr_files at all.
+    await pg.handle.db.delete(t.prFiles).where(eq(t.prFiles.prId, pr.id));
+    const agent = await makeAgent(app, 'Sec-fetch');
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+    const files = await pg.handle.db.select().from(t.prFiles).where(eq(t.prFiles.prId, pr.id));
+    expect(files.map((f) => f.path)).toEqual(['src/config.ts']);
+    expect(files[0]!.patch).toContain('stripeKey');
+
+    await app.close();
+  });
+
+  it('a PR that GitHub says changes no files fails with THAT reason, not a token hint', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const gh = new MockGitHubClient();
+    const real = gh.getPullRequest.bind(gh);
+    // Like quick-blog #36: open, 2 commits, but 0 changed files vs base.
+    gh.getPullRequest = async (r, n) => ({ ...(await real(r, n)), files: [], files_count: 0, additions: 0, deletions: 0 });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: { embedder: new MockEmbedder(), git: new MockGitClient({ diff: '' }), github: gh, llm: { openai: llm } },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    await pg.handle.db.delete(t.prFiles).where(eq(t.prFiles.prId, pr.id));
+    const agent = await makeAgent(app, 'Sec-nofiles');
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('failed');
+    expect(runs[0]!.error).toContain('changes no files');
+    expect(runs[0]!.error).not.toContain('token');
+    expect(llm.calls.filter((c) => c.method !== 'listModels')).toHaveLength(0);
+
     await app.close();
   });
 });

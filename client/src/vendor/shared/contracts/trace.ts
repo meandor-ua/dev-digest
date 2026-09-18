@@ -61,6 +61,10 @@ export const RunStats = z.object({
   duration_ms: z.number().int(),
   tokens_in: z.number().int(),
   tokens_out: z.number().int(),
+  /** USD cost of this run; null = no cost data (never fabricated). Optional
+   *  (not just nullable): a run_traces row persisted before this field
+   *  existed has no `cost_usd` key at all in its stored jsonb. */
+  cost_usd: z.number().nullish(),
   findings: z.number().int(),
   grounding: z.string(),
 });
@@ -109,5 +113,12 @@ export const RunSummary = z.object({
   // findings that trip the agent's gate. Null on failed/cancelled runs.
   score: z.number().int().nullable(),
   blockers: z.number().int().nullable(),
+  /** USD cost of this run; null = no cost data (never fabricated). */
+  cost_usd: z.number().nullable(),
+  /** True when a `run_traces` document exists for this run. Derived server-side
+   *  from a LEFT JOIN flag — never the trace itself (that jsonb holds the whole
+   *  run log). Optional so pre-existing `RunSummary` fixtures/rows stay valid;
+   *  treat a missing value as "unknown, assume a trace may exist". */
+  has_trace: z.boolean().optional(),
 });
 export type RunSummary = z.infer<typeof RunSummary>;

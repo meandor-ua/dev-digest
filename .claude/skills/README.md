@@ -1,6 +1,6 @@
 # Skills
 
-Reusable AI skills that provide specialized knowledge and workflows. Canonical location is `.claude/skills/` with a symlink at `.cursor/skills/ → ../.claude/skills` for Cursor compatibility. Shared with the team via version control.
+Reusable AI skills that provide specialized knowledge and workflows. Canonical location is `.claude/skills/`, shared with the team via version control.
 
 ## Catalog
 
@@ -16,6 +16,9 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [typescript-expert](typescript-expert/SKILL.md) | Full-stack | Type-level programming, performance, tooling, migrations |
 | [security](security/SKILL.md) | Full-stack | OWASP Top 10:2025, auth, injection, uploads, secrets |
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
+| [engineering-insights](engineering-insights/SKILL.md) | Local | Capture non-obvious findings into the right `INSIGHTS.md` during/after a session |
+| [esbuild-arch-mismatch](esbuild-arch-mismatch/SKILL.md) | Local | Diagnose/work around esbuild native-binary CPU-arch mismatches in this repo |
+| [plan-adversarial-review](plan-adversarial-review/SKILL.md) | Local | Independently re-verify a drafted implementation plan against live code, project docs and tests before coding |
 
 ## What Are Skills?
 
@@ -37,3 +40,10 @@ Each skill has:
 - `SKILL.md` — Main skill file with rules and conventions (required)
 - `examples.md` — Code examples showing good/bad patterns (recommended)
 - `references.md` — Sources and rationale (optional)
+
+A skill isn't done until it's in the **Catalog** table above — add a row
+(scope `Local` for one authored in this repo, or the matching domain scope
+for a vendored one) in the same commit that adds `SKILL.md`. Vendored skills
+also get an entry in `skills-lock.json`; skills authored locally (like
+`engineering-insights`) don't and rely on the catalog row alone for
+discoverability.

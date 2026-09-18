@@ -40,6 +40,28 @@ export const s = {
   } satisfies CSSProperties,
   sizeBadgeBorder: (color: string): CSSProperties => ({ border: `1px solid ${color}` }),
   scoreCell: { display: "flex", alignItems: "center" } satisfies CSSProperties,
+  costCell: {
+    fontSize: 13,
+    color: "var(--text-secondary)",
+    textAlign: "right",
+  } satisfies CSSProperties,
+  findingsCell: {
+    display: "flex",
+    alignItems: "center",
+  } satisfies CSSProperties,
+  actionsCell: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  } satisfies CSSProperties,
+  runningChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    marginRight: 6,
+    fontSize: 12,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
   updatedCell: {
     fontSize: 12,
     color: "var(--text-muted)",
@@ -55,6 +77,7 @@ export const s = {
     flexWrap: "wrap",
   } satisfies CSSProperties,
   filterChips: { display: "flex", gap: 8 } satisfies CSSProperties,
+  lastSynced: { fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" } satisfies CSSProperties,
   filterActions: {
     marginLeft: "auto",
     display: "flex",

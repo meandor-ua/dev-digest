@@ -16,6 +16,7 @@ export function VerdictBanner({
   findingsCount,
   blockers,
   agentName,
+  footer,
 }: {
   verdict: Verdict;
   summary: string | null;
@@ -23,6 +24,8 @@ export function VerdictBanner({
   findingsCount: number;
   blockers: number;
   agentName?: string | null;
+  /** Optional content rendered under "PR SCORE" (e.g. cost / tokens). */
+  footer?: React.ReactNode;
 }) {
   const t = useTranslations("prReview");
   const m = VERDICT_META[verdict] ?? VERDICT_META.comment;
@@ -47,10 +50,20 @@ export function VerdictBanner({
         </div>
         {summary && <p style={s.summary}>{summary}</p>}
       </div>
-      {score != null && (
+      {/* Ring colour = CircularScore's score thresholds (green ≥75, amber
+          ≥50, red below) — the same rule as the PR list and the Timeline.
+          A 0 score shows no ring at all. */}
+      {/* The footer (cost / tokens) must survive a hidden ring — it lives in
+          this column, so the column renders whenever EITHER is present. */}
+      {(!!score || footer) && (
         <div style={s.scoreCol}>
-          <CircularScore score={score} size={52} stroke={5} />
-          <span style={s.scoreLabel}>{t("verdict.prScore")}</span>
+          {!!score && (
+            <>
+              <CircularScore score={score} size={52} stroke={5} />
+              <span style={s.scoreLabel}>{t("verdict.prScore")}</span>
+            </>
+          )}
+          {footer}
         </div>
       )}
     </div>

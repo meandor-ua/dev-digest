@@ -1,14 +1,22 @@
-/* RunReviewDropdown — ported from components2.jsx.
-   "Run all enabled agents" / a specific agent → kicks off POST /pulls/:id/review
-   and hands the resulting runIds up so the parent can stream SSE live status. */
+/* RunReviewDropdown — "Run all enabled agents" / a specific agent → kicks off
+   POST /pulls/:id/review and hands the resulting runIds up so the parent can
+   stream SSE live status.
+
+   Lives in `src/components/` (not a route-local `_components/`) because it is
+   used from TWO routes: the PR detail header and the PR list's Actions column.
+   The list usage passes `kind="ghost"` (a quiet outlined "Run Review ⌄" that
+   brightens on hover, per the design) and `menuPortal` (the list's table card
+   is `overflow: hidden`, which would clip an in-place absolutely-positioned
+   menu on the bottom rows). */
 "use client";
 
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, type DropdownItemDef } from "@devdigest/ui";
-import { useAgents } from "../../../../../../../lib/hooks/agents";
-import { useRunReview } from "../../../../../../../lib/hooks/reviews";
+import { useAgents } from "@/lib/hooks/agents";
+import { useRunReview } from "@/lib/hooks/reviews";
+import { notify } from "@/lib/toast";
 import { DROPDOWN_WIDTH } from "./constants";
 
 export function RunReviewDropdown({
@@ -16,15 +24,21 @@ export function RunReviewDropdown({
   size = "sm",
   kind = "primary",
   warnMerged = false,
+  menuPortal = false,
   onRunStart,
   onRunsStarted,
   onRunSettled,
 }: {
   prId: string;
   size?: "sm" | "md" | "lg";
-  kind?: "primary" | "secondary";
+  /** `ghost` = the PR list's quiet outlined trigger; hover highlight comes
+   *  from the shared Button primitive. */
+  kind?: "primary" | "secondary" | "ghost";
   /** PR is already merged/closed — dim the trigger and warn, but still allow. */
   warnMerged?: boolean;
+  /** Render the menu into document.body — required inside an `overflow: hidden`
+   *  container such as the PR list's table card. */
+  menuPortal?: boolean;
   /** Fired the moment a run is kicked off (before it completes). */
   onRunStart?: () => void;
   onRunsStarted?: (runIds: string[]) => void;
@@ -42,7 +56,9 @@ export function RunReviewDropdown({
     onRunStart?.();
     try {
       const res = await run.mutateAsync({ prId, ...opts });
-      onRunsStarted?.(res.runs.map((r) => r.run_id));
+      const runIds = res.runs.map((r) => r.run_id);
+      notify.info(t("runReview.started", { count: runIds.length }));
+      onRunsStarted?.(runIds);
     } finally {
       onRunSettled?.();
     }
@@ -81,18 +97,21 @@ export function RunReviewDropdown({
     { label: t("runReview.configureAgents"), icon: "Settings", muted: true, onClick: () => router.push("/agents") },
   ];
 
+  const label = run.isPending ? t("runReview.running") : t("runReview.runReview");
+
   return (
     <Dropdown
       width={DROPDOWN_WIDTH}
       align="right"
+      portal={menuPortal}
       items={items}
       trigger={
         <span
-          title={warnMerged ? t("runReview.mergedTooltip") : undefined}
+          title={warnMerged ? t("runReview.mergedTooltip") : t("runReview.runReview")}
           style={warnMerged ? { opacity: 0.6 } : undefined}
         >
           <Button kind={kind} size={size} iconRight="ChevronDown" icon="Sparkles" loading={run.isPending}>
-            {run.isPending ? t("runReview.running") : t("runReview.runReview")}
+            {label}
           </Button>
         </span>
       }

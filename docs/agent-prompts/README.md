@@ -111,9 +111,11 @@ numbers and gates from what the model returns:
 - **Findings are citation-grounded**: a finding whose line range doesn't intersect a
   real diff hunk is dropped (`grounding.ts`). Cite real `file:line` from the diff or
   the finding disappears.
-- **`verdict` is currently passed through from the model** (`run.ts:208`). That is
-  why a wrong verdict reaches the UI unchanged — and why the verdict convention
-  above is load-bearing until/unless the verdict is also derived deterministically.
+- **`verdict` is currently passed through from the model** (`run.ts:208`) and
+  stored as-is. The client no longer DISPLAYS it raw — it derives the shown
+  verdict from the active findings (`client/src/lib/findings.ts`:
+  `effectiveVerdict` / `verdictFromCounts`) — but the stored value is still the
+  model's, so the verdict convention above still matters.
 
 ## Severity / verdict / gate at a glance
 

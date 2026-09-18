@@ -26,6 +26,11 @@
     "blockers": " · {count} blockers",
     "prScore": "PR SCORE"
   },
+  "brief": {
+    "title": "PR BRIEF",
+    "notReviewedTitle": "Not reviewed yet",
+    "notReviewedBody": "Run a review to generate a brief. Use Run Review ▾ above."
+  },
   "panel": {
     "hideLowConfidence": "Hide low confidence",
     "noMatchTitle": "No findings match",
@@ -36,6 +41,7 @@
     "configureAgents": "Configure agents…",
     "running": "Running…",
     "runReview": "Run Review",
+    "started": "Review started · {count} agent(s)",
     "mergedWarning": "Already merged — review is informational",
     "mergedTooltip": "This PR is already merged; running a review won’t affect the merged code."
   },
@@ -91,7 +97,10 @@
       "author": "Author",
       "size": "Size",
       "score": "Score",
+      "findings": "Findings",
       "status": "Status",
+      "cost": "Cost",
+      "actions": "",
       "updated": "Updated"
     },
     "filesCount": "{count} files",
@@ -103,6 +112,7 @@
   },
   "timeline": {
     "goToReview": "Jump to this run’s findings below",
+    "copyLink": "Copy a shareable link to this run",
     "openTrace": "Open run trace & logs",
     "deleteRun": "Delete run"
   }

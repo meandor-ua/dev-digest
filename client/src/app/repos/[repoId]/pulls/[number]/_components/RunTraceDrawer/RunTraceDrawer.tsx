@@ -43,9 +43,11 @@ export default function RunTraceDrawer({
 }: RunTraceDrawerProps) {
   const t = useTranslations("runs");
   const [tab, setTab] = React.useState<string>(running ? "log" : "trace");
-  const { events, running: liveRunning } = useRunEvents(running ? [runId] : []);
-  // Load the persisted trace once we're not (or no longer) running.
-  const stillRunning = running && liveRunning;
+  const { events } = useRunEvents(running ? [runId] : []);
+  // `running` comes from the server's active-run set — the authority on "still
+  // going" (the SSE socket can close early without the run being finished).
+  const stillRunning = running;
+  // Load the persisted trace once the run is no longer active.
   const { data: trace, isLoading } = useRunTrace(runId, !stillRunning);
 
   // Copy the model's raw output to the clipboard (footer button), with a brief
@@ -61,7 +63,7 @@ export default function RunTraceDrawer({
   const log: LogLine[] = eventsToLog(events);
   // When historical, fall back to the trace's persisted log for the Live-log tab.
   const persistedLog: LogLine[] = traceLog(trace);
-  const shownLog = running ? log : persistedLog;
+  const shownLog = stillRunning ? log : persistedLog.length ? persistedLog : log;
 
   const prCtx = prNumber != null ? `${t("drawer.pr", { number: prNumber })} · ` : "";
   const subtitle = `${prCtx}${stillRunning ? t("drawer.running") : t("drawer.completed")}`;

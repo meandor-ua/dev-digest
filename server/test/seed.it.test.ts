@@ -1,0 +1,46 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
+import { seed } from '../src/db/seed.js';
+import * as t from '../src/db/schema.js';
+import { eq } from 'drizzle-orm';
+
+const hasDocker = await dockerAvailable();
+const d = hasDocker ? describe : describe.skip;
+
+d('seed: demo PR #482 is reviewable (Testcontainers pg)', () => {
+  let pg: PgFixture;
+  beforeAll(async () => {
+    pg = await startPg();
+    await seed(pg.handle.db);
+  });
+  afterAll(async () => {
+    await pg?.stop();
+  });
+
+  async function files() {
+    const [pr] = await pg.handle.db.select().from(t.pullRequests).where(eq(t.pullRequests.number, 482));
+    return pg.handle.db.select().from(t.prFiles).where(eq(t.prFiles.prId, pr!.id));
+  }
+
+  it('gives all four pr_files real patches covering the lines the seeded findings cite', async () => {
+    const rows = await files();
+    expect(rows).toHaveLength(4);
+    for (const r of rows) expect(r.patch && r.patch.length).toBeGreaterThan(0);
+    const config = rows.find((r) => r.path === 'src/config.ts')!;
+    const users = rows.find((r) => r.path === 'src/api/users.ts')!;
+    // config.ts hunk starts at new line 9 with 3 context lines → first '+' is line 12
+    expect(config.patch).toMatch(/^@@ -9,3 \+9,7 @@/);
+    expect(config.patch).toContain('+  stripeSecretKey');
+    // users.ts additions start at new line 45 and run through 52
+    expect(users.patch).toMatch(/^@@ -43,5 \+43,11 @@/);
+  });
+
+  it('a second seed() restores blanked patches (idempotent backfill)', async () => {
+    const [pr] = await pg.handle.db.select().from(t.pullRequests).where(eq(t.pullRequests.number, 482));
+    await pg.handle.db.update(t.prFiles).set({ patch: null }).where(eq(t.prFiles.prId, pr!.id));
+    await seed(pg.handle.db);
+    const rows = await files();
+    expect(rows).toHaveLength(4);
+    for (const r of rows) expect(r.patch && r.patch.length).toBeGreaterThan(0);
+  });
+});
