@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PrMeta, ReviewRecord } from "@devdigest/shared";
 import messages from "../../../../../../../messages/en/prReview.json";
 import { PRRow } from "./PRRow";
@@ -15,10 +16,23 @@ let mockReviews: ReviewRecord[] | undefined = undefined;
 // PRRow now also renders RunReviewDropdown (the Actions column), which pulls
 // `useRunReview` out of this SAME module and `useAgents` out of another —
 // without both mocks every test in this file throws on an undefined hook.
+let mockActive: { run_id: string }[] | undefined = undefined;
+const activeArgs: (string | null)[] = [];
+const settleArgs: (string[] | undefined)[] = [];
+const mutateAsync = vi.fn();
 vi.mock("../../../../../../lib/hooks/reviews", () => ({
   usePrReviews: () => ({ data: mockReviews }),
-  useRunReview: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRunReview: () => ({ mutateAsync, isPending: false }),
+  usePrActiveRuns: (id: string | null) => {
+    activeArgs.push(id);
+    // Like react-query, a disabled query keeps returning its cached data.
+    return { data: mockActive, dataUpdatedAt: Date.now() + 1000 };
+  },
+  useRefreshWhenRunsSettle: (_id: string, ids: string[] | undefined) => {
+    settleArgs.push(ids);
+  },
 }));
+vi.mock("@/lib/toast", () => ({ notify: { info: vi.fn(), error: vi.fn(), success: vi.fn() } }));
 vi.mock("@/lib/hooks/agents", () => ({
   useAgents: () => ({ data: [{ id: "a1", name: "Security", model: "gpt-4.1", enabled: true }] }),
 }));
@@ -27,6 +41,10 @@ afterEach(() => {
   cleanup();
   push.mockClear();
   mockReviews = undefined;
+  mockActive = undefined;
+  activeArgs.length = 0;
+  settleArgs.length = 0;
+  mutateAsync.mockReset();
 });
 
 function pr(o: Partial<PrMeta>): PrMeta {
@@ -52,9 +70,11 @@ function pr(o: Partial<PrMeta>): PrMeta {
 
 function renderRow(p: PrMeta) {
   return render(
-    <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
-      <PRRow pr={p} repoId="r1" />
-    </NextIntlClientProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
+        <PRRow pr={p} repoId="r1" />
+      </NextIntlClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -298,5 +318,53 @@ describe("PRRow — physical cell order matches COLUMN_KEYS", () => {
 
   it("the GRID track count matches COLUMN_KEYS (a partial reorder would desync them)", () => {
     expect(GRID.trim().split(/\s+/)).toHaveLength(COLUMN_KEYS.length);
+  });
+});
+
+describe("PRRow — run started from the list", () => {
+  it("an idle row never watches active runs and shows no chip", () => {
+    renderRow(pr({}));
+    expect(activeArgs.every((a) => a === null)).toBe(true);
+    expect(screen.queryByTestId("running-chip")).toBeNull();
+  });
+
+  it("after a run starts, shows the Running… chip and watches this PR's active runs", async () => {
+    mutateAsync.mockResolvedValue({ runs: [{ run_id: "run-1" }] });
+    mockActive = [{ run_id: "run-1" }];
+    renderRow(pr({}));
+    fireEvent.click(screen.getByRole("button", { name: "Run Review" }));
+    fireEvent.click(screen.getByText("Run all enabled agents"));
+    expect(await screen.findByTestId("running-chip")).toHaveTextContent("Running…");
+    expect(mutateAsync).toHaveBeenCalledWith({ prId: "pr-1", all: true });
+    expect(activeArgs).toContain("pr-1");
+    expect(settleArgs.at(-1)).toEqual(["run-1"]);
+  });
+
+  it("drops the chip once the active set empties", async () => {
+    mutateAsync.mockResolvedValue({ runs: [{ run_id: "run-1" }] });
+    mockActive = [];
+    renderRow(pr({}));
+    fireEvent.click(screen.getByRole("button", { name: "Run Review" }));
+    fireEvent.click(screen.getByText("Run all enabled agents"));
+    await vi.waitFor(() => expect(screen.queryByTestId("running-chip")).toBeNull());
+    expect(settleArgs).toContainEqual([]);
+  });
+});
+
+describe("PRRow — score ring", () => {
+  const strokes = (c: HTMLElement) =>
+    [...c.querySelectorAll('svg[style*="rotate"] circle')].map((x) => x.getAttribute("stroke"));
+  it.each([
+    [90, "var(--ok)"],
+    [61, "var(--warn)"],
+    [20, "var(--crit)"],
+  ])("score %i rings %s regardless of findings", (score, color) => {
+    const { container } = renderRow(pr({ score, findings_by_severity: { CRITICAL: 1, WARNING: 0, SUGGESTION: 0 } }));
+    expect(strokes(container)).toContain(color);
+  });
+
+  it("a 0 score shows no ring", () => {
+    const { container } = renderRow(pr({ score: 0, findings_by_severity: { CRITICAL: 3, WARNING: 0, SUGGESTION: 0 } }));
+    expect(container.querySelector('svg[style*="rotate"] circle')).toBeNull();
   });
 });

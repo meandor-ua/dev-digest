@@ -27,6 +27,14 @@ export type ReviewRunRow =
   | { kind: "review"; review: ReviewRecord }
   | { kind: "failed"; run: RunSummary };
 
+/** Stable, never-null identity of a Review-runs row — what `?agent=` holds.
+ *  A review with no producing run (e.g. the seeded demo review, `run_id: null`)
+ *  falls back to its own review id, otherwise every targeting / URL-sync path
+ *  keyed on the run id silently skips it. */
+export function reviewRunRowKey(row: ReviewRunRow): string {
+  return row.kind === "review" ? (row.review.run_id ?? row.review.id) : row.run.run_id;
+}
+
 function formatWhen(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
@@ -81,15 +89,17 @@ export function ReviewRunAccordion({
   const review = row.kind === "review" ? row.review : null;
   const failedRun = row.kind === "failed" ? row.run : null;
   const runId = review?.run_id ?? failedRun?.run_id ?? null;
+  // Targeting / onOpen use the row key, which exists even without a run id.
+  const rowKey = reviewRunRowKey(row);
   const agentName = review?.agent_name ?? failedRun?.agent_name ?? "Agent";
   const when = review?.created_at ?? failedRun?.ran_at ?? null;
 
   React.useEffect(() => {
-    if (runId && runId === targetRunId) {
+    if (rowKey === targetRunId) {
       setOpen(true);
       rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [targetRunId, targetNonce, runId]);
+  }, [targetRunId, targetNonce, rowKey]);
 
   const del = useDeleteReview(prId);
   const findings = React.useMemo(() => review?.findings ?? [], [review]);
@@ -111,12 +121,12 @@ export function ReviewRunAccordion({
   // `router.replace()` it bubbles up to — twice per click in dev.
   const toggle = () => {
     const next = !open;
-    if (next && runId) onOpen?.(runId);
+    if (next) onOpen?.(rowKey);
     setOpen(next);
   };
 
   return (
-    <div ref={rootRef} id={runId ? `review-run-${runId}` : undefined} style={s.root}>
+    <div ref={rootRef} id={`review-run-${rowKey}`} style={s.root}>
       <div style={s.header}>
         <Icon.Cpu size={15} style={s.agentIcon} />
         <span style={s.agentName}>{agentName}</span>

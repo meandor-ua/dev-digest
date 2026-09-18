@@ -129,3 +129,69 @@ you, so the next agent/session doesn't relearn it.
   updated_at so a later list read derives from identical data. Evidence:
   `server/src/modules/pulls/routes.ts:293,316`; guarded by
   `server/test/pulls-detail-status.it.test.ts`.
+
+- **2026-09-18** — `completeAgentRun` before `saveRunTrace` published a
+  "done" run (gone from `/runs/active`) whose trace did not exist yet, so
+  `GET /runs/:id/trace` 404'd. Save the trace first (failure swallowed), then
+  mark done. Evidence: `server/src/modules/reviews/run-executor.ts:282`;
+  pinned by `server/test/reviews.it.test.ts` ("already has its trace").
+- **2026-09-18** — Empty-diff trap: `seed.ts` stored PR #482's `pr_files`
+  with no `patch`, `acme/payments-api` has no clone (fictional), and
+  `diff-loader.ts:37` skips patchless files — so the demo PR reviewed an empty
+  diff, paid for "nothing to review", recorded `done` and overwrote the seeded
+  request_changes/61 with an empty approve. Pre-work that yields nothing to
+  review must `failAll`, not proceed. A patchless `pr_files` row also renders a
+  zero-line file card (`client/.../diff-viewer/helpers.ts:13`), so "diff tab
+  looks empty" and "review found nothing" share a root cause. Evidence:
+  `server/src/modules/reviews/run-executor.ts:107`,
+  `server/src/db/seed-patches.ts`.
+- **2026-09-18** — (Supersedes the evidence lines of the two entries above.)
+  Exact lines: trace-before-done `server/src/modules/reviews/run-executor.ts:289`;
+  empty-diff guard `run-executor.ts:109`; demo patches
+  `server/src/db/seed-patches.ts:9`; idempotent backfill
+  `server/src/db/seed.ts:176`; patchless skip
+  `server/src/modules/reviews/diff-loader.ts:37`.
+- **2026-09-18** — "No reviewable diff" on a REAL GitHub PR (quick-blog #12,
+  71 files) was not the demo-data trap: the PR list imports PRs and even
+  backfills their size from `getPullRequest`, but never stores `pr_files`
+  (`server/src/modules/pulls/routes.ts:95`) — only opening the PR's page does
+  (`routes.ts:246`). And the clone can't help: it's shallow `main` only, and
+  `GitClient.fetchPullHead` exists but nothing calls it, so `git diff
+  base...<PR head>` fails. So "Run Review" from the list on a never-opened PR
+  had zero patches. `loadDiff` now fetches + stores the files from GitHub as a
+  last resort (`server/src/modules/reviews/diff-loader.ts:36`). Also: the detail
+  route's delete-then-insert of `pr_files` was two statements — a review
+  loading its diff between them saw zero files; it is now one transaction
+  (`server/src/modules/_shared/pr-files.ts:17`).
+- **2026-09-18** — An empty diff is not always a data problem: quick-blog #36
+  is open with 2 commits but GitHub reports `changed_files: 0` (its changes
+  already landed on `main` via #33). One generic "check the GitHub token"
+  message sent the user hunting for a non-problem. `loadDiff` now returns an
+  `emptyReason` naming the actual cause (GitHub unreachable / PR changes no
+  files / files but no text patches / patches unparseable) and the run fails
+  with it. Check GitHub's own `changed_files` before debugging the pipeline.
+  Evidence: `server/src/modules/reviews/diff-loader.ts:18`.
+
+## Session Notes
+
+### 2026-09-18
+- Executor now saves the run trace before marking the run done, and fails a
+  run closed ("No reviewable diff") instead of reviewing an empty diff — no
+  LLM call, no review row, PR score untouched.
+- Seed gives PR #482 real patches (hunks contain the lines the seeded findings
+  cite) and backfills them on an existing DB; new `test/seed.it.test.ts` + 3
+  new cases in `test/reviews.it.test.ts`.
+- quick-blog #12: "Run Review" from the list on a never-opened PR had no
+  stored patches → `loadDiff` now fetches + stores the PR's files from GitHub;
+  the detail route's `pr_files` replace is one transaction.
+- quick-blog #36: GitHub reports 0 changed files → the run now fails with that
+  exact reason (`emptyReason`) instead of a misleading token hint.
+
+## Open Questions
+
+- **2026-09-18** — Deleting every run of a PR removes its reviews (score goes
+  back to none) but leaves `pull_requests.last_reviewed_sha` set, so the list
+  STATUS still derives "reviewed". Should `deleteAgentRun` / `deleteReview`
+  clear it when the PR's last review goes? Evidence:
+  `server/src/modules/reviews/repository/run.repo.ts:88`,
+  `server/src/modules/pulls/routes.ts:205`.

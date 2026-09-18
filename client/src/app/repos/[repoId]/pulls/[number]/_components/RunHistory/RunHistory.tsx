@@ -196,11 +196,10 @@ export function RunHistory({
             <Badge color={o.color} bg={o.bg} icon={o.icon}>
               {t(`runStatus.${o.key}`)}
             </Badge>
-            {settled && r.score != null && (
-              /* Ring colour follows this row's OUTCOME badge, so the two can't
-                 disagree (a 0-score "rejected" row was already red; a
-                 "reviewed" row must not read red just because it scored low). */
-              <CircularScore score={r.score} size={30} stroke={3} colorOverride={o.color} />
+            {settled && !!r.score && (
+              /* Score thresholds, same as the PR list and the verdict banner;
+                 a 0 score shows no ring. */
+              <CircularScore score={r.score} size={30} stroke={3} />
             )}
             <div style={s.main}>
               <div style={s.agentLine}>

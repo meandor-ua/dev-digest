@@ -10,6 +10,7 @@
     { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
     { "cmd": ["find", "role", "button", "click", "--name", "Files changed"], "label": "switch to the Files changed tab" },
     { "cmd": ["wait", "--url", "tab=diff"], "label": "diff tab is active in the URL" },
-    { "cmd": ["wait", "--text", "src/config.ts"], "label": "a seeded changed file renders in the diff viewer" }
+    { "cmd": ["wait", "--text", "src/config.ts"], "label": "a seeded changed file renders in the diff viewer" },
+    { "cmd": ["wait", "--text", "stripeSecretKey"], "label": "a seeded code line from the src/config.ts hunk renders, not just the file path" }
   ]
 }

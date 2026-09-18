@@ -14,6 +14,9 @@ export function useRunTrace(runId: string | null | undefined, enabled = true) {
     queryKey: ["run-trace", runId],
     queryFn: () => api.get<RunTrace>(`/runs/${runId}/trace`),
     enabled: !!runId && enabled,
-    retry: false,
+    // The trace row can lag a just-finished run (404 until written): retry once,
+    // then poll until it exists so the drawer never sticks on "no trace".
+    retry: 1,
+    refetchInterval: (q) => (q.state.data ? false : 2000),
   });
 }

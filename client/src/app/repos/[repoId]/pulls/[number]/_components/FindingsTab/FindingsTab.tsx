@@ -4,7 +4,7 @@ import React, { useCallback } from "react";
 import { Icon, Badge, Button, SectionLabel, EmptyState } from "@devdigest/ui";
 import { RunStatus } from "../RunStatus";
 import { RunHistory } from "../RunHistory/RunHistory";
-import { ReviewRunAccordion, type ReviewRunRow } from "../ReviewRunAccordion";
+import { ReviewRunAccordion, reviewRunRowKey, type ReviewRunRow } from "../ReviewRunAccordion";
 import { s } from "./styles";
 import type { FindingRecord, ReviewRecord, RunSummary, PrCommit, Severity } from "@devdigest/shared";
 import type { UseMutationResult } from "@tanstack/react-query";
@@ -142,8 +142,8 @@ export function FindingsTab({
   // pill is active, without it once cleared. No remount: `appliedByRunId` is
   // deliberately left alone, since the panel already holds the new filter.
   const handlePanelFilterChange = useCallback(
-    (runId: string | null, sev: Severity | null) => {
-      if (runId) writeUrl(runId, sev);
+    (runId: string, sev: Severity | null) => {
+      writeUrl(runId, sev);
     },
     [writeUrl],
   );
@@ -153,8 +153,8 @@ export function FindingsTab({
   // to the URL while the panel right below it stays unfiltered, so a live click
   // and a reload of that very URL render differently.
   const handleHeaderSeverityClick = useCallback(
-    (runId: string | null, sev: Severity) => {
-      if (runId) handleGoToReview(runId, sev);
+    (runId: string, sev: Severity) => {
+      handleGoToReview(runId, sev);
     },
     [handleGoToReview],
   );
@@ -180,6 +180,38 @@ export function FindingsTab({
       ) || 0;
     return [...reviewed, ...failed].sort((a, b) => tsOf(b) - tsOf(a));
   }, [runs, prRuns]);
+
+  // Apply the URL's `agent`/`severity` whenever it changes from OUTSIDE this
+  // component (back/forward, a link while mounted) — our own writes are
+  // recognised via `urlRef` and skipped. A `severity` with no `agent` (the PR
+  // list links that way when it doesn't know the run) targets the newest
+  // review, resolved once the rows have loaded; until then it stays pending.
+  const newestReviewKey = React.useMemo(() => {
+    const row = rows.find((r) => r.kind === "review");
+    return row ? reviewRunRowKey(row) : null;
+  }, [rows]);
+  const seededRef = React.useRef(false);
+  React.useEffect(() => {
+    const url = urlRef.current;
+    const external =
+      !seededRef.current || url.runId !== initialAgentRunId || url.severity !== initialSeverity;
+    if (!external) return;
+    if (initialAgentRunId) {
+      seededRef.current = true;
+      // First mount is already seeded through the useState initialisers.
+      if (url.runId === initialAgentRunId && url.severity === initialSeverity) return;
+      handleGoToReview(initialAgentRunId, initialSeverity);
+      return;
+    }
+    if (!initialSeverity) {
+      seededRef.current = true;
+      urlRef.current = { runId: null, severity: null };
+      return;
+    }
+    if (!newestReviewKey) return; // rows not loaded yet
+    seededRef.current = true;
+    handleGoToReview(newestReviewKey, initialSeverity);
+  }, [initialAgentRunId, initialSeverity, newestReviewKey, handleGoToReview]);
 
   // `has_trace` is optional in the contract and a MISSING value means "unknown,
   // assume a trace may exist" — so the map keeps the raw tri-state and the read
@@ -282,9 +314,10 @@ export function FindingsTab({
         prId &&
         rows.map((row, i) => {
           const runId = row.kind === "review" ? row.review.run_id : row.run.run_id;
+          const rowKey = reviewRunRowKey(row);
           // Each row reads its OWN applied entry — never a value derived from
           // who the current target is (see `appliedByRunId` above).
-          const applied = runId ? appliedByRunId[runId] : undefined;
+          const applied = appliedByRunId[rowKey];
           return (
             <ReviewRunAccordion
               key={row.kind === "review" ? row.review.id : `failed:${row.run.run_id}`}
@@ -301,8 +334,8 @@ export function FindingsTab({
               costUsd={runId ? costByRunId.get(runId) : undefined}
               onOpen={handleAccordionOpen}
               onOpenTrace={handleOpenTrace}
-              onSeverityClick={(sev) => handleHeaderSeverityClick(runId, sev)}
-              onFilterChange={(sev) => handlePanelFilterChange(runId, sev)}
+              onSeverityClick={(sev) => handleHeaderSeverityClick(rowKey, sev)}
+              onFilterChange={(sev) => handlePanelFilterChange(rowKey, sev)}
             />
           );
         })

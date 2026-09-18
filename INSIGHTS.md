@@ -86,3 +86,54 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   `include` — and REFORMATS the whole file while doing so; committing the
   include line up front (`client/tsconfig.json:33`) means Next finds nothing
   to add and leaves the file alone.
+
+- **2026-09-18** — Don't trust `docker exec devdigest-postgres psql … '\dt'`
+  to show this app's data: in this checkout it reported no relations while the
+  API on :3001 served full data from `DATABASE_URL` on localhost:5432. Verify
+  DB facts via the API (`curl localhost:3001/…`) or `pnpm db:*` from
+  `server/`. Evidence: `server/.env:2` (`DATABASE_URL`). (Later corrected —
+  see the CORRECTION entry below.)
+- **2026-09-18** — Name collision: `@devdigest/shared` already exports a
+  `PrBrief` contract (`client/src/vendor/shared/contracts/brief.ts:116`) for
+  the L05 LLM-generated brief.
+  The Overview card is a different, LLM-free, props-only thing and is
+  deliberately named `ReviewBriefCard`.
+- **2026-09-18** — CORRECTION to the `docker exec … psql` entry above: re-run
+  later the same day, `docker exec devdigest-postgres psql -U devdigest -d
+  devdigest -c '\dt'` DID list the app's tables (`agent_runs`, `agents`, …),
+  matching `DATABASE_URL=…@localhost:5432/devdigest` (`server/.env:2`). The
+  earlier "no relations" reading came from a prior session and was never
+  reproduced; the container is the app's DB. Still prefer the API for app-level
+  facts (derived fields like PR score exist only there), but `docker exec` is
+  a valid way to inspect raw tables. Evidence: `server/.env:2`.
+- **2026-09-18** — Exact evidence for the `PrBrief` entry above:
+  `client/src/vendor/shared/contracts/brief.ts:116`.
+- **2026-09-18** — Don't trust agent-guide rules as ground truth — count
+  before you repeat them. Root and `client/CLAUDE.md` both said "relative
+  imports carry `.js` … server, client, reviewer-core all do this", but the
+  client does NOT (20 of 432 relative imports; Next's bundler resolves
+  extensionless), and the server exempts its `src/db/schema*` barrel. "Every
+  component gets a co-located test" was also false (17 of 30 route components
+  had none). A one-line `grep -c` per claim settles it; rules now corrected.
+  Evidence: `client/CLAUDE.md:26`, `CLAUDE.md:66`, `server/src/db/schema.ts:15`.
+
+## Session Notes
+
+### 2026-09-18
+- Cross-package L01 follow-up implemented (client + server +
+  e2e: new `e2e/specs/11-pr-brief.flow.json`, `05-pr-diff` asserts a real code
+  line). Skills used: `engineering-insights` only — `react-best-practices`,
+  `react-testing-library`, `fastify-best-practices` were planned but not
+  loaded.
+- Insight hygiene gap this session: later entries were appended by shell
+  without re-invoking the skill, landed at file end (under "What Doesn't
+  Work" regardless of kind) and some lacked file:line — fixed additively by
+  the superseding notes in each file.
+- Agent-instruction audit: root `CLAUDE.md` gained Tech stack / Commands /
+  Naming conventions / "Engineering insights (always)" sections; duplicated
+  rules removed from root, `reviewer-core/` and `e2e/` CLAUDE.md; false or stale
+  claims fixed (`.js` imports, per-component tests, `NEXT_PUBLIC_API_BASE`
+  "needed", a `.cursor` symlink that doesn't exist, `reviewer-core/prompt.ts`
+  paths, the "raw verdict reaches the UI" note). Left alone (do-not-touch):
+  `skills-lock.json` still pins `architecture-patterns` and
+  `github-workflow-automation`, whose folders no longer exist.

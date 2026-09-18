@@ -27,3 +27,11 @@ export function effectiveVerdict(findings: FindingRecord[]): Verdict {
   if (active.some((f) => f.severity === "CRITICAL")) return "request_changes";
   return active.length > 0 ? "comment" : "approve";
 }
+
+/** Same rule as `effectiveVerdict`, over the server's per-severity counts
+ *  (`PrMeta.findings_by_severity`) so the PR brief and the PR list agree. */
+export function verdictFromCounts(counts: Partial<Record<Severity, number>>): Verdict {
+  if ((counts.CRITICAL ?? 0) > 0) return "request_changes";
+  const total = (counts.WARNING ?? 0) + (counts.SUGGESTION ?? 0);
+  return total > 0 ? "comment" : "approve";
+}

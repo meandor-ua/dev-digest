@@ -87,6 +87,9 @@ function finding(severity: "CRITICAL" | "WARNING" | "SUGGESTION", id: string, re
   };
 }
 
+/** The CircularScore ring (icons also draw <circle>s). */
+const RING = 'svg[style*="rotate"] circle';
+
 function renderRuns(
   runs: RunSummary[],
   reviews?: ReviewRecord[],
@@ -100,11 +103,11 @@ function renderRuns(
 }
 
 describe("RunHistory — outcome badge", () => {
-  it("a done run WITH blockers reads 'rejected' (never green 'done') + shows the score ring", () => {
-    renderRuns([run({ status: "done", findings_count: 5, blockers: 5, score: 0 })]);
+  it("a done run WITH blockers reads 'rejected' (never green 'done'); a 0 score shows no ring", () => {
+    const { container } = renderRuns([run({ status: "done", findings_count: 5, blockers: 5, score: 0 })]);
     expect(screen.getByText("rejected")).toBeInTheDocument();
     expect(screen.queryByText("done")).not.toBeInTheDocument();
-    expect(screen.getByText("0")).toBeInTheDocument(); // CircularScore renders the number
+    expect(container.querySelector(RING)).toBeNull();
     expect(screen.getByText(/5 blockers/)).toBeInTheDocument();
   });
 
@@ -250,9 +253,9 @@ describe("RunHistory — live blockers (colour and text can never disagree)", ()
     expect(screen.queryByText("reviewed")).not.toBeInTheDocument();
     // …and the badge beside it is the empty "—" one, as the outcome now claims.
     expect(screen.getByTestId("findings-badge-empty")).toBeInTheDocument();
-    // The score ring follows the (green) outcome, never amber/red.
-    const strokes = [...container.querySelectorAll("circle")].map((c) => c.getAttribute("stroke"));
-    expect(strokes).toContain("var(--ok)");
+    // The ring follows the SCORE thresholds (40 → red), not the outcome badge.
+    const strokes = [...container.querySelectorAll(RING)].map((c) => c.getAttribute("stroke"));
+    expect(strokes).toContain("var(--crit)");
   });
 
   it("with no matching review the 'reviewed' branch still falls back to the frozen count", () => {
@@ -275,15 +278,14 @@ describe("RunHistory — live blockers (colour and text can never disagree)", ()
     expect(screen.getByText(/2 blockers/)).toBeInTheDocument();
   });
 
-  it("the score ring colour follows the row's outcome badge, not the numeric threshold", () => {
+  it("the score ring colour follows the score thresholds, not the row's outcome badge", () => {
     const { container } = renderRuns([
       run({ status: "done", findings_count: 5, blockers: 5, score: 92 }),
     ]);
-    // 92 would be green on the numeric threshold; the row is "rejected", so
-    // the ring must be red instead.
-    const strokes = [...container.querySelectorAll("circle")].map((c) => c.getAttribute("stroke"));
-    expect(strokes).toContain("var(--crit)");
-    expect(strokes).not.toContain("var(--ok)");
+    // "rejected" row, but 92 → green: same rule as the PR list and banner.
+    const strokes = [...container.querySelectorAll(RING)].map((c) => c.getAttribute("stroke"));
+    expect(strokes).toContain("var(--ok)");
+    expect(strokes).not.toContain("var(--crit)");
   });
 });
 

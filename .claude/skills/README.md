@@ -1,6 +1,6 @@
 # Skills
 
-Reusable AI skills that provide specialized knowledge and workflows. Canonical location is `.claude/skills/` with a symlink at `.cursor/skills/ → ../.claude/skills` for Cursor compatibility. Shared with the team via version control.
+Reusable AI skills that provide specialized knowledge and workflows. Canonical location is `.claude/skills/`, shared with the team via version control.
 
 ## Catalog
 

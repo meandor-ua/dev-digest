@@ -25,23 +25,18 @@ alias (`@devdigest/reviewer-core` → `../reviewer-core/src`).
 - Public API is exactly what's exported from `src/index.ts` — nothing else
   is meant to be imported by consumers.
 - Relative imports carry the `.js` extension even though the source is `.ts`
-  (ESM, matches client/server) — true here too despite there being no build
-  output, since the server consumes this package's TS source directly under
-  Node's ESM resolution rules.
+  (the server consumes this TS source directly).
 
 ## Conventions (not obvious from code)
 
-- Pure library — no DB/GitHub/filesystem access; its only side effect is one
-  call through an injected `LLMProvider`, which is what makes it
-  mock-testable.
-- Ships no compiled JS — `build` is a type-check; the server imports the
-  TypeScript source directly via a tsconfig path alias.
+- The injected `LLMProvider` is the only side effect, which is what makes the
+  whole engine mock-testable.
 - `skills` / `memory` / `specs` / `callers` prompt slots exist in the API for
   later course lessons and are simply omitted by the starter, not stubbed.
 
 ## Do-not-touch
 
-- `INJECTION_GUARD` in `prompt.ts` — deliberate trust-boundary design
+- `INJECTION_GUARD` in `src/prompt.ts` — deliberate trust-boundary design
   (untrusted content is data, never instructions); don't replace with
   keyword/denylist scanning.
 - `groundFindings()` must stay the single source of truth for the score —

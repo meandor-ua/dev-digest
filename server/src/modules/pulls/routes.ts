@@ -8,6 +8,7 @@ import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import { deriveReviewStatus, rollupSeverities } from './status.js';
+import { replacePrFiles } from '../_shared/pr-files.js';
 
 /**
  * F1 — pulls module. PR import via Octokit (list + per-PR detail).
@@ -242,18 +243,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       const gh = await container.github();
       const detail = await gh.getPullRequest({ owner: repo.owner, name: repo.name }, pr.number);
 
-      await container.db.delete(t.prFiles).where(eq(t.prFiles.prId, pr.id));
-      if (detail.files.length > 0) {
-        await container.db.insert(t.prFiles).values(
-          detail.files.map((f) => ({
-            prId: pr.id,
-            path: f.path,
-            additions: f.additions,
-            deletions: f.deletions,
-            patch: f.patch ?? null,
-          })),
-        );
-      }
+      await replacePrFiles(container.db, pr.id, detail.files);
       await container.db.delete(t.prCommits).where(eq(t.prCommits.prId, pr.id));
       if (detail.commits.length > 0) {
         await container.db.insert(t.prCommits).values(

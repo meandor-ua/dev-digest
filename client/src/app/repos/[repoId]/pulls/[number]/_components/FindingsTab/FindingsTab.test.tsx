@@ -391,3 +391,75 @@ describe("FindingsTab — a run's severity pills keep ?severity= in sync", () =>
     expect(onTargetChange).not.toHaveBeenCalled();
   });
 });
+
+describe("FindingsTab — a review with no run_id (the seeded demo review)", () => {
+  const SEEDED: ReviewRecord[] = [
+    review({
+      id: "rv-seed",
+      run_id: null,
+      findings: [
+        finding({ id: "fs-c", severity: "CRITICAL", title: "Seed critical" }),
+        finding({ id: "fs-w", severity: "WARNING", title: "Seed warning" }),
+      ],
+    }),
+  ];
+
+  it("header severity chip writes ?agent=<review id>&severity= and filters the panel", () => {
+    const onTargetChange = vi.fn();
+    const { container } = renderTab({ runs: SEEDED, prRuns: [], onTargetChange });
+    const root = accordion(container, "rv-seed");
+    const chip = within(root)
+      .getAllByRole("button")
+      .find((b) => b.getAttribute("aria-haspopup") === "true")!;
+    fireEvent.click(chip); // CRITICAL
+    expect(onTargetChange).toHaveBeenCalledWith("rv-seed", "CRITICAL");
+    expect(within(accordion(container, "rv-seed")).queryByText("Seed warning")).not.toBeInTheDocument();
+  });
+
+  it("its severity pills sync the URL too", () => {
+    const onTargetChange = vi.fn();
+    const { container } = renderTab({ runs: SEEDED, prRuns: [], onTargetChange });
+    fireEvent.click(within(accordion(container, "rv-seed")).getByText("WARNING").closest("button")!);
+    expect(onTargetChange).toHaveBeenLastCalledWith("rv-seed", "WARNING");
+  });
+});
+
+describe("FindingsTab — ?severity= from the URL is always applied", () => {
+  it("severity without agent filters the newest review once it loads", () => {
+    const onTargetChange = vi.fn();
+    const { container, rerender } = renderTab({ runs: [], prRuns: [], initialSeverity: "CRITICAL", onTargetChange });
+    rerender(
+      <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
+        <FindingsTab
+          prId="pr1" liveRunIds={[]} reviewRunning={false} lethalTrifecta={[]}
+          runs={RUNS} prRuns={PR_RUNS} prCommits={[]} cancelMutation={cancelMutation}
+          onOpenTrace={vi.fn()} onDelete={vi.fn()} onRunDone={vi.fn()}
+          initialSeverity="CRITICAL" onTargetChange={onTargetChange}
+        />
+      </NextIntlClientProvider>,
+    );
+    const one = accordion(container, "run-1");
+    expect(within(one).getByText("R1 critical")).toBeInTheDocument();
+    expect(within(one).queryByText("R1 warning")).not.toBeInTheDocument();
+    expect(onTargetChange).toHaveBeenCalledWith("run-1", "CRITICAL");
+  });
+
+  it("an external URL change (back/forward) re-applies agent + severity", () => {
+    const props = { runs: RUNS, prRuns: PR_RUNS, initialAgentRunId: "run-1", initialSeverity: "CRITICAL" as const };
+    const { container, rerender } = renderTab(props);
+    expect(within(accordion(container, "run-1")).queryByText("R1 warning")).not.toBeInTheDocument();
+    rerender(
+      <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
+        <FindingsTab
+          prId="pr1" liveRunIds={[]} reviewRunning={false} lethalTrifecta={[]}
+          prCommits={[]} cancelMutation={cancelMutation}
+          onOpenTrace={vi.fn()} onDelete={vi.fn()} onRunDone={vi.fn()}
+          {...props} initialAgentRunId="run-2" initialSeverity="WARNING"
+        />
+      </NextIntlClientProvider>,
+    );
+    const two = accordion(container, "run-2");
+    expect(within(two).getByText("R2 warning")).toBeInTheDocument();
+    expect(within(two).queryByText("R2 critical")).not.toBeInTheDocument();
+  });
+});

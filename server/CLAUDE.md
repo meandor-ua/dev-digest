@@ -25,7 +25,7 @@ required to boot — every secret is optional and settable at runtime.
 ## Naming conventions
 
 - Relative imports carry the `.js` extension even though the source is `.ts`
-  (ESM, matches client/reviewer-core).
+  (only exception: the `src/db/schema*` barrel).
 - A DB-backed test (imports `test/helpers/pg.ts`) **must** use the
   `*.it.test.ts` suffix or the unit/integration split breaks.
 - Modules are registered statically, one import + one `app.register` each,

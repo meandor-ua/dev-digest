@@ -19,8 +19,12 @@ const TRACE: RunTrace = {
   ],
 };
 
+const traceEnabled: boolean[] = [];
 vi.mock("../../../../../../../lib/hooks/trace", () => ({
-  useRunTrace: () => ({ data: TRACE, isLoading: false }),
+  useRunTrace: (_id: string, enabled: boolean) => {
+    traceEnabled.push(enabled);
+    return { data: TRACE, isLoading: false };
+  },
 }));
 vi.mock("../../../../../../../lib/hooks/reviews", () => ({
   useRunEvents: () => ({ events: [], running: false }),
@@ -80,5 +84,24 @@ describe("A5 Run Trace drawer (smoke)", () => {
     expect(screen.getByText("Hardcoded Stripe secret key in commit")).toBeInTheDocument();
     expect(screen.getByText("CRITICAL")).toBeInTheDocument();
     expect(screen.getByText(/src\/config\.ts:12/)).toBeInTheDocument();
+  });
+});
+
+describe("Run Trace drawer — persisted log vs live log", () => {
+  it("lists the persisted trace log for a finished run (was '0 lines')", () => {
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" running={false} onClose={() => {}} />);
+    fireEvent.click(screen.getByText("log"));
+    expect(screen.getByText("Starting review with agent Security")).toBeInTheDocument();
+  });
+
+  it("while running, gates the trace fetch off the server's running flag", () => {
+    traceEnabled.length = 0;
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" running onClose={() => {}} />);
+    expect(traceEnabled.every((e) => e === false)).toBe(true);
+  });
+
+  it("falls back to the trace's agent name when none is passed", () => {
+    renderWithIntl(<RunTraceDrawer runId="r1" running={false} onClose={() => {}} />);
+    expect(screen.getByText(/Security/)).toBeInTheDocument();
   });
 });

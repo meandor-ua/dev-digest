@@ -16,6 +16,7 @@ import { useTranslations } from "next-intl";
 import { Button, Dropdown, type DropdownItemDef } from "@devdigest/ui";
 import { useAgents } from "@/lib/hooks/agents";
 import { useRunReview } from "@/lib/hooks/reviews";
+import { notify } from "@/lib/toast";
 import { DROPDOWN_WIDTH } from "./constants";
 
 export function RunReviewDropdown({
@@ -55,7 +56,9 @@ export function RunReviewDropdown({
     onRunStart?.();
     try {
       const res = await run.mutateAsync({ prId, ...opts });
-      onRunsStarted?.(res.runs.map((r) => r.run_id));
+      const runIds = res.runs.map((r) => r.run_id);
+      notify.info(t("runReview.started", { count: runIds.length }));
+      onRunsStarted?.(runIds);
     } finally {
       onRunSettled?.();
     }

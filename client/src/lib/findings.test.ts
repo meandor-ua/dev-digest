@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { activeFindings, countBySeverity, effectiveVerdict } from "./findings";
+import { activeFindings, countBySeverity, effectiveVerdict, verdictFromCounts } from "./findings";
 import type { FindingRecord } from "@devdigest/shared";
 
 function finding(overrides: Partial<FindingRecord> = {}): FindingRecord {
@@ -76,5 +76,19 @@ describe("effectiveVerdict", () => {
     expect(effectiveVerdict([finding({ severity: "CRITICAL", dismissed_at: "2026-01-01T00:00:00Z" })])).toBe(
       "approve",
     );
+  });
+});
+
+describe("verdictFromCounts", () => {
+  it("CRITICAL → request_changes", () => {
+    expect(verdictFromCounts({ CRITICAL: 1, WARNING: 1, SUGGESTION: 0 })).toBe("request_changes");
+  });
+  it("only non-critical → comment", () => {
+    expect(verdictFromCounts({ WARNING: 1 })).toBe("comment");
+    expect(verdictFromCounts({ CRITICAL: 0, WARNING: 0, SUGGESTION: 2 })).toBe("comment");
+  });
+  it("all zero / empty → approve", () => {
+    expect(verdictFromCounts({ CRITICAL: 0, WARNING: 0, SUGGESTION: 0 })).toBe("approve");
+    expect(verdictFromCounts({})).toBe("approve");
   });
 });

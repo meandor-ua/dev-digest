@@ -64,6 +64,31 @@ you, so the next agent/session doesn't relearn it.
   outcome colour and the printed "· N blockers" text so a row can never
   contradict itself. Evidence:
   `client/src/app/repos/[repoId]/pulls/[number]/_components/RunHistory/RunHistory.tsx:34`.
+- **2026-09-18** — Score rings use ONE rule everywhere: `CircularScore`'s own
+  thresholds (≥75 green, ≥50 amber, else red), and a score of 0 renders NO
+  ring (PR list shows "—"). This deliberately reverses the older "ring follows
+  the verdict / outcome badge" design (`colorOverride`), per the user: a
+  high-score PR that still has a blocker now shows a green ring beside a red
+  "Request changes" label — expected, not a bug. Don't reintroduce
+  `colorOverride` at these call sites. Evidence:
+  `client/src/vendor/ui/primitives/CircularScore.tsx:19`,
+  `client/src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.tsx:104`,
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/VerdictBanner/VerdictBanner.tsx:58`,
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/RunHistory/RunHistory.tsx:202`.
+- **2026-09-18** — Review-runs rows are addressed by `reviewRunRowKey`
+  (`run_id ?? review.id`), and `?agent=` may therefore hold a REVIEW id for a
+  run-less review (the seeded one). A `?severity=` without `?agent=` resolves
+  to the newest `kind === "review"` row once rows load. Evidence:
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/ReviewRunAccordion/ReviewRunAccordion.tsx:34`,
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingsTab/FindingsTab.tsx:189`.
+- **2026-09-18** — Hiding a container hides everything slotted into it:
+  `VerdictBanner`'s `footer` (the PR BRIEF's cost/tokens) lives in the score
+  column, so "score 0 → no ring" silently dropped the cost too (quick-blog #34:
+  list COST $0.020, brief none). The column now renders on `score || footer`
+  and only the ring/label are gated on the score. When gating a region, check
+  what callers inject into it. Score 0 is otherwise shown as: list "—", no ring
+  anywhere, Review-runs header plain "0" (kept by user decision). Evidence:
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/VerdictBanner/VerdictBanner.tsx:58`.
 
 ## What Doesn't Work
 
@@ -217,3 +242,81 @@ you, so the next agent/session doesn't relearn it.
   server persists the review BEFORE marking the run done. Evidence:
   `client/src/lib/hooks/reviews.ts:49`,
   `client/src/app/repos/[repoId]/pulls/[number]/page.tsx:59`.
+
+- **2026-09-18** — Trace drawer "0 lines" trap: a `running` prop captured at
+  mount + `retry: false` on a trace endpoint that 404s until written = a
+  permanently empty log pane. The server's active-run set (`liveRunIds`), not
+  the SSE socket, is the authority on "still running"; once not running, the
+  persisted log must win over an empty SSE buffer, and the trace query polls
+  until the row exists. Evidence:
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/RunTraceDrawer/RunTraceDrawer.tsx:64`,
+  `client/src/lib/hooks/trace.ts:18`.
+- **2026-09-18** — A mutation that triggers background work must invalidate
+  (or watch) the query its OWN page renders from. `useRunReview` only
+  invalidates `["reviews", prId]`, so the PR list's `["pulls"]` row stayed
+  frozen and "Run Review" read as a dead button (the handler was bound fine).
+  `PRRow` now polls `usePrActiveRuns` only after a run starts and
+  `useRefreshWhenRunsSettle` refreshes `["pulls"]`. Evidence:
+  `client/src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.tsx:33`.
+- **2026-09-18** — `ReviewRecord.run_id` is nullable (the seeded #482 review
+  has none), and every Review-runs targeting/URL path used to bail on
+  `if (runId)` — so on the demo PR severity chips and pills filtered locally
+  but never wrote `?severity=`, and a `?severity=` with no `?agent=` was
+  ignored outright. Key rows by `reviewRunRowKey` (run_id ?? review id), and
+  resolve an agent-less severity to the newest review once rows load.
+  Evidence: `client/src/app/repos/[repoId]/pulls/[number]/_components/ReviewRunAccordion/ReviewRunAccordion.tsx:34`,
+  `.../FindingsTab/FindingsTab.tsx` (URL-sync effect).
+- **2026-09-18** — SSE streams to the API (`:3001`, plain HTTP/1.1) count
+  against Chrome's 6-connections-per-host limit, shared by ALL tabs. The
+  Findings tab opened one EventSource per live run and the Run Trace drawer
+  opened its own for the same run, so with ≥6 streams (two "Run all" batches,
+  or another tab) the drawer's stream sat queued: empty log, "dead" filter,
+  and a reopen "fixed" it only because a run had finished. `useRunEvents` now
+  shares one ref-counted EventSource per run (deferred close survives
+  StrictMode remounts). Verified in a real browser with 6 live runs.
+  Evidence: `client/src/lib/hooks/reviews.ts:236` (`acquireRunStream`).
+- **2026-09-18** — `["pr-active-runs", prId]` is shared by the PR list row and
+  the PR page, and its poll only runs while the data is non-empty. Under the
+  global `staleTime: 30_000` a cached `[]` meant a run started from the list
+  (or another tab) was never fetched: the row's "Running…" chip stuck and
+  nothing refreshed. Now `staleTime: 0` on that query + PRRow invalidates it
+  on start. Evidence: `client/src/lib/hooks/reviews.ts:36` (`usePrActiveRuns`),
+  `client/src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.tsx:157`,
+  `.../pulls/_components/PRRow/PRRow.run.test.tsx`.
+- **2026-09-18** — The PR list's SCORE / FINDINGS / COST are derived on the
+  server from the PR's reviews and runs, but `useDeleteRun`, `useDeleteReview`
+  and `useFindingAction` only invalidated `["reviews"]` / `["pr-runs"]`, so
+  after deleting every run the list kept the old score (global
+  `staleTime: 30_000`, no focus refetch) until a reload. They now also
+  invalidate `["pulls"]` + `["pull", prId]` (`invalidatePrSummary`). Evidence:
+  `client/src/lib/hooks/reviews.ts:78`.
+- **2026-09-18** — (Supersedes the evidence of the five 2026-09-18 entries
+  above that cite only a file.) Exact lines: trace-log fallback
+  `.../RunTraceDrawer/RunTraceDrawer.tsx:66` + trace poll
+  `client/src/lib/hooks/trace.ts:20`; list-row watch
+  `.../pulls/_components/PRRow/PRRow.tsx:37`; shared SSE stream
+  `client/src/lib/hooks/reviews.ts:236`; active-runs `staleTime: 0`
+  `client/src/lib/hooks/reviews.ts:36` + row invalidate `PRRow.tsx:157`;
+  `invalidatePrSummary` `client/src/lib/hooks/reviews.ts:78`.
+
+## Session Notes
+
+### 2026-09-18
+- Implemented the L01 follow-up: list Run Review feedback (toast + per-row "Running…"
+  chip + in-place refresh), Run Trace drawer log/trace fixes, the LLM-free PR
+  BRIEF card (`ReviewBriefCard`) on the Overview tab, `verdictFromCounts`,
+  `lib/tokens.ts`.
+- Follow-up fixes found by the user: severity chips/pills not writing
+  `?severity=` + URL severity not applied; drawer filter dead on first open
+  (SSE connection limit); stuck list chip (shared cache `staleTime`); list
+  score surviving run deletion; score rings back to score thresholds.
+- Not done / known gaps: ≥6 simultaneous live runs still starve the Findings
+  tab's own streams and polling; an already-open PR page doesn't notice a run
+  started in another tab until reload.
+
+## Open Questions
+
+- **2026-09-18** — Should live run events be multiplexed into one SSE stream
+  per PR (server change) or should the API be served over HTTP/2, to remove
+  the 6-connection ceiling for good? Evidence:
+  `client/src/lib/hooks/reviews.ts:236`.

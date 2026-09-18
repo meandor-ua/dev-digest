@@ -9,13 +9,20 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/hooks/agents", () => ({
   useAgents: () => ({ data: [{ id: "a1", name: "Security", model: "gpt-4.1", enabled: true }] }),
 }));
+const mutateAsync = vi.fn();
+const info = vi.fn();
 vi.mock("@/lib/hooks/reviews", () => ({
-  useRunReview: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRunReview: () => ({ mutateAsync, isPending: false }),
 }));
+vi.mock("@/lib/toast", () => ({ notify: { info: (m: string) => info(m), error: vi.fn(), success: vi.fn() } }));
 
 import { RunReviewDropdown } from "./RunReviewDropdown";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mutateAsync.mockReset();
+  info.mockReset();
+});
 
 function renderWithIntl(ui: React.ReactElement) {
   return render(
@@ -74,5 +81,27 @@ describe("RunReviewDropdown — menuPortal", () => {
     const { container } = renderWithIntl(<RunReviewDropdown prId="pr1" />);
     fireEvent.click(screen.getByText("Run Review"));
     expect(container.querySelector("[data-testid='dropdown-menu']")).toBeInTheDocument();
+  });
+});
+
+describe.each([false, true])("RunReviewDropdown — menu items run reviews (menuPortal=%s)", (menuPortal) => {
+  it("'Run all enabled agents' calls the mutation with { prId, all: true } and toasts the count", async () => {
+    mutateAsync.mockResolvedValue({ runs: [{ run_id: "r1" }, { run_id: "r2" }] });
+    const onRunsStarted = vi.fn();
+    renderWithIntl(<RunReviewDropdown prId="pr1" menuPortal={menuPortal} onRunsStarted={onRunsStarted} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run Review" }));
+    fireEvent.click(screen.getByText("Run all enabled agents"));
+    await vi.waitFor(() => expect(onRunsStarted).toHaveBeenCalledWith(["r1", "r2"]));
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync).toHaveBeenCalledWith({ prId: "pr1", all: true });
+    expect(info).toHaveBeenCalledWith("Review started · 2 agent(s)");
+  });
+
+  it("a specific agent calls the mutation with { prId, agentId }", async () => {
+    mutateAsync.mockResolvedValue({ runs: [{ run_id: "r1" }] });
+    renderWithIntl(<RunReviewDropdown prId="pr1" menuPortal={menuPortal} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run Review" }));
+    fireEvent.click(screen.getByText("Security"));
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ prId: "pr1", agentId: "a1" }));
   });
 });

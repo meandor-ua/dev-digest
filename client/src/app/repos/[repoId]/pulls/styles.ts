@@ -54,6 +54,14 @@ export const s = {
     alignItems: "center",
     justifyContent: "center",
   } satisfies CSSProperties,
+  runningChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    marginRight: 6,
+    fontSize: 12,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
   updatedCell: {
     fontSize: 12,
     color: "var(--text-muted)",

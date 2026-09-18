@@ -66,23 +66,49 @@ describe("VerdictBanner — 'comment' is amber, not gray", () => {
   });
 });
 
-describe("VerdictBanner — the score ring follows the verdict, not the number", () => {
-  it("an 'approve' at a LOW numeric score still rings green via colorOverride", () => {
-    const { container } = renderWithIntl(
-      <VerdictBanner verdict="approve" summary={null} score={42} findingsCount={0} blockers={0} />,
-    );
-    // 42 would be var(--crit) on CircularScore's own numeric thresholds.
-    const strokes = [...container.querySelectorAll("circle")].map((c) => c.getAttribute("stroke"));
-    expect(strokes).toContain("var(--ok)");
-    expect(strokes).not.toContain("var(--crit)");
-  });
+describe("VerdictBanner — the score ring follows the score thresholds", () => {
+  const strokes = (c: HTMLElement) => [...c.querySelectorAll('svg[style*="rotate"] circle')].map((x) => x.getAttribute("stroke"));
 
-  it("a 'request_changes' at a HIGH numeric score still rings red", () => {
+  it("high score is green even when the verdict is request_changes", () => {
     const { container } = renderWithIntl(
       <VerdictBanner verdict="request_changes" summary={null} score={95} findingsCount={1} blockers={1} />,
     );
-    const strokes = [...container.querySelectorAll("circle")].map((c) => c.getAttribute("stroke"));
-    expect(strokes).toContain("var(--crit)");
-    expect(strokes).not.toContain("var(--ok)");
+    expect(strokes(container)).toContain("var(--ok)");
+  });
+
+  it("mid score is amber, low score is red", () => {
+    const { container } = renderWithIntl(
+      <VerdictBanner verdict="approve" summary={null} score={61} findingsCount={0} blockers={0} />,
+    );
+    expect(strokes(container)).toContain("var(--warn)");
+    cleanup();
+    const low = renderWithIntl(
+      <VerdictBanner verdict="approve" summary={null} score={42} findingsCount={0} blockers={0} />,
+    );
+    expect(strokes(low.container)).toContain("var(--crit)");
+  });
+
+  it("a 0 score renders no ring and no PR SCORE label", () => {
+    const { container } = renderWithIntl(
+      <VerdictBanner verdict="request_changes" summary={null} score={0} findingsCount={3} blockers={3} />,
+    );
+    expect(container.querySelector('svg[style*="rotate"] circle')).toBeNull();
+    expect(screen.queryByText("PR SCORE")).toBeNull();
+  });
+
+  it("a 0 score still renders the footer (cost / tokens), just without the ring", () => {
+    const { container } = renderWithIntl(
+      <VerdictBanner
+        verdict="request_changes"
+        summary={null}
+        score={0}
+        findingsCount={10}
+        blockers={5}
+        footer={<span>$0.020</span>}
+      />,
+    );
+    expect(screen.getByText("$0.020")).toBeInTheDocument();
+    expect(container.querySelector('svg[style*="rotate"] circle')).toBeNull();
+    expect(screen.queryByText("PR SCORE")).toBeNull();
   });
 });

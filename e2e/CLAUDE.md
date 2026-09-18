@@ -25,18 +25,16 @@ command list run in order against one shared browser session by `run.ts`.
 ## Naming conventions
 
 - Flows are named `NN-name.flow.json` under `specs/`, numbered in run order.
-- Locators must be deterministic only (`--url`, `--text`,
-  `find role|text|label`) — never the AI `chat` command, so runs stay stable
-  and key-free.
 
 ## Conventions (not obvious from code)
 
-- Each flow is a JSON command list (`specs/NN-name.flow.json`) run verbatim
-  through `agent-browser` by `run.ts` — no Playwright, no LLM, no API key.
-- `wait --text` / `wait --url` ARE the assertions; a non-zero exit fails the
-  step.
+- `wait --text` / `wait --url` ARE the assertions (a non-zero exit fails the
+  step); a step may also carry `"assert": { "stdoutIncludes": "…" }`
+  (`run.ts:73`).
 - Locators stay deterministic only (`--url`, `--text`, `find role|text|label`)
-  — never the AI `chat` command.
+  — never the AI `chat` command, so runs stay stable and key-free.
+- `wait --text` matches RENDERED text: `SectionLabel` uppercases, so wait for
+  `"DESCRIPTION"`, not `"Description"`.
 
 ## Do-not-touch
 

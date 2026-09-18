@@ -1,0 +1,102 @@
+{
+  "name": "PR detail Overview shows the PR BRIEF card above the description",
+  "description": "From PR #482 (seeded review: request_changes, score 61, 1 CRITICAL + 1 WARNING) confirm the Overview tab renders the PR BRIEF card — verdict, findings count, summary, PR SCORE — with DESCRIPTION still below it. Read-only seeded data (no model call). Assumes a freshly-seeded DB (see e2e/README.md).",
+  "steps": [
+    {
+      "cmd": [
+        "open",
+        "{BASE}/"
+      ],
+      "label": "load the app root"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/pulls"
+      ],
+      "label": "land on the PR list"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Add rate limiting to public API endpoints"
+      ],
+      "label": "seeded PR title row is visible"
+    },
+    {
+      "cmd": [
+        "find",
+        "text",
+        "Add rate limiting to public API endpoints",
+        "click"
+      ],
+      "label": "open the PR row"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/pulls/482"
+      ],
+      "label": "navigate to the PR detail route"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "PR detail data settles"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "PR BRIEF"
+      ],
+      "label": "the PR BRIEF section renders"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Request changes"
+      ],
+      "label": "verdict derived from the findings counts"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "2 findings"
+      ],
+      "label": "findings count matches the PR list"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Stripe secret key is committed in plaintext"
+      ],
+      "label": "the seeded review summary renders"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "PR SCORE"
+      ],
+      "label": "score ring label renders"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "DESCRIPTION"
+      ],
+      "label": "the description section still renders below the brief"
+    }
+  ]
+}

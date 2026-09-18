@@ -4,7 +4,7 @@ import { waitForPrRuns } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
-import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
+import { MockLLMProvider, MockEmbedder, MockGitClient, MockGitHubClient } from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Review } from '@devdigest/shared';
@@ -455,6 +455,153 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     const pulls = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
     const listedPr = pulls.find((p: { id: string }) => p.id === pr.id);
     expect(listedPr.cost_usd).toBeCloseTo(0.003, 6);
+
+    await app.close();
+  });
+
+  async function makeAgent(app: Awaited<ReturnType<typeof appWith>>, name: string) {
+    return (
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: { name, provider: 'openai', model: 'gpt-4.1', system_prompt: 'sec' },
+      })
+    ).json();
+  }
+
+  it('a run reported done (absent from /runs/active) already has its trace', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = await makeAgent(app, 'Sec-order');
+    const started = (
+      await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } })
+    ).json();
+    const runId = started.runs[0].run_id as string;
+
+    // Poll the same signal the client uses; the instant the run leaves the
+    // active set its trace must exist (never a 404 window).
+    for (let i = 0; i < 400; i++) {
+      const active = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/runs/active` })).json();
+      if (!active.some((r: { run_id: string }) => r.run_id === runId)) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    const trace = await app.inject({ method: 'GET', url: `/runs/${runId}/trace` });
+    expect(trace.statusCode).toBe(200);
+    const runs = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/runs` })).json();
+    expect(runs.find((r: { run_id: string }) => r.run_id === runId).has_trace).toBe(true);
+
+    await app.close();
+  });
+
+  it('an empty diff fails the run closed: no review, no LLM call, PR untouched', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: '' }),
+        llm: { openai: llm },
+        // GitHub unreachable too — the last-resort patch fetch must not rescue it.
+        github: { getPullRequest: async () => { throw new Error('offline'); } } as never,
+      },
+    });
+    const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    // No stored patch and (empty git diff) no clone → nothing to review.
+    await pg.handle.db.update(t.prFiles).set({ patch: null }).where(eq(t.prFiles.prId, pr.id));
+    const agent = await makeAgent(app, 'Sec-empty');
+
+    const res = await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().runs).toHaveLength(1);
+
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('failed');
+    expect(runs[0]!.error).toContain('No reviewable diff');
+    expect(runs[0]!.error).toContain('GitHub could not be reached');
+    expect(runs[0]!.costUsd).toBeNull();
+
+    const reviews = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/reviews` })).json();
+    expect(reviews).toHaveLength(0);
+    const listed = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` }))
+      .json()
+      .find((p: { id: string }) => p.id === pr.id);
+    expect(listed.score ?? null).toBeNull();
+    expect(listed.cost_usd).toBeNull();
+    expect(llm.calls.filter((c) => c.method !== 'listModels')).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('a PR with a stored patch still reviews normally (empty-diff guard does not regress it)', async () => {
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: '' }),
+        llm: { openai: new MockLLMProvider('openai', { structured: REVIEW_FIXTURE }) },
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId); // has a patch in pr_files
+    const agent = await makeAgent(app, 'Sec-patched');
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+    const reviews = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/reviews` })).json();
+    expect(reviews).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it('a PR imported without patches fetches them from GitHub and reviews normally', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: '' }), // clone has no diff for the PR head
+        github: new MockGitHubClient(), // serves src/config.ts with a patch
+        llm: { openai: llm },
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    // As the PR list leaves it: no pr_files at all.
+    await pg.handle.db.delete(t.prFiles).where(eq(t.prFiles.prId, pr.id));
+    const agent = await makeAgent(app, 'Sec-fetch');
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+    const files = await pg.handle.db.select().from(t.prFiles).where(eq(t.prFiles.prId, pr.id));
+    expect(files.map((f) => f.path)).toEqual(['src/config.ts']);
+    expect(files[0]!.patch).toContain('stripeKey');
+
+    await app.close();
+  });
+
+  it('a PR that GitHub says changes no files fails with THAT reason, not a token hint', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const gh = new MockGitHubClient();
+    const real = gh.getPullRequest.bind(gh);
+    // Like quick-blog #36: open, 2 commits, but 0 changed files vs base.
+    gh.getPullRequest = async (r, n) => ({ ...(await real(r, n)), files: [], files_count: 0, additions: 0, deletions: 0 });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: { embedder: new MockEmbedder(), git: new MockGitClient({ diff: '' }), github: gh, llm: { openai: llm } },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    await pg.handle.db.delete(t.prFiles).where(eq(t.prFiles.prId, pr.id));
+    const agent = await makeAgent(app, 'Sec-nofiles');
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('failed');
+    expect(runs[0]!.error).toContain('changes no files');
+    expect(runs[0]!.error).not.toContain('token');
+    expect(llm.calls.filter((c) => c.method !== 'listModels')).toHaveLength(0);
 
     await app.close();
   });

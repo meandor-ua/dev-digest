@@ -8,13 +8,14 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Icon, Avatar, Badge, CircularScore } from "@devdigest/ui";
 import type { PrMeta } from "@/lib/types";
 import { RunCostBadge } from "@/components/run-cost-badge";
 import { FindingsBySeverityBadge } from "@/components/findings-by-severity";
 import { RunReviewDropdown } from "@/components/run-review-dropdown";
-import { usePrReviews } from "../../../../../../lib/hooks/reviews";
+import { usePrReviews, usePrActiveRuns, useRefreshWhenRunsSettle } from "../../../../../../lib/hooks/reviews";
 import { activeFindings } from "../../../../../../lib/findings";
 import { SIZE_COLOR, STATUS_META } from "../../constants";
 import { relativeTime, sizeOf } from "../../helpers";
@@ -27,7 +28,21 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
   const [findingsOpen, setFindingsOpen] = React.useState(false);
   const st = STATUS_META[pr.status] ?? STATUS_META.needs_review!;
   const { size, lines } = sizeOf(pr);
-  const reviewed = pr.score != null; // null score ⇒ PR has never been reviewed
+  // Only a row whose review was just started polls its active runs; idle rows
+  // issue no extra requests. Settling refreshes ["pulls"] so score / findings /
+  // cost update in place.
+  const qc = useQueryClient();
+  const [watching, setWatching] = React.useState(false);
+  const watchStart = React.useRef(0);
+  const { data: activeRuns, dataUpdatedAt } = usePrActiveRuns(watching ? pr.id : null);
+  const activeIds = React.useMemo(() => (activeRuns ?? []).map((r) => r.run_id), [activeRuns]);
+  useRefreshWhenRunsSettle(pr.id, activeRuns ? activeIds : undefined);
+  React.useEffect(() => {
+    // Ignore a cached (pre-click) empty result: only a fetch made after the
+    // click can say the runs are done.
+    if (watching && activeRuns && activeRuns.length === 0 && dataUpdatedAt > watchStart.current)
+      setWatching(false);
+  }, [watching, activeRuns, dataUpdatedAt]);
 
   // Lazy — only fetched once the FINDINGS badge is actually hovered/opened,
   // so the list page doesn't fire one reviews request per row up front.
@@ -45,7 +60,9 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
   // Clicking a severity chip lands on the PR's Agent-runs tab, pre-filtered.
   // `run_id` rides along only when the lazily-fetched review is already in
   // hand — never worth an extra request just to build a link.
-  const popoverRunId = reviewRecord?.run_id ?? null;
+  // Same key the Review-runs accordions use (`reviewRunRowKey`): a review with
+  // no run (the seeded one) is addressed by its own id.
+  const popoverRunId = reviewRecord ? (reviewRecord.run_id ?? reviewRecord.id) : null;
   const deepLink = (sev: string) => {
     const qs = new URLSearchParams({ tab: "findings", severity: sev });
     if (popoverRunId) qs.set("agent", popoverRunId);
@@ -81,8 +98,10 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
         </Badge>
       </div>
       <div style={s.scoreCell}>
-        {reviewed ? (
-          <CircularScore score={pr.score!} size={34} stroke={3} />
+        {/* Score thresholds (green ≥75, amber ≥50, red below), same as the
+            PR page; a 0 score shows no ring. */}
+        {pr.score ? (
+          <CircularScore score={pr.score} size={34} stroke={3} />
         ) : (
           <span style={s.muted}>—</span>
         )}
@@ -119,7 +138,27 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
             router.push — the same wrapper pattern the Findings cell uses.
             `menuPortal` because `tableCard` is `overflow: hidden`.
             `pr.id` is nullish in the contract — nothing to run without one. */}
-        {pr.id && <RunReviewDropdown prId={pr.id} kind="ghost" menuPortal />}
+        {watching && (
+          <span style={s.runningChip} data-testid="running-chip">
+            <Icon.RefreshCw size={12} style={{ animation: "ddspin 1s linear infinite" }} />
+            {t("runReview.running")}
+          </span>
+        )}
+        {pr.id && (
+          <RunReviewDropdown
+            prId={pr.id}
+            kind="ghost"
+            menuPortal
+            onRunsStarted={() => {
+              watchStart.current = Date.now();
+              // The ["pr-active-runs"] cache is shared with the PR page and may
+              // hold a still-fresh [] from before this click — without this the
+              // row trusts it, never polls, and the chip never clears.
+              qc.invalidateQueries({ queryKey: ["pr-active-runs", pr.id] });
+              setWatching(true);
+            }}
+          />
+        )}
       </div>
       <div style={s.updatedCell}>{relativeTime(pr.updated_at)}</div>
     </div>

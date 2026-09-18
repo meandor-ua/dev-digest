@@ -1,12 +1,13 @@
 import 'dotenv/config';
 import { createDb, type Db } from './client.js';
 import * as t from './schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or, isNull } from 'drizzle-orm';
 import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
 } from './seed-prompts.js';
+import { PR_482_PATCHES, patchStats } from './seed-patches.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -117,12 +118,9 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       .returning();
 
     // pr_files (subset)
-    await db.insert(t.prFiles).values([
-      { prId: pr!.id, path: 'src/middleware/ratelimit.ts', additions: 84, deletions: 0 },
-      { prId: pr!.id, path: 'src/api/public/webhooks.ts', additions: 31, deletions: 6 },
-      { prId: pr!.id, path: 'src/config.ts', additions: 4, deletions: 0 },
-      { prId: pr!.id, path: 'src/api/users.ts', additions: 7, deletions: 2 },
-    ]);
+    await db
+      .insert(t.prFiles)
+      .values(PR_482_PATCHES.map((f) => ({ prId: pr!.id, path: f.path, patch: f.patch, ...patchStats(f.patch) })));
 
     // pr_commits
     await db.insert(t.prCommits).values({
@@ -173,6 +171,17 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
         confidence: 0.86,
       },
     ]);
+  }
+
+  // Backfill patches on a DB seeded before they existed: without a stored patch
+  // (and with no clone for this fictional repo) the PR has no diff to review.
+  for (const f of PR_482_PATCHES) {
+    await db
+      .update(t.prFiles)
+      .set({ patch: f.patch, ...patchStats(f.patch) })
+      .where(
+        and(eq(t.prFiles.prId, pr!.id), eq(t.prFiles.path, f.path), or(isNull(t.prFiles.patch), eq(t.prFiles.patch, ''))),
+      );
   }
 
   // ---- built-in agents (the three starter presets) ----

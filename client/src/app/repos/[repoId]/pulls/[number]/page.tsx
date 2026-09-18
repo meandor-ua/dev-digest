@@ -43,7 +43,8 @@ export default function PRDetailPage() {
   // The route is keyed by PR number, but every PR API is keyed by the row's
   // uuid — resolve number → uuid via the (cached) pulls list before fetching.
   const { data: pulls, isLoading: pullsLoading } = usePulls(repoId);
-  const prId = pulls?.find((p) => p.number === Number(number))?.id ?? null;
+  const prMeta = pulls?.find((p) => p.number === Number(number));
+  const prId = prMeta?.id ?? null;
   const { data: pr, isLoading: detailLoading, isError, error, refetch } = usePullDetail(prId);
 
   const isLoading = pullsLoading || (prId != null && detailLoading);
@@ -108,6 +109,14 @@ export default function PRDetailPage() {
     () => (traceRunId ? runs.find((r) => r.kind === "review" && r.run_id === traceRunId) : undefined),
     [runs, traceRunId],
   );
+  // PR BRIEF inputs — all already loaded; same numbers as the PR list row.
+  const briefSummary = runs.find((r) => r.kind === "review")?.summary ?? null;
+  const briefTokens = (prRuns ?? [])
+    .filter((r) => r.status === "done")
+    .reduce(
+      (acc, r) => ({ in: acc.in + (r.tokens_in ?? 0), out: acc.out + (r.tokens_out ?? 0) }),
+      { in: 0, out: 0 },
+    );
   const lethalTrifecta = allFindings.filter((f) => f.kind === "lethal_trifecta");
   const findingsCount = allFindings.length;
 
@@ -173,7 +182,19 @@ export default function PRDetailPage() {
       />
 
       <div style={{ padding: "24px 32px 44px", display: "flex", flexDirection: "column", gap: 24, maxWidth: 1080, margin: "0 auto" }}>
-        {tab === "overview" && <OverviewTab prBody={pr.body} />}
+        {tab === "overview" && (
+          <OverviewTab
+            prBody={pr.body}
+            brief={{
+              score: prMeta?.score,
+              counts: prMeta?.findings_by_severity,
+              costUsd: prMeta?.cost_usd,
+              tokensIn: briefTokens.in,
+              tokensOut: briefTokens.out,
+              summary: briefSummary,
+            }}
+          />
+        )}
 
         {tab === "findings" && (
           <FindingsTab
@@ -220,7 +241,11 @@ export default function PRDetailPage() {
           runId={traceRunId}
           prNumber={pr.number}
           findings={tracedReview?.findings ?? []}
-          agentName={tracedReview?.agent_name ?? null}
+          agentName={
+            tracedReview?.agent_name ??
+            prRuns?.find((r) => r.run_id === traceRunId)?.agent_name ??
+            null
+          }
           running={liveRunIds.includes(traceRunId)}
           onClose={() => setParam("trace", null)}
         />
