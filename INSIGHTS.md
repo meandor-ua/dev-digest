@@ -68,6 +68,21 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   `.claude/skills/plan-adversarial-review/SKILL.md:1-4`,
   `.claude/skills/frontend-architecture/SKILL.md:1-6`.
 
+- **2026-09-21** — A skill's frontmatter `description` has a hard **1024-char
+  cap** (Claude Code refuses longer ones); `onion-architecture` had drifted to
+  1068. Audit every skill with a one-liner that re-extracts the frontmatter
+  value and measures it after collapsing whitespace — `python3` + `re.search`
+  over `.claude/skills/*/SKILL.md`; the next-closest to the cap are
+  `frontend-architecture` (944) and `plan-adversarial-review` (850), so this
+  recurs. When trimming, cut only what does no *triggering* work: prose that
+  restates the rule (already in the body), `see ` prefixes before sibling skill
+  names, and framework version numbers (`(ESM)`, `Fastify 5` — nobody phrases a
+  request that way). Keep the whole `Use when …` clause list and distinctive
+  stack tokens like `pgvector`, which are what disambiguate one skill from the
+  15+ others competing for the same match. 1068 → 978 this way, body untouched.
+  Evidence: `.claude/skills/onion-architecture/SKILL.md:3` (rule restated in
+  the body at `:62`, `:80`).
+
 - **2026-09-16** — `docs/README.md` and `specs/README.md` stub files use the
   header convention `# <thing> — <package>` (e.g. `# docs — DevDigest`,
   `# specs — client`) — follow it when adding new doc/spec stubs so headers
