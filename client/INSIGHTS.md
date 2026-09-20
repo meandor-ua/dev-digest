@@ -90,6 +90,17 @@ you, so the next agent/session doesn't relearn it.
   anywhere, Review-runs header plain "0" (kept by user decision). Evidence:
   `client/src/app/repos/[repoId]/pulls/[number]/_components/VerdictBanner/VerdictBanner.tsx:58`.
 
+- **2026-09-20** — `client/next-env.d.ts` is Next-generated and its
+  `routes.d.ts` reference flips between `./.next/...` and `./.next-e2e/...`
+  depending on which run last touched it (`scripts/e2e.sh` sets
+  `NEXT_DIST_DIR=.next-e2e`), so a tracked copy shows a spurious diff after
+  every dev/e2e run. It is now untracked + gitignored (Next's recommendation).
+  Harmless for tooling — `tsconfig.json` includes both `.next/types` and
+  `.next-e2e/types`, eslint ignores it — but on a fresh clone the file doesn't
+  exist until the first `next dev`/`build`, so a typecheck before that may lack
+  the route types. Never `git add` it. Evidence: `client/next.config.mjs:12`,
+  `scripts/e2e.sh:46`, `.gitignore:11`, `client/tsconfig.json:33`.
+
 ## What Doesn't Work
 
 - **2026-09-18** — `vendor/ui/primitives/Button.tsx`'s `active` prop is

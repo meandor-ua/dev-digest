@@ -10,7 +10,7 @@ primitives) are NOT real npm packages — there's no monorepo workspace, no
 plain TypeScript trees under `src/vendor/shared` and `src/vendor/ui`,
 imported via `tsconfig.json` path aliases. `@devdigest/shared` is meant to
 stay byte-identical to `server`'s copy of the same contracts (hand-edit both,
-then `diff` — see root `CLAUDE.md`'s do-not-touch section); `@devdigest/ui`
+then `diff` — see root `AGENTS.md`'s do-not-touch section); `@devdigest/ui`
 has no second copy anywhere in the repo, so it's safe to hand-edit directly
 (confirmed by grepping for a server-side `vendor/ui` — none exists; UI
 primitives are a client-only concern).

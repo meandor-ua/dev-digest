@@ -91,7 +91,7 @@ open the file, you do not know.
 Plans contradict project conventions silently, because conventions live in
 prose the planner skimmed. Read what applies to the touched area:
 
-- **Agent/convention files** — root and per-package `CLAUDE.md` / `AGENTS.md`:
+- **Agent/convention files** — root and per-package `AGENTS.md` (`CLAUDE.md` symlink):
   stack, structure, naming policy, and especially **do-not-touch** rules
   (generated files, vendored copies, applied migrations, lockfiles). A plan
   step that edits one of those is a must-fix on its own.

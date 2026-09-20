@@ -18,6 +18,17 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   Not a project bug — an environment quirk to route around, every time. Bites the
   npm-managed `e2e/` package, run as `cd e2e && npm test` (`scripts/e2e.sh:18`).
 
+- **2026-09-20** — Agent-guide files are `AGENTS.md` (tool-neutral); each
+  directory also has a `CLAUDE.md` **symlink** to it (`ln -s AGENTS.md
+  CLAUDE.md`, relative) because Claude Code reads only the `CLAUDE.md` name,
+  and only per directory — a root-only link would not cover
+  `client/`/`server/`/`reviewer-core/`/`e2e/`. Edit `AGENTS.md`, never replace
+  the symlink with a copy. On Windows symlinks need `core.symlinks=true` +
+  developer mode, else they check out as a text file; fallback is a one-line
+  `CLAUDE.md` containing `@AGENTS.md`. `server/clones/**` holds third-party
+  repos with their own `CLAUDE.md` (gitignored) — don't rename those.
+  Evidence: `AGENTS.md:119`, `.gitignore:21`.
+
 ## Codebase Patterns
 
 - **2026-09-16** — `docs/README.md` and `specs/README.md` stub files use the

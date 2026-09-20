@@ -106,6 +106,6 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 
 ---
 
-Agent-facing map, conventions, and do-not-touch zones: [`CLAUDE.md`](./CLAUDE.md) ·
+Agent-facing map, conventions, and do-not-touch zones: [`AGENTS.md`](./AGENTS.md) ·
 deeper notes: [`docs/`](./docs/) · [`INSIGHTS.md`](./INSIGHTS.md)
 (`specs/` here already holds agent-browser flow definitions, not this convention.)
