@@ -106,8 +106,9 @@ carries a date and a `file:line`.
 - `skills-lock.json` and the VENDORED skill folders under `.claude/skills/`
   (hash-pinned Claude Code dev tooling, unrelated to the product's own future
   "Skills" feature). Skills with scope `Local` in `.claude/skills/README.md`
-  (`engineering-insights`, `esbuild-arch-mismatch`, `plan-adversarial-review`)
-  and that README itself are authored here and may be edited.
+  (`engineering-insights`, `esbuild-arch-mismatch`, `frontend-architecture`,
+  `plan-adversarial-review`) and that README itself are authored here and may
+  be edited.
 - Per-package dependency lockfiles — never hand-edit, only regenerate via
   that package's own package manager: `client/pnpm-lock.yaml`,
   `server/pnpm-lock.yaml`, `reviewer-core/package-lock.json`,

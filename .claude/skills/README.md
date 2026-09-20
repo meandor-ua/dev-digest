@@ -4,6 +4,12 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 
 ## Catalog
 
+Scope is the domain a skill serves — `Backend`, `Frontend`, `Full-stack`,
+`Shared`, or `Local`. **`Local` is load-bearing**: it is what marks a skill as
+authored here and therefore editable (everything else is vendored — see the
+do-not-touch section in the root `AGENTS.md`). The `Local` set is mirrored in
+`AGENTS.md`'s do-not-touch list and the two must be updated together.
+
 | Skill | Scope | Description |
 |-------|-------|-------------|
 | [fastify-best-practices](fastify-best-practices/SKILL.md) | Backend | Fastify routes, plugins, JSON-schema validation, error handling |
@@ -19,6 +25,7 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [engineering-insights](engineering-insights/SKILL.md) | Local | Capture non-obvious findings into the right `INSIGHTS.md` during/after a session |
 | [esbuild-arch-mismatch](esbuild-arch-mismatch/SKILL.md) | Local | Diagnose/work around esbuild native-binary CPU-arch mismatches in this repo |
 | [plan-adversarial-review](plan-adversarial-review/SKILL.md) | Local | Independently re-verify a drafted implementation plan against live code, project docs and tests before coding |
+| [frontend-architecture](frontend-architecture/SKILL.md) | Local | Decide where every frontend file belongs — tiered structure, component taxonomy, constants, utils vs helpers, UI/business-logic layering |
 
 ## What Are Skills?
 
@@ -33,13 +40,27 @@ Skills are modular packages that extend the AI agent with specialized knowledge 
 | **Skills** (`.md`) | Domain knowledge | On-demand by agent | Specialized knowledge |
 | **Agents** (`.md`) | Workflows | Via Task tool | Subagent orchestration |
 
+In this repo only **Skills** are present — `.claude/` contains `skills/` and
+nothing else. The other three rows are context for how skills differ, not an
+inventory.
+
 ## Creating New Skills
 
-Each skill has:
+Every skill has a `SKILL.md` (required) — frontmatter of exactly `name`
+(kebab-case, identical to the directory) and `description`, then the rules.
+That is all most of them have: 10 of 14 are `SKILL.md`-only.
 
-- `SKILL.md` — Main skill file with rules and conventions (required)
-- `examples.md` — Code examples showing good/bad patterns (recommended)
-- `references.md` — Sources and rationale (optional)
+Beyond that, two patterns are in use, both fine — pick by size:
+
+- **Companion files** — `examples.md` (good/bad code) and `references.md`
+  (sources and rationale), as `frontend-architecture`, `react-best-practices`,
+  `mermaid-diagram` and `security` do.
+- **Flat topic files** — one `.md` per topic beside `SKILL.md`, which becomes
+  a table of contents pointing at them. `next-best-practices` does this with
+  19 of them.
+
+Keep `SKILL.md` under 500 lines and keep every reference exactly one level
+deep from it, so a file is never reached through another file.
 
 A skill isn't done until it's in the **Catalog** table above — add a row
 (scope `Local` for one authored in this repo, or the matching domain scope

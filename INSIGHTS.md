@@ -29,7 +29,44 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   repos with their own `CLAUDE.md` (gitignored) — don't rename those.
   Evidence: `AGENTS.md:119`, `.gitignore:21`.
 
+- **2026-09-20** — `tseslint.configs.base` is a single config **object**, not
+  an array: spreading it (`...tseslint.configs.base`) throws `TypeError:
+  object is not iterable` at config load, while `tseslint.configs.recommended`
+  IS an array and must be spread. Related trap: a flat config with no
+  typescript-eslint parser block reports ~150 bogus
+  `Parsing error: Unexpected token :` across `.ts` files — that's a missing
+  parser, not broken sources. Evidence: `client/eslint.config.mjs:12`.
+
+- **2026-09-20** — A session running as a *different* OS user than the repo
+  owner leaves files that later sessions cannot edit: the
+  `.claude/skills/frontend-architecture/` files were written by user `sov`
+  (mode 644) in a repo owned by `oleksandr`, so a subsequent session as
+  `oleksandr` gets `PermissionError` on every write and `git` may refuse with
+  `fatal: detected dubious ownership`. Check `ls -l` before planning edits to
+  files a previous session created; the fix is
+  `sudo chown -R "$(whoami)" <path>`.
+
+- **2026-09-20** — The `skip-worktree` rationale for inlining vitest in CI was
+  dead and had been copy-pasted into four files (`TESTING.md`,
+  `server-unit.yml`, `server-integration.yml`, `e2e-web.yml`): all claimed
+  `server/package.json` is `skip-worktree`, but `git ls-files -v | grep '^S'`
+  is empty — no file in the repo carries the flag. The inlined
+  `pnpm exec vitest run …` is still right, for the simpler reason that
+  `server/package.json` has no `test:unit`/`test:integration` scripts.
+  Rationale corrected in place this session. Evidence: `TESTING.md:83-87`.
+
 ## Codebase Patterns
+
+- **2026-09-20** — Locally-authored skills in `.claude/skills/<name>/` use
+  frontmatter of **exactly two keys** — `name` (kebab-case, identical to the
+  directory) and `description` — with no `version`, `allowed-tools`, or
+  `metadata`. A skill's version therefore lives in the SKILL.md body and its
+  README, never in frontmatter. Body idiom: rationale paragraph → topical
+  `##` sections → tables and fenced templates → a closing `| Don't | Do |`
+  table, prose wrapped ~76 cols. Anthropic's own cap is 500 body lines with
+  references exactly one level deep from SKILL.md. Evidence:
+  `.claude/skills/plan-adversarial-review/SKILL.md:1-4`,
+  `.claude/skills/frontend-architecture/SKILL.md:1-6`.
 
 - **2026-09-16** — `docs/README.md` and `specs/README.md` stub files use the
   header convention `# <thing> — <package>` (e.g. `# docs — DevDigest`,
@@ -54,6 +91,15 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   exercise (e.g. `agent_runs.cost_usd` existed at `0000_init`, was dropped by
   migration `0009`, added back by this session's L01 task 3). Evidence:
   `server/src/db/schema/runs.ts:23`.
+
+- **2026-09-20** — `docker-compose.yml` exists twice (repo root and
+  `server/`), byte-identical, and **both pin `name: devdigest`** — so they
+  address the same compose project, container and volume. Running
+  `docker compose up -d` from either directory is equivalent; the duplication
+  looks like a container-name collision but is not one. Separately,
+  `scripts/e2e.sh` does NOT use compose at all — it runs a throwaway Postgres
+  on :5433 via `docker run --rm`, so the e2e stack never touches the dev
+  volume. Evidence: `docker-compose.yml:7`, `scripts/e2e.sh:91`.
 
 ## What Doesn't Work
 
@@ -127,6 +173,36 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   component gets a co-located test" was also false (17 of 30 route components
   had none). A one-line `grep -c` per claim settles it; rules now corrected.
   Evidence: `client/CLAUDE.md:26`, `CLAUDE.md:66`, `server/src/db/schema.ts:15`.
+
+- **2026-09-20** — Naive repo-wide `find`/`grep` counts are wrong twice over.
+  (a) `server/clones/**` is a gitignored clone of THIS repo, so counting
+  `server/` without excluding it double-counts: a prior audit reported 35
+  DB-free + 17 DB-backed server tests; the real numbers are **16 and 11**, all
+  in `server/test/`. That bad count had already leaked into
+  `.github/workflows/server-unit.yml` (which said "~19"). (b) `src/vendor/**`
+  holds 70 of client's 269 `.ts`/`.tsx` files, so vendor-inclusive stats
+  overstate local convention — non-vendor figures are 199 files, 351
+  `style={`, 33 `className=`, 22 tests. Vendor is do-not-touch, so it is never
+  evidence of how code here is written. Always exclude both. Evidence:
+  `find server -name '*.test.ts' -not -path '*/clones/*' -not -path '*/node_modules/*'`.
+
+- **2026-09-20** — Supersedes the 2026-09-17 note that both `vendor/shared`
+  copies "must be hand-edited identically": they have **drifted**, and the
+  drift is currently **inert**. `server/src/vendor/shared` is ahead of the
+  client copy in 5 files (`adapters.ts` 49 lines, `contracts/knowledge.ts` 35,
+  `contracts/eval-ci.ts` 33, `contracts/trace.ts` 5 comment-only,
+  `contracts/productionize.ts` 2). It doesn't bite today because the client
+  imports none of the server-only symbols (`AgentManifest`, `AgentVersion`,
+  `CommitFilesPayload`, `getAuthenticatedUser`, `sessionId`) and does **zero
+  runtime Zod parsing** of shared schemas — `.parse`/`.safeParse` appear
+  nowhere outside `vendor/`, so the contracts are used purely as `z.infer`
+  types and `pnpm typecheck` passes clean. The latent trap:
+  `PluginAgent.provider` and `ConformanceInput.provider` are
+  `['openai','anthropic']` on the client vs `[…,'openrouter']` on the server,
+  so the first client code to touch either symbol gets an inexplicable type
+  error on `"openrouter"` — even though `Provider` in `knowledge.ts` still has
+  all three on both sides. Nothing in CI checks parity. Evidence:
+  `diff -r server/src/vendor/shared client/src/vendor/shared`.
 
 ## Session Notes
 

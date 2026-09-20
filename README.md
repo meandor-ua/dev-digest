@@ -128,9 +128,9 @@ cd ../client && pnpm install && pnpm dev               # web on :3000
 
 ## Useful scripts
 
-`server/`: `dev` · `build` · `db:migrate` · `db:seed` · `db:generate` · `test` · `typecheck`
+`server/`: `dev` · `build` · `start` · `db:migrate` · `db:seed` · `db:generate` · `test` · `typecheck` · `lint`
 (unit/integration split: `pnpm exec vitest run --exclude '**/*.it.test.ts'` / `pnpm exec vitest run .it.test`)
-`client/`: `dev` · `build` · `start` · `test` · `typecheck`
+`client/`: `dev` · `build` · `start` · `test` · `typecheck` · `lint`
 
 ## Testing & CI
 
@@ -154,7 +154,8 @@ Postgres); everything else is hermetic. The browser e2e flows live in
 - **`relation ... does not exist` / API errors on first run** — migrations weren't
   applied. The server does **not** migrate on boot: run `cd server && pnpm db:migrate`.
 - **Port 5432 already in use** — another Postgres is running. Stop it, or change the
-  host port in `docker-compose.yml`.
+  host port in the repo-root `docker-compose.yml` (and its byte-identical copy
+  at `server/docker-compose.yml`).
 - **`vector` type errors** — the pgvector extension is enabled by migration `0000`;
   make sure migrations ran against the Dockerized DB, not a different one.
 - **Reset everything** — `docker compose down -v` drops the volume, then re-run

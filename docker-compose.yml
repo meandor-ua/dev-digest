@@ -1,3 +1,9 @@
+# Canonical compose file — scripts/dev.sh runs `docker compose up -d` against
+# it. (scripts/e2e.sh does NOT use compose: it runs its own ephemeral,
+# throwaway Postgres on :5433 via `docker run --rm`, so the e2e stack never
+# touches this volume.)
+# server/docker-compose.yml is a byte-identical copy for `cd server`
+# convenience — same `name:`, so same project. Keep them in sync.
 name: devdigest
 
 services:

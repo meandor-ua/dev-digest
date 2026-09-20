@@ -101,7 +101,56 @@ you, so the next agent/session doesn't relearn it.
   the route types. Never `git add` it. Evidence: `client/next.config.mjs:12`,
   `scripts/e2e.sh:46`, `.gitignore:11`, `client/tsconfig.json:33`.
 
+- **2026-09-20** — Detecting server vs client components by reading the first
+  few lines is unreliable: in
+  `client/src/app/repos/[repoId]/pulls/[number]/page.tsx` the `"use client"`
+  directive sits at **line 6**, after a 5-line header comment, so a `head -3`
+  check calls it a server component. Grep the whole file. (For the record
+  there are exactly three real server components — `app/layout.tsx`,
+  `app/agents/page.tsx`, `app/settings/[section]/page.tsx` — and none of them
+  fetch.) Evidence:
+  `client/src/app/repos/[repoId]/pulls/[number]/page.tsx:6`.
+
+- **2026-09-20** — "How many component folders?" is ambiguous here and gives
+  two different answers, because the repo uses **two** directory conventions:
+  route-local `_components/<PascalName>/<PascalName>.tsx` and cross-route
+  `src/components/<kebab-name>/<PascalName>.tsx`. A loop testing
+  `[ -f "$d/$(basename $d).tsx" ]` only finds the first kind and reports 17
+  folders missing `styles.ts`; adding the `src/components/*/` kebab dirs gives
+  the real **22**. Any doc quoting a component count must state which
+  convention(s) it counted, or the next person "corrects" it to the wrong
+  number. Evidence: `client/src/components/run-cost-badge/RunCostBadge.tsx`
+  vs `client/src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.tsx`.
+- **2026-09-20** (supersedes the entry above) — The raw "**22** folders missing
+  `styles.ts`" overstates the gap, because a sibling `styles.ts` is not the only
+  sanctioned way to style: of the 22, **14** reuse a *shared* styles module —
+  10 sub-components import their parent's `styles.ts` (`from "../styles"` /
+  `"../../styles"`, in `RunTraceDrawer/`, `pulls/`, `diff-viewer/`) and 4
+  diff-viewer members import the shared `cs` object from `diff-viewer/comments.ts`
+  — and **3** render no styling of their own (compose only `@devdigest/ui` +
+  children: `DiffTab`, `app-shell`, `repo-not-found`). Only **~5** genuinely
+  style inline with neither a sibling nor a shared module (`AddRepoView`,
+  `PromptModalBody`, `run-cost-badge`, `mermaid-diagram`, `run-review-dropdown`).
+  So report both: 22 lack a *sibling* `styles.ts`, but the real gap is ~5. This
+  intra-family sharing is now sanctioned in the `frontend-architecture` skill
+  (SKILL.md "Styling"). Evidence:
+  `client/src/components/diff-viewer/comments.ts:108` (`export const cs`),
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/RunTraceDrawer/_components/TraceSection/TraceSection.tsx:6`.
+
 ## What Doesn't Work
+
+- **2026-09-20** — A blanket ESLint ban on deep relative imports
+  (`no-restricted-imports` patterns `../../*`, `../../../*`) cannot be
+  satisfied by the `@/` alias alone: `@/*` maps to `./src/*`
+  (`client/tsconfig.json`), but the i18n message files live **outside** `src`
+  at `client/messages/en/*.json`, so imports like
+  `../../../messages/en/prReview.json` have no aliased form. Add a second
+  path (`@messages/*` → `./messages/*`) or exempt that group before turning
+  such a rule on. Measured 2026-09-20: 79 violations total across
+  `client/src`, all pre-existing deep relatives. Evidence:
+  `client/src/components/run-review-dropdown/RunReviewDropdown.test.tsx:4`,
+  `client/src/app/repos/[repoId]/pulls/[number]/page.tsx:11-12` (alias and
+  deep relative in the same file).
 
 - **2026-09-18** — `vendor/ui/primitives/Button.tsx`'s `active` prop is
   completely dead for `kind="secondary"`/`"ghost"` — only `kind="tertiary"`'s
