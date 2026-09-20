@@ -116,6 +116,24 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   on :5433 via `docker run --rm`, so the e2e stack never touches the dev
   volume. Evidence: `docker-compose.yml:7`, `scripts/e2e.sh:91`.
 
+- **2026-09-21** — Supersedes the 2026-09-21 "hard 1024-char cap (Claude Code
+  refuses longer ones)" entry above: there are **two different limits and
+  Claude Code's is not the 1024 one**. Claude Code truncates `description` +
+  `when_to_use` **combined** at **1536 characters**, and does so *silently in
+  the skill listing* — the skill still loads, it just loses the trailing text,
+  which is exactly where the `Use when …` trigger phrases live. The **1024**
+  cap is the claude.ai / Agent Skills packaging validator, and that one is a
+  hard reject. Budget to 1024 for portability, but **measure bytes, not
+  characters**: this repo's em-dash house style costs 3 bytes per dash, so
+  `frontend-architecture` is 944 chars / **946 bytes** and
+  `plan-adversarial-review` is 850 / **856**. A description written to "1020
+  characters" can land over the byte cap. Keep the description ASCII to make
+  the two numbers equal. No tooling checks either limit — `claude plugin
+  validate` is syntax-only and `/skill-doctor` reports usage — so the audit
+  one-liner must also print `len(d.encode())` and `d.isascii()`. Evidence:
+  `.claude/skills/pr-self-review/SKILL.md:3` (853 chars / 853 bytes, ASCII,
+  written to this rule).
+
 ## What Doesn't Work
 
 - **2026-09-17** — Don't trust `git log --all` authorship as "the teacher's
@@ -219,7 +237,54 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   all three on both sides. Nothing in CI checks parity. Evidence:
   `diff -r server/src/vendor/shared client/src/vendor/shared`.
 
+- **2026-09-21** — Don't implement the vendor-parity rule as a whole-tree
+  `diff -rq server/src/vendor client/src/vendor` gate: it fires on every run,
+  so any automated check built on it is a permanent false blocker. Two
+  independent reasons. (1) `client/src/vendor/ui` has no server counterpart at
+  all, so the trees can never match. (2) The shared subtrees are **already
+  divergent on `main`** — 5 files differ (`shared/adapters.ts` plus
+  `shared/contracts/{eval-ci,knowledge,productionize,trace}.ts`), the server
+  copy being a superset that carries server-only surface (`CommitFilesPayload`,
+  `commitFiles`, `findOpenPr`, `getAuthenticatedUser`, `sync`, `diffNameOnly`,
+  the `'openrouter'` provider id). This supersedes the 2026-09-17 entry's
+  "verified via `diff` they were kept byte-identical (modulo comments)" — that
+  held for the two `contracts/` files it checked, not for the vendor trees as a
+  whole. The invariant that *is* enforceable is per-file and diff-scoped: if a
+  change-set touches one package's `vendor/` path, the mirrored path under the
+  other package must be in the same change-set. Pre-existing drift is at most a
+  `should-fix` labelled pre-existing, never a blocker on whoever merely touched
+  the file. Evidence: `.claude/skills/pr-self-review/routing.md:42-56`.
+
+- **2026-09-21** — A delegated subagent **inherits the parent session's plan
+  mode**. An `Agent` spawned to implement an approved plan while plan mode was
+  still active refused to write any repo file and produced a second plan file
+  instead, reporting success — the parent then has to re-delegate from scratch.
+  Call `ExitPlanMode` and get approval *before* delegating implementation work,
+  and treat "agent finished but `git status` is clean" as the tell. Evidence:
+  this session's two `pr-self-review` delegations, the first producing only
+  `~/.claude/plans/…-agent-<id>.md`.
+
 ## Session Notes
+
+### 2026-09-21
+- Added the `pr-self-review` skill (`.claude/skills/pr-self-review/`: SKILL.md
+  167 lines + `routing.md` + `severity.md`), scope `Local`. It is a
+  *dispatcher*, not another reviewer: resolves the change-set (branch vs
+  `main` merge-base, unioned with uncommitted work), runs the touched
+  packages' own gates first, fans out one subagent per bucket loading the
+  matching existing skills, merges to one verdict. Catalog row and the
+  `AGENTS.md` do-not-touch `Local` list updated together, as the README
+  requires.
+- Deliberately **skill-only** — no `.claude/settings.json` hook, no
+  `pre-push`. A skill cannot block a process; SKILL.md says so explicitly
+  rather than implying enforcement. `verdict.json` shape is kept stable so a
+  later hook can read it without changing the skill.
+- The severity rubric had to live in the new skill, not in the reviewer
+  skills it calls: those are vendored and hash-pinned in `skills-lock.json`,
+  so a shared "what counts as blocking" definition has nowhere else to go.
+- Implementation was delegated to Sonnet 5; review of its output caught the
+  whole-tree vendor-diff false blocker and a tier inconsistency between
+  `routing.md` and `severity.md` (both fixed in-session).
 
 ### 2026-09-18
 - Cross-package L01 follow-up implemented (client + server +

@@ -27,6 +27,7 @@ do-not-touch section in the root `AGENTS.md`). The `Local` set is mirrored in
 | [plan-adversarial-review](plan-adversarial-review/SKILL.md) | Local | Independently re-verify a drafted implementation plan against live code, project docs and tests before coding |
 | [frontend-architecture](frontend-architecture/SKILL.md) | Local | Decide where every frontend file belongs — tiered structure, component taxonomy, constants, utils vs helpers, UI/business-logic layering |
 | [onion-architecture](onion-architecture/SKILL.md) | Local | Decide which server layer every file belongs to — inward-only dependencies, ports vs adapters, no Drizzle/rows above the repository, service DI |
+| [pr-self-review](pr-self-review/SKILL.md) | Local | Pre-PR dispatcher: resolve the diff, run deterministic gates, fan out to the matching review skills per package, merge into one verdict |
 
 ## What Are Skills?
 
