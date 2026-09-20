@@ -22,6 +22,20 @@ you, so the next agent/session doesn't relearn it.
 
 ## Tool & Library Notes
 
+- **2026-09-21** — `dependency-cruiser` (a `server/` devDep, `package.json:25`,
+  also the engine behind `adapters/depgraph`) has two traps when writing
+  layer-boundary rules: (1) a backreference to a `from` capture group inside a
+  `to` path must be **`$1`**, not `\1` — `\1` does not interpolate, so a
+  "no cross-module internals" rule written with `(?!\1/)` silently matched
+  *same-module* imports and produced 22 false positives; (2)
+  `tsPreCompilationDeps: true` is **required**, or `import type` edges are
+  invisible and any rule about type-only leakage (e.g. Drizzle row types)
+  reports nothing and looks green. Run it without `pnpm exec`:
+  `PATH=/usr/local/bin:$PATH node ./node_modules/dependency-cruiser/bin/dependency-cruise.mjs src --config <cfg> --output-type err`.
+  A verified onion-boundary baseline for the current tree is 24 errors /
+  0 warnings over 151 modules. Evidence:
+  `.claude/skills/onion-architecture/enforcement.md:1`.
+
 - **2026-09-17** — A Fastify route with no declared `schema.response` and a
   bare object return correctly drops an `undefined`-valued key from the JSON
   wire response (confirmed empirically, not just assumed) — this is the

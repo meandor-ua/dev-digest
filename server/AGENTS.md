@@ -48,6 +48,8 @@ required to boot — every secret is optional and settable at runtime.
   (`fastify-type-provider-zod`) — don't hand-roll `Schema.parse(req.body)`.
 - Secrets never come from `AppConfig` — they go through `SecretsProvider`
   (`~/.devdigest/secrets.json`, `process.env` fallback).
+- Layer boundaries (which file may import Drizzle, where ports live, service DI)
+  → use the `onion-architecture` skill.
 
 ## Use when
 

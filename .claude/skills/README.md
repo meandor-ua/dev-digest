@@ -26,6 +26,7 @@ do-not-touch section in the root `AGENTS.md`). The `Local` set is mirrored in
 | [esbuild-arch-mismatch](esbuild-arch-mismatch/SKILL.md) | Local | Diagnose/work around esbuild native-binary CPU-arch mismatches in this repo |
 | [plan-adversarial-review](plan-adversarial-review/SKILL.md) | Local | Independently re-verify a drafted implementation plan against live code, project docs and tests before coding |
 | [frontend-architecture](frontend-architecture/SKILL.md) | Local | Decide where every frontend file belongs — tiered structure, component taxonomy, constants, utils vs helpers, UI/business-logic layering |
+| [onion-architecture](onion-architecture/SKILL.md) | Local | Decide which server layer every file belongs to — inward-only dependencies, ports vs adapters, no Drizzle/rows above the repository, service DI |
 
 ## What Are Skills?
 
