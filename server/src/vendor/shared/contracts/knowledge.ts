@@ -131,6 +131,37 @@ export const Skill = z.object({
 });
 export type Skill = z.infer<typeof Skill>;
 
+export const SkillVersion = z.object({
+  skill_id: z.string(),
+  version: z.number().int(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type SkillVersion = z.infer<typeof SkillVersion>;
+
+export const SkillAgentRef = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+export type SkillAgentRef = z.infer<typeof SkillAgentRef>;
+
+export const SkillStats = z.object({
+  agent_count: z.number().int(),
+  agents: z.array(SkillAgentRef),
+  pull_frequency_pct: z.number(),
+  accept_rate_pct: z.number(),
+  findings_30d: z.number().int(),
+  findings_by_category: z.record(z.string(), z.number().int()),
+});
+export type SkillStats = z.infer<typeof SkillStats>;
+
+export const SkillWithStats = Skill.extend({
+  agent_count: z.number().int().optional(),
+  pull_frequency_pct: z.number().optional(),
+  accept_rate_pct: z.number().optional(),
+});
+export type SkillWithStats = z.infer<typeof SkillWithStats>;
+
 export const CommunitySkill = z.object({
   name: z.string(),
   repo: z.string(),

@@ -66,6 +66,72 @@ Specs / acceptance criteria for the `server` package.
   token configured, revoked token, network error), never a thrown 500.
 - Covered by `test/workspace.it.test.ts`.
 
+## `/skills` endpoints — SSRF-safe import + vetting
+
+### Overview
+Skills are reusable review rubrics/rules that agents can link to. They support
+CRUD operations and optional import from remote URLs with strict SSRF guards.
+
+### Security: `POST /skills/import` — SSRF prevention
+
+Importing from user-provided URLs requires multiple layers of validation:
+
+- **HTTPS-only:** `http://` rejected outright.
+- **No credentials:** URLs with username/password rejected.
+- **Port validation:** only default HTTPS (443) allowed; non-standard ports rejected.
+- **Public addresses only, checked at connect time:** the socket's `lookup`
+  hook resolves the host and refuses unless *every* address is public, so the
+  address that was checked is the address that is dialled (no DNS-rebinding
+  window). IP-literal hosts skip `lookup` and are checked up front. Blocked:
+  RFC 1918, loopback, CGNAT, link-local/metadata (169.254/16), benchmarking,
+  multicast/reserved; IPv6 `::/96`, ULA, link/site-local, multicast, Teredo,
+  documentation — and IPv4 embedded in IPv4-mapped (incl. the hex form
+  `::ffff:7f00:1` that `new URL()` normalises `[::ffff:127.0.0.1]` to), NAT64
+  and 6to4 addresses is judged by the IPv4 rules (`isPublicAddress`,
+  `src/adapters/remote-text/index.ts`).
+- **Redirect handling:** never auto-followed; up to 3 redirects, each
+  re-validated against the same rules (no following to private addresses).
+- **Response limits:** 2xx status, `text/*` content-type, max 256 KiB body,
+  no binary content (rejects NUL bytes).
+- **Timeout:** one 5-second deadline across all hops and the body read
+  (not just a socket-idle timeout).
+
+Violations throw `ValidationError` (422) for URL/address issues or
+`ExternalServiceError` (502) for network/HTTP failures. Error messages never
+echo response bodies.
+
+**Rate-limited:** `POST /skills/import` is capped at 10 requests per minute
+per client (the `@fastify/rate-limit` default key is the IP); disabled under test.
+
+### Vetting: non-manual skills always disabled on creation
+
+Any skill with `source != 'manual'` (e.g., `imported_url`, `extracted`,
+`community`) is **always** stored with `enabled: false` regardless of the
+`enabled` input parameter. This ensures imported skills must be manually
+reviewed (edited, linked to agents, tested) before they can influence reviews.
+Manual skills respect the `enabled` flag as provided; imported skills can only
+be enabled later via `PUT /skills/:id`.
+
+### Input limits
+- `name`: 1–200 characters
+- `description`: 0–1000 characters
+- `body`: 0–100,000 characters
+
+Violations of these limits return `422 Unprocessable Entity` (Zod validation).
+
+### Endpoint list
+- `GET /skills` — list all skills in the workspace (with optional stats)
+- `POST /skills` — create a manual skill
+- `GET /skills/:id` — fetch one skill
+- `PUT /skills/:id` — update metadata or body (bumps version if body changes)
+- `DELETE /skills/:id` — delete a skill and cascade skill-agent links
+- `GET /skills/:id/stats` — skill usage stats (agent count, pull frequency, accept rate)
+- `GET /skills/:id/versions` — version history (immutable snapshots)
+- `POST /skills/:id/restore` — restore a past version snapshot
+- `POST /skills/import` — import from a remote HTTPS URL (with vetting)
+
+Covered by `test/skills.it.test.ts` and `test/remote-text.test.ts`.
+
 ## `POST /findings/:id/(accept|dismiss)`
 
 Pre-existing, unchanged by this work — documented here because it's a

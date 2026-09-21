@@ -19,8 +19,9 @@ import type { AgentRunHistoryItem } from "@devdigest/shared";
 import { useAgentStats } from "../../../../../../../lib/hooks/agents";
 import { formatCost } from "../../../../../../../lib/cost";
 import RunTraceDrawer from "../../../../../../../components/run-trace-drawer";
-import { CATEGORY_PALETTE, SEVERITY_BARS } from "./constants";
-import { formatDuration, toPercentages } from "./helpers";
+import { SEVERITY_BARS } from "./constants";
+import { formatDuration } from "./helpers";
+import { categoryDonutSegments } from "../../../../../../../lib/category-chart";
 import { s } from "./styles";
 
 interface OpenTrace {
@@ -67,12 +68,7 @@ export function StatsTab({
     (w) => w.CRITICAL + w.WARNING + w.SUGGESTION > 0,
   );
   // Category shares of all findings, as whole percents summing to exactly 100.
-  const categoryPct = toPercentages(stats.findings_by_category.map((p) => p.value));
-  const donutSegments = stats.findings_by_category.map((p, i) => ({
-    label: p.label,
-    value: categoryPct[i] ?? 0,
-    color: CATEGORY_PALETTE[i % CATEGORY_PALETTE.length] ?? "var(--text-secondary)",
-  }));
+  const donutSegments = categoryDonutSegments(stats.findings_by_category);
 
   return (
     <div style={s.wrap}>

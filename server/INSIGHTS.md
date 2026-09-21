@@ -19,6 +19,15 @@ you, so the next agent/session doesn't relearn it.
   global toolchain, scoped workarounds per command):
   `.claude/skills/esbuild-arch-mismatch/SKILL.md:1`. Evidence:
   `server/src/db/migrations/0010_add_agent_run_cost.sql:1`.
+- **2026-09-21** — Integration tests fail in `beforeAll` with "Could not find a
+  working container runtime strategy" right after OrbStack starts: testcontainers
+  probes `/var/run/docker.sock`, which OrbStack links only later. Run them with
+  `DOCKER_HOST=unix:///Users/<you>/.orbstack/run/docker.sock pnpm exec vitest run .it.test`.
+  Evidence: `server/test/helpers/pg.ts` (testcontainers `startPg`).
+- **2026-09-21** — Drizzle `.update(t).set({})` with an all-`undefined` patch
+  throws (empty `SET`) and surfaces as a 500 on `PUT` with `{}`; short-circuit an
+  empty patch as a no-op returning the existing row. Evidence:
+  `server/src/modules/skills/repository.ts:185`.
 
 ## Tool & Library Notes
 
@@ -48,6 +57,19 @@ you, so the next agent/session doesn't relearn it.
 - **2026-09-17** — `MockLLMProvider.complete`/`.completeStructured`
   (`src/adapters/mocks.ts:78-89`) already return a fixed `costUsd: 0.001` —
   no mock changes are needed to write cost-related test assertions.
+- **2026-09-21** — SSRF guards can't string-match IPv4-mapped IPv6: `new URL()`
+  normalises `https://[::ffff:127.0.0.1]/` to host `[::ffff:7f00:1]`, so a
+  `startsWith('::ffff:')` + dotted-quad check lets loopback through. Parse IPv6
+  to bytes and judge embedded IPv4 (mapped, NAT64, 6to4) by the IPv4 rules.
+  Evidence: `server/src/adapters/remote-text/index.ts:46` (`parseV6`), `:98`
+  (`isPublicAddress`); regressions in `server/test/remote-text.test.ts`.
+- **2026-09-21** — Node `https.request({ timeout })` is a socket-*idle* timeout,
+  not a deadline — a server that drips one byte at a time never trips it. Use one
+  deadline timer across hops + body read that destroys the req/res. And the
+  `lookup` option (where the rebinding-safe address check lives) is never called
+  for IP-literal hosts — validate those before connecting. Evidence:
+  `server/src/adapters/remote-text/index.ts:109` (`assertAllowedUrl`), `:127`
+  (`guardedLookup`), `:169`/`:186` (`request`/`readBody`).
 
 ## Codebase Patterns
 
@@ -98,12 +120,8 @@ you, so the next agent/session doesn't relearn it.
   dropped `outcome.costUsd` for a long stretch via an incomplete
   `const { tokensIn, tokensOut, grounding } = outcome` destructure — the
   field was fully computed upstream (reviewer-core, LLM adapters) the whole
-  time, just never read at the one call site that mattered.
-  **Superseded 2026-09-18**: this is fixed as of this session —
-  `run-executor.ts:214` now destructures `costUsd` too and threads it
-  through to `cost_usd` in the persisted row (`run-executor.ts:270`). Not
-  this session's fix (pre-existing on entry), but confirming the old entry
-  no longer describes the current code.
+  time, just never read at the one call site that mattered. (Fixed since:
+  `run-executor.ts:237` destructures `costUsd`, persisted at `:280`.)
 - **2026-09-18** — This dev machine has a real `GITHUB_TOKEN`/secret
   configured, so `container.github()` succeeds and hits the **real** GitHub
   API even under `NODE_ENV=test` (confirmed: `getAuthenticatedUser()`
@@ -121,15 +139,6 @@ you, so the next agent/session doesn't relearn it.
   second full-suite run. Likely resource contention under parallel
   Docker/Postgres load, not a real regression — re-run before concluding a
   change broke something, if the same file passes alone.
-- **2026-09-17** — The seeded demo PR (`acme/payments-api` #482) can NEVER
-  produce findings, regardless of which agent reviews it or how many times.
-  `server/src/db/seed.ts:120` inserts `pr_files` rows with no `patch`, and
-  `server/src/modules/reviews/diff-loader.ts:37` (`if (!f.patch) continue;`)
-  skips any file with no patch — so every review sees a genuinely empty
-  diff. Not a regression from any lesson's work; it's a property of the
-  starter seed. The only way around it is importing a real PR from an
-  actual GitHub repo (a `GITHUB_TOKEN` is already supported via
-  `~/.devdigest/secrets.json`) — not done as of this entry.
 - **2026-09-18** — `repos.last_polled_at` was only ever bumped
   **asynchronously**, inside `RepoRepository.updateClonePath()` once the
   enqueued clone job completed. The client invalidates its `["repos"]` cache
@@ -142,7 +151,7 @@ you, so the next agent/session doesn't relearn it.
   GitHub token (`container.github()` throws `ConfigError` without one,
   breaking the "no API keys required to boot" guarantee) **and** it rewrites
   `pull_requests.updated_at`, i.e. the PR list's own Updated column.
-  Evidence: `server/src/modules/repos/service.ts:119`,
+  Evidence: `server/src/modules/repos/service.ts:121`,
   `server/src/modules/repos/repository.ts:79`, asserted at
   `server/test/integration.it.test.ts` ("bumps last_polled_at SYNCHRONOUSLY").
 - **2026-09-18** — `pull_requests.status` is GitHub's MERGE state
@@ -156,30 +165,25 @@ you, so the next agent/session doesn't relearn it.
   must go through `deriveReviewStatus`; the detail route now does in both
   branches, and its GitHub branch also persists the fresh head_sha / status /
   updated_at so a later list read derives from identical data. Evidence:
-  `server/src/modules/pulls/routes.ts:293,316`; guarded by
+  `server/src/modules/pulls/routes.ts:283,306`; guarded by
   `server/test/pulls-detail-status.it.test.ts`.
 
 - **2026-09-18** — `completeAgentRun` before `saveRunTrace` published a
   "done" run (gone from `/runs/active`) whose trace did not exist yet, so
   `GET /runs/:id/trace` 404'd. Save the trace first (failure swallowed), then
-  mark done. Evidence: `server/src/modules/reviews/run-executor.ts:282`;
+  mark done. Evidence: `server/src/modules/reviews/run-executor.ts:303-304`;
   pinned by `server/test/reviews.it.test.ts` ("already has its trace").
-- **2026-09-18** — Empty-diff trap: `seed.ts` stored PR #482's `pr_files`
-  with no `patch`, `acme/payments-api` has no clone (fictional), and
-  `diff-loader.ts:37` skips patchless files — so the demo PR reviewed an empty
+- **2026-09-18** — Empty-diff trap (fixed — the seed now stores real patches):
+  `seed.ts` stored PR #482's `pr_files` with no `patch`, `acme/payments-api`
+  has no clone (fictional), and `diff-loader.ts:82` skips patchless files — so the demo PR reviewed an empty
   diff, paid for "nothing to review", recorded `done` and overwrote the seeded
   request_changes/61 with an empty approve. Pre-work that yields nothing to
   review must `failAll`, not proceed. A patchless `pr_files` row also renders a
   zero-line file card (`client/.../diff-viewer/helpers.ts:13`), so "diff tab
   looks empty" and "review found nothing" share a root cause. Evidence:
-  `server/src/modules/reviews/run-executor.ts:107`,
-  `server/src/db/seed-patches.ts`.
-- **2026-09-18** — (Supersedes the evidence lines of the two entries above.)
-  Exact lines: trace-before-done `server/src/modules/reviews/run-executor.ts:289`;
-  empty-diff guard `run-executor.ts:109`; demo patches
-  `server/src/db/seed-patches.ts:9`; idempotent backfill
-  `server/src/db/seed.ts:176`; patchless skip
-  `server/src/modules/reviews/diff-loader.ts:37`.
+  empty-diff guard `server/src/modules/reviews/run-executor.ts:112`, demo
+  patches `server/src/db/seed-patches.ts:9`, idempotent backfill
+  `server/src/db/seed.ts:176`.
 - **2026-09-18** — "No reviewable diff" on a REAL GitHub PR (quick-blog #12,
   71 files) was not the demo-data trap: the PR list imports PRs and even
   backfills their size from `getPullRequest`, but never stores `pr_files`
@@ -188,10 +192,10 @@ you, so the next agent/session doesn't relearn it.
   `GitClient.fetchPullHead` exists but nothing calls it, so `git diff
   base...<PR head>` fails. So "Run Review" from the list on a never-opened PR
   had zero patches. `loadDiff` now fetches + stores the files from GitHub as a
-  last resort (`server/src/modules/reviews/diff-loader.ts:36`). Also: the detail
+  last resort (`server/src/modules/reviews/diff-loader.ts:25`). Also: the detail
   route's delete-then-insert of `pr_files` was two statements — a review
   loading its diff between them saw zero files; it is now one transaction
-  (`server/src/modules/_shared/pr-files.ts:17`).
+  (`server/src/modules/_shared/pr-files.ts:18`).
 - **2026-09-18** — An empty diff is not always a data problem: quick-blog #36
   is open with 2 commits but GitHub reports `changed_files: 0` (its changes
   already landed on `main` via #33). One generic "check the GitHub token"
@@ -200,6 +204,12 @@ you, so the next agent/session doesn't relearn it.
   files / files but no text patches / patches unparseable) and the run fails
   with it. Check GitHub's own `changed_files` before debugging the pipeline.
   Evidence: `server/src/modules/reviews/diff-loader.ts:18`.
+- **2026-09-21** — Seeding a non-`manual` skill with the column default
+  `enabled: true` bypasses the vetting rule `SkillsService.create` enforces
+  (imported ⇒ disabled): the run executor injected the seeded "imported" skill
+  into every Test Quality Reviewer review with no "needs vetting" badge. The seed
+  must apply the same rule. Evidence: `server/src/db/seed.ts:311`,
+  `server/test/seed.it.test.ts` ("the imported one lands unvetted").
 
 ## Session Notes
 
@@ -215,6 +225,16 @@ you, so the next agent/session doesn't relearn it.
   the detail route's `pr_files` replace is one transaction.
 - quick-blog #36: GitHub reports 0 changed files → the run now fails with that
   exact reason (`emptyReason`) instead of a misleading token hint.
+### 2026-09-21
+- Finished the Skills feature (L02): SSRF-safe `POST /skills/import` behind a
+  `RemoteTextFetcher` adapter, imported skills always saved disabled until vetted,
+  input limits, N+1-free `GET /skills` stats, prompt-injection integration test
+  (`server/test/reviews.it.test.ts`, "injects only enabled, vetted skills").
+- Row→DTO mappers moved to `server/src/modules/skills/helpers.ts`, so
+  `skills/service.ts` no longer imports Drizzle row types (root `INSIGHTS.md`'s
+  R5 entry updated to match).
+- Not done: the plan's manual control experiments (real LLM run with/without the
+  Test Quality skills) — needs the app running with an API key.
 
 ## Open Questions
 

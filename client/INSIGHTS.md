@@ -47,18 +47,8 @@ you, so the next agent/session doesn't relearn it.
   it has no offset parent any more, so the in-place `position: absolute` +
   `top: calc(100% + 6px)` styling silently lands at the top of the page.
   Evidence: `client/src/vendor/ui/kit/Dropdown.tsx:78-100`,
-  `client/src/vendor/ui/kit/Dropdown.test.tsx:60`.
+  `client/src/vendor/ui/kit/Dropdown.test.tsx:87-90`.
 
-- **2026-09-18** — "Always red" review verdicts on the demo PR are **seed data,
-  not a binding bug**: `server/src/db/seed.ts:142` inserts exactly one review,
-  hardcoded `verdict: 'request_changes'`, for the one demo PR, and no
-  `agent_runs`/`run_traces` rows at all. `ReviewRunAccordion.tsx` /
-  `RunHistory.tsx` were already fully data-driven. Don't go hunting for a
-  colour-binding bug in the client when every locally-visible run reads red —
-  check what `seed.ts` actually inserts first. (The one real colour bug there
-  *was*: a local `VERDICT_COLOR` map in `ReviewRunAccordion.tsx` that disagreed
-  with `VerdictBanner/constants.ts`'s `VERDICT_META` for the same verdict; now
-  deduped to the single `VERDICT_META` source of truth.)
 - **2026-09-18** — `RunHistory.tsx` / `ReviewRunAccordion.tsx` deliberately
   count blockers as **CRITICAL and non-dismissed, recomputed live** from the
   matched `ReviewRecord.findings`, not the denormalized `run.blockers` column.
@@ -84,7 +74,9 @@ you, so the next agent/session doesn't relearn it.
 - **2026-09-18** — Review-runs rows are addressed by `reviewRunRowKey`
   (`run_id ?? review.id`), and `?agent=` may therefore hold a REVIEW id for a
   run-less review (the seeded one). A `?severity=` without `?agent=` resolves
-  to the newest `kind === "review"` row once rows load. Evidence:
+  to the newest `kind === "review"` row once rows load. (`ReviewRecord.run_id`
+  is nullable — paths that bailed on `if (runId)` silently skipped URL writes
+  on the demo PR.) Evidence:
   `client/src/app/repos/[repoId]/pulls/[number]/_components/ReviewRunAccordion/ReviewRunAccordion.tsx:34`,
   `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingsTab/FindingsTab.tsx:189`.
 - **2026-09-18** — Hiding a container hides everything slotted into it:
@@ -105,7 +97,7 @@ you, so the next agent/session doesn't relearn it.
   `.next-e2e/types`, eslint ignores it — but on a fresh clone the file doesn't
   exist until the first `next dev`/`build`, so a typecheck before that may lack
   the route types. Never `git add` it. Evidence: `client/next.config.mjs:12`,
-  `scripts/e2e.sh:46`, `.gitignore:11`, `client/tsconfig.json:33`.
+  `scripts/e2e.sh:46`, root `.gitignore:13`, `client/tsconfig.json:33`.
 
 - **2026-09-20** — Detecting server vs client components by reading the first
   few lines is unreliable: in
@@ -117,31 +109,29 @@ you, so the next agent/session doesn't relearn it.
   fetch.) Evidence:
   `client/src/app/repos/[repoId]/pulls/[number]/page.tsx:6`.
 
-- **2026-09-20** — "How many component folders?" is ambiguous here and gives
-  two different answers, because the repo uses **two** directory conventions:
+- **2026-09-20** — "How many component folders lack `styles.ts`?" has no
+  single answer, for two reasons. (1) There are **two** directory conventions —
   route-local `_components/<PascalName>/<PascalName>.tsx` and cross-route
-  `src/components/<kebab-name>/<PascalName>.tsx`. A loop testing
-  `[ -f "$d/$(basename $d).tsx" ]` only finds the first kind and reports 17
-  folders missing `styles.ts`; adding the `src/components/*/` kebab dirs gives
-  the real **22**. Any doc quoting a component count must state which
-  convention(s) it counted, or the next person "corrects" it to the wrong
-  number. Evidence: `client/src/components/run-cost-badge/RunCostBadge.tsx`
-  vs `client/src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.tsx`.
-- **2026-09-20** (supersedes the entry above) — The raw "**22** folders missing
-  `styles.ts`" overstates the gap, because a sibling `styles.ts` is not the only
-  sanctioned way to style: of the 22, **14** reuse a *shared* styles module —
-  10 sub-components import their parent's `styles.ts` (`from "../styles"` /
-  `"../../styles"`, in `RunTraceDrawer/`, `pulls/`, `diff-viewer/`) and 4
-  diff-viewer members import the shared `cs` object from `diff-viewer/comments.ts`
-  — and **3** render no styling of their own (compose only `@devdigest/ui` +
-  children: `DiffTab`, `app-shell`, `repo-not-found`). Only **~5** genuinely
-  style inline with neither a sibling nor a shared module (`AddRepoView`,
-  `PromptModalBody`, `run-cost-badge`, `mermaid-diagram`, `run-review-dropdown`).
-  So report both: 22 lack a *sibling* `styles.ts`, but the real gap is ~5. This
-  intra-family sharing is now sanctioned in the `frontend-architecture` skill
-  (SKILL.md "Styling"). Evidence:
+  `src/components/<kebab-name>/<PascalName>.tsx` — and a loop testing
+  `[ -f "$d/$(basename $d).tsx" ]` finds only the first. (2) A sibling
+  `styles.ts` is not the only sanctioned styling: sub-components may import
+  their parent's `styles.ts` (`from "../styles"`), diff-viewer members share
+  `cs` from `diff-viewer/comments.ts`, and pure-composition components (only
+  `@devdigest/ui` + children, e.g. `DiffTab`, placeholder tabs) need none —
+  sanctioned in `frontend-architecture` (SKILL.md "Styling"). Re-measure with
+  both conventions and report "no sibling `styles.ts`" separately from
+  "genuinely inline-styled"; counts drift with every feature. Evidence:
   `client/src/components/diff-viewer/comments.ts:108` (`export const cs`),
-  `client/src/app/repos/[repoId]/pulls/[number]/_components/RunTraceDrawer/_components/TraceSection/TraceSection.tsx:6`.
+  `client/src/components/run-trace-drawer/_components/TraceSection/TraceSection.tsx:6`.
+- **2026-09-21** — jsdom's `File` has no `arrayBuffer()`/`text()`, so code that
+  reads uploads can't be tested with `new File(...)`. Type the input as
+  `Pick<File, "name" | "size" | "arrayBuffer">` and pass plain objects in tests.
+  Evidence: `client/src/app/skills/_components/CreateSkillModal/file-extractor.ts:27`.
+- **2026-09-21** — ZIPs made by macOS Finder set general-purpose bit 3, so the
+  *local* headers carry 0 sizes — a local-header walker silently finds nothing.
+  Parse via EOCD + central directory, and cap the inflated size while streaming
+  (the declared size can lie — zip bomb). Evidence: same file `:72`
+  (`extractFromZip`), `:127` (`inflateCapped`).
 
 ## What Doesn't Work
 
@@ -156,7 +146,7 @@ you, so the next agent/session doesn't relearn it.
   right-hand value column and NOTHING from `value` — `value`/`max` only size the
   bar. To show a number next to the bar you must pass it as `suffix` (e.g.
   `suffix={`${pct}%`}`), not rely on `value`. Evidence:
-  `client/src/vendor/ui/charts/BarRow.tsx:41`.
+  `client/src/vendor/ui/charts/BarRow.tsx:43`.
 - **2026-09-21** — `vendor/ui/icons.tsx` is a hand-curated lucide-react subset
   (no `GripVertical`, etc.), and it's a hand-synced vendor file. Don't extend
   the registry for one glyph — reuse an existing name (`Menu` works as a
@@ -175,8 +165,8 @@ you, so the next agent/session doesn't relearn it.
   at `client/messages/en/*.json`, so imports like
   `../../../messages/en/prReview.json` have no aliased form. Add a second
   path (`@messages/*` → `./messages/*`) or exempt that group before turning
-  such a rule on. Measured 2026-09-20: 79 violations total across
-  `client/src`, all pre-existing deep relatives. Evidence:
+  such a rule on. Many deep relatives exist today — count with
+  `grep -rlE "from ['\"](\.\./){2,}" src` before scoping the change. Evidence:
   `client/src/components/run-review-dropdown/RunReviewDropdown.test.tsx:4`,
   `client/src/app/repos/[repoId]/pulls/[number]/page.tsx:11-12` (alias and
   deep relative in the same file).
@@ -189,20 +179,6 @@ you, so the next agent/session doesn't relearn it.
   a long time with zero visual effect. Fix at the call site with a `style`
   override (Button spreads `style` last, so it always wins) rather than
   relying on `active` for these two kinds.
-- **2026-09-18** — Overriding a shared `Button`'s border with longhand
-  `{ borderStyle, borderColor, borderWidth }` in a conditionally-applied
-  `style` prop triggers a persistent React dev-mode console warning
-  ("Removing/Updating a style property... when a conflicting property is set
-  (border)...") on every render where the override toggles on/off, because
-  `Button.tsx`'s own `base` style sets the shorthand `border: "1px solid
-  transparent"` (`client/src/vendor/ui/primitives/Button.tsx:37`).
-  Cosmetic only — no visual bug observed — but expect the
-  warning; fixing it for real means restructuring `Button.tsx`'s base style
-  to longhand throughout, which is a shared-component change, not a
-  per-caller one. `FindingCard/styles.ts`'s pre-existing `card()` function
-  has the same class of mixing (`borderColor` + `borderLeftColor` together),
-  unrelated to any single feature — this isn't new, just newly triggered by
-  an interaction that re-renders with the override toggling.
 - **2026-09-18** — Installing new devDependencies in `client/` via `pnpm add`
   can hit `ERR_PNPM_IGNORED_BUILDS` for a transitive native binary
   (`unrs-resolver`, pulled in by `eslint-config-next`) — pnpm's
@@ -236,9 +212,10 @@ you, so the next agent/session doesn't relearn it.
   required output value. Evidence:
   `client/src/vendor/shared/contracts/trace.ts:119`.
 
-- **2026-09-18** — **Supersedes** the "Overriding a shared `Button`'s border
-  with longhand" entry above: both React style-conflict warnings are now
-  gone. (1) `FindingCard/styles.ts` `card()` sets per-side
+- **2026-09-18** — Toggling border longhands (`borderColor`, `borderWidth`…)
+  on a vendored `Button` — whose base style sets the `border` shorthand — or
+  mixing `borderColor` with `borderLeftColor` triggers React's "conflicting
+  property" dev warning on every toggle. Fixed here: (1) `FindingCard/styles.ts` `card()` sets per-side
   `borderTop/Right/BottomColor` instead of `borderColor` — `borderColor` is
   itself a shorthand, so toggling it on focus beside `borderLeftColor`
   warned. (2) `pressedBorder` uses `outline` instead of border longhands, so
@@ -251,18 +228,18 @@ you, so the next agent/session doesn't relearn it.
 
 - **2026-09-18** — `PrMeta.id` is `z.string().nullish()`
   (`src/vendor/shared/contracts/platform.ts:167`), and `PRRow.test.tsx`'s
-  shared `pr()` fixture omitted it entirely. That mattered more than it
-  looks: the new Actions cell is guarded on `pr.id`, so every existing test
+  shared `pr()` fixture once omitted it (now fixed). That mattered more than it
+  looked: the new Actions cell is guarded on `pr.id`, so every existing test
   in the file kept passing while the cell rendered **nothing** — the
   `RunReviewDropdown` was never mounted, so the predicted "missing
   `useRunReview`/`useAgents` mocks will throw" breakage never surfaced and
   would have shipped an untested column. When adding a conditionally-rendered
   cell, add the field it is guarded on to the shared fixture first, then
   confirm the new assertions actually fail without the change. Evidence:
-  `client/src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.test.tsx:24`.
+  `client/src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.test.tsx:50`.
 - **2026-09-18** — `vi.mock()` keys on the RESOLVED module, not the literal
   specifier: `vi.mock("../../../../../../lib/hooks/reviews", …)` in
-  `PRRow.test.tsx:18-21` also mocks the `@/lib/hooks/reviews` import that the
+  `PRRow.test.tsx:23` also mocks the `@/lib/hooks/reviews` import that the
   (differently-located) `RunReviewDropdown` uses, because the tsconfig alias
   resolves both to the same file. So one factory must export every hook BOTH
   call sites need (`usePrReviews` **and** `useRunReview`) — a factory that
@@ -280,7 +257,7 @@ you, so the next agent/session doesn't relearn it.
   (`list.columns.actions: ""`) — it throws only on a genuinely missing key.
   That is the clean way to give a table a header-less column without
   special-casing the header `map`. Evidence:
-  `client/messages/en/prReview.json:97` (`list.columns.actions`).
+  `client/messages/en/prReview.json:103` (`list.columns.actions`).
 - **2026-09-18** — The "Last synced" label is **unreachable on seeded data**:
   `repos.last_polled_at` has no DB default (`server/src/db/schema/repos.ts:17`)
   and `seed.ts` never sets it, so it is `null` until someone actually clicks
@@ -288,8 +265,8 @@ you, so the next agent/session doesn't relearn it.
   refresh — which enqueues a live `git clone` and breaks the read-only
   contract every flow here relies on. Covered by `FilterBar.test.tsx`
   instead; noted in flow `09-pr-list-actions.flow.json`'s description.
-- **2026-09-18** — **Supersedes the "Always red … seed data" entry above —
-  that diagnosis was incomplete.** `reviews.verdict` is the model's
+- **2026-09-18** — "Always red" verdicts are not a colour-binding bug:
+  `reviews.verdict` is the model's
   SELF-REPORTED verdict, written before citation-grounding drops findings it
   can't anchor to the diff. So a real run can persist
   `verdict: "request_changes"` with **0 surviving findings and score 100**
@@ -298,7 +275,8 @@ you, so the next agent/session doesn't relearn it.
   "approved". Never render `review.verdict` directly: derive it with
   `effectiveVerdict()` (active CRITICAL → request_changes, other active →
   comment, none → approve), the same rule as the Timeline's `outcomeOf`.
-  Evidence: `client/src/lib/findings.ts:19-29`,
+  Verdict colours come only from `VerdictBanner/constants.ts`'s
+  `VERDICT_META` (a divergent local map was removed). Evidence: `client/src/lib/findings.ts:19-29`,
   `client/src/app/repos/[repoId]/pulls/[number]/_components/ReviewRunAccordion/ReviewRunAccordion.tsx:99-102`.
 - **2026-09-18** — For a quiet table-row action with a hover highlight, use
   the shared `Button`'s `kind="ghost"` rather than a hand-rolled `<button>`:
@@ -329,7 +307,7 @@ you, so the next agent/session doesn't relearn it.
   active-run ids and invalidates reviews / pr-runs / pull / pulls when any
   leaves the set (it ignores `undefined` loading states). Safe because the
   server persists the review BEFORE marking the run done. Evidence:
-  `client/src/lib/hooks/reviews.ts:49`,
+  `client/src/lib/hooks/reviews.ts:53`,
   `client/src/app/repos/[repoId]/pulls/[number]/page.tsx:59`.
 
 - **2026-09-18** — Trace drawer "0 lines" trap: a `running` prop captured at
@@ -338,23 +316,15 @@ you, so the next agent/session doesn't relearn it.
   the SSE socket, is the authority on "still running"; once not running, the
   persisted log must win over an empty SSE buffer, and the trace query polls
   until the row exists. Evidence:
-  `client/src/app/repos/[repoId]/pulls/[number]/_components/RunTraceDrawer/RunTraceDrawer.tsx:64`,
-  `client/src/lib/hooks/trace.ts:18`.
+  `client/src/components/run-trace-drawer/RunTraceDrawer.tsx:66`,
+  `client/src/lib/hooks/trace.ts:20`.
 - **2026-09-18** — A mutation that triggers background work must invalidate
   (or watch) the query its OWN page renders from. `useRunReview` only
   invalidates `["reviews", prId]`, so the PR list's `["pulls"]` row stayed
   frozen and "Run Review" read as a dead button (the handler was bound fine).
   `PRRow` now polls `usePrActiveRuns` only after a run starts and
   `useRefreshWhenRunsSettle` refreshes `["pulls"]`. Evidence:
-  `client/src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.tsx:33`.
-- **2026-09-18** — `ReviewRecord.run_id` is nullable (the seeded #482 review
-  has none), and every Review-runs targeting/URL path used to bail on
-  `if (runId)` — so on the demo PR severity chips and pills filtered locally
-  but never wrote `?severity=`, and a `?severity=` with no `?agent=` was
-  ignored outright. Key rows by `reviewRunRowKey` (run_id ?? review id), and
-  resolve an agent-less severity to the newest review once rows load.
-  Evidence: `client/src/app/repos/[repoId]/pulls/[number]/_components/ReviewRunAccordion/ReviewRunAccordion.tsx:34`,
-  `.../FindingsTab/FindingsTab.tsx` (URL-sync effect).
+  `client/src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.tsx:37`.
 - **2026-09-18** — SSE streams to the API (`:3001`, plain HTTP/1.1) count
   against Chrome's 6-connections-per-host limit, shared by ALL tabs. The
   Findings tab opened one EventSource per live run and the Run Trace drawer
@@ -379,14 +349,23 @@ you, so the next agent/session doesn't relearn it.
   `staleTime: 30_000`, no focus refetch) until a reload. They now also
   invalidate `["pulls"]` + `["pull", prId]` (`invalidatePrSummary`). Evidence:
   `client/src/lib/hooks/reviews.ts:78`.
-- **2026-09-18** — (Supersedes the evidence of the five 2026-09-18 entries
-  above that cite only a file.) Exact lines: trace-log fallback
-  `.../RunTraceDrawer/RunTraceDrawer.tsx:66` + trace poll
-  `client/src/lib/hooks/trace.ts:20`; list-row watch
-  `.../pulls/_components/PRRow/PRRow.tsx:37`; shared SSE stream
-  `client/src/lib/hooks/reviews.ts:236`; active-runs `staleTime: 0`
-  `client/src/lib/hooks/reviews.ts:36` + row invalidate `PRRow.tsx:157`;
-  `invalidatePrSummary` `client/src/lib/hooks/reviews.ts:78`.
+- **2026-09-21** — A form that stays mounted across tabs (SkillEditor keeps
+  ConfigTab mounted to keep unsaved edits) and resets only on `skill.id` goes
+  stale after a restore or a list toggle — Save then overwrote the restore with
+  the old body. Rebase per field (take the server value for fields the user hasn't
+  touched) and send only changed fields. Evidence:
+  `client/src/app/skills/[id]/_components/SkillEditor/_components/ConfigTab/draft.ts:24,33`.
+- **2026-09-21** — next-intl: markup passed as a `t()` argument renders as literal
+  `<code>` text — use `t.rich`. Missing keys fail only at runtime on the one
+  screen that renders them; restructuring `skills.json` by overwrite dropped
+  keys still in use (`preview.untrustedNotice`, `detail.loadError`). Merge
+  message files, and `client/src/app/skills/i18n-keys.test.ts` now checks every
+  static `t("…")` key. Evidence: `.../PreviewTab/PreviewTab.tsx:28`.
+- **2026-09-21** — `vi.mock` factories are hoisted: referencing a top-level
+  `const fn = vi.fn()` throws "Cannot access … before initialization" — use
+  `vi.hoisted`. A `vi.mock` path with one `../` too few doesn't error, it just
+  doesn't apply, and the real hook runs. Evidence:
+  `client/src/app/skills/[id]/_components/SkillEditor/_components/StatsTab/StatsTab.test.tsx:8`.
 
 ## Session Notes
 

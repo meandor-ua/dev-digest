@@ -16,7 +16,8 @@ you, so the next agent/session doesn't relearn it.
   stack: `04-pr-findings.flow.json` and `05-pr-diff.flow.json` both failed on
   "open the PR row" every run until a `wait --text "Add rate limiting to
   public API endpoints"` step was inserted before the `find...click`,
-  matching the pattern `02-repo-pulls-detail.flow.json:7-8` already used.
+  matching the pattern flow 02 already used (`02-repo-pulls-detail.flow.json`:
+  `wait --text` at lines 22-23, before its `find` at 63).
   `find` locates and acts immediately; only `wait` polls for an element to
   appear. Every new flow that opens a PR row should copy flow 02's
   wait-then-click order, not flow 04/05's original (buggy) order.
@@ -96,27 +97,21 @@ you, so the next agent/session doesn't relearn it.
 
 ## Codebase Conventions
 
-- **2026-09-21** — SUPERSEDES the 2026-09-18 "seed writes NO `agent_runs`" note
-  below: `server/src/db/seed.ts` now seeds demo runs for the Agents-stats
-  feature — General Reviewer ×14 (over ~7 weeks), Security ×4, Performance ×3,
-  all `status='done'` and attached to PR #482 — so the Agents editor's Stats
-  tab and the card stats have real, repo-scoped data in e2e. Still NO
-  `run_traces` rows, so `has_trace` stays false everywhere and "View trace" is
-  disabled ("No trace") — flow `12-agent-detail` asserts exactly that. The
-  original *review* row still has no `run_id`, so the PR-detail Timeline
-  run-row widgets remain absent (that half of the older note still holds).
-  Evidence: `server/src/db/seed.ts` (demo runs), `server/src/modules/agents/stats.ts`.
+- **2026-09-21** — `server/src/db/seed.ts` seeds demo `agent_runs` (General
+  Reviewer ×14 over ~7 weeks, Security ×4, Performance ×3, Test Quality ×3,
+  all `status='done'`, on PR #482) and `run_traces` for the first few of each
+  (`withTrace`), so the Agents Stats tab, card stats and "View trace" work in
+  e2e — flow `12-agent-detail` opens a seeded trace ("Prompt assembly"). The
+  canonical seeded *review* row still has no `run_id`
+  (`server/src/db/seed.ts:136-147`), so PR #482's Timeline shows COMMIT rows
+  only and the run-row widgets (share link, per-run trace button, severity
+  chips) are absent. Reaching them needs a live model call, which flows may
+  not make — cover them with client unit tests (`RunHistory.test.tsx`).
+  Evidence: `server/src/db/seed.ts` (`insertRun`, `withTrace`),
+  `e2e/specs/12-agent-detail.flow.json`.
 - **2026-09-21** — Repo-scoped Agents UI resolves its repo via `useActiveRepo()`
   (`client/src/lib/repo-context.tsx`: URL `:repoId` > localStorage > first repo
   from the API), so on the `:repoId`-less `/agents` routes it falls back to the
   first/only seeded repo (`acme/payments-api`). That's why flow `12`'s Stats tab
   loads without a repo in the URL — it only works because the hermetic DB has
   exactly one repo. Evidence: `e2e/specs/12-agent-detail.flow.json`.
-  seeded review carries no `run_id` (`server/src/db/seed.ts:136-147`). So on
-  PR #482's Agent-runs tab the
-  Timeline renders COMMIT rows only: every run-row widget (the copy-shareable-
-  link button, the per-run trace button, the per-run severity chips) is simply
-  absent in e2e. Producing one would require a real review run, i.e. a live
-  model call, which every flow here is forbidden from making — cover those
-  widgets with client unit tests (`RunHistory.test.tsx`) instead of trying to
-  reach them from a flow.

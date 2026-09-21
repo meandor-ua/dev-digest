@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toPercentages } from "./helpers";
+import { toPercentages, categoryDonutSegments } from "./category-chart";
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
@@ -23,5 +23,16 @@ describe("toPercentages", () => {
   it("returns zeros for empty or all-zero input", () => {
     expect(toPercentages([])).toEqual([]);
     expect(toPercentages([0, 0])).toEqual([0, 0]);
+  });
+});
+
+describe("categoryDonutSegments", () => {
+  it("maps counts to percent segments with cycling palette colours", () => {
+    const segs = categoryDonutSegments([
+      { label: "security", value: 3 },
+      { label: "bug", value: 1 },
+    ]);
+    expect(segs.map((s) => [s.label, s.value])).toEqual([["security", 75], ["bug", 25]]);
+    expect(segs[0]!.color).toBe("var(--accent)");
   });
 });

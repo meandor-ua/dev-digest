@@ -605,4 +605,50 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
 
     await app.close();
   });
+  it('injects only enabled, vetted skills into the prompt, in link order', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: { embedder: new MockEmbedder(), git: new MockGitClient({ diff: DIFF }), llm: { openai: llm } },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = await makeAgent(app, 'Sec-skills');
+    const mkSkill = async (name: string, body: string, source: 'manual' | 'imported_url' = 'manual') =>
+      (await app.inject({ method: 'POST', url: '/skills', payload: { name, type: 'rubric', body, source } })).json();
+    const second = await mkSkill('Second', 'RULE-SECOND');
+    const first = await mkSkill('First', 'RULE-FIRST');
+    const linkOff = await mkSkill('Link off', 'RULE-LINK-OFF');
+    const unvetted = await mkSkill('Unvetted', 'RULE-UNVETTED', 'imported_url'); // stored disabled
+    expect(unvetted.enabled).toBe(false);
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${agent.id}/skills`,
+      payload: {
+        skills: [
+          { skill_id: first.id, enabled: true },
+          { skill_id: linkOff.id, enabled: false },
+          { skill_id: unvetted.id, enabled: true },
+          { skill_id: second.id, enabled: true },
+        ],
+      },
+    });
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+
+    const prompt = llm.calls
+      .filter((c) => c.method === 'completeStructured')
+      .map((c) => JSON.stringify((c.req as { messages: unknown }).messages))
+      .join('\n');
+    expect(prompt).toContain('## Skills / rules');
+    expect(prompt).toContain('RULE-FIRST');
+    expect(prompt).toContain('RULE-SECOND');
+    expect(prompt.indexOf('RULE-FIRST')).toBeLessThan(prompt.indexOf('RULE-SECOND'));
+    expect(prompt).not.toContain('RULE-LINK-OFF');
+    expect(prompt).not.toContain('RULE-UNVETTED');
+
+    await app.close();
+  });
 });

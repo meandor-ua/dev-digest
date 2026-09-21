@@ -65,6 +65,19 @@ d('seed: demo PR #482 is reviewable (Testcontainers pg)', () => {
     expect(runs.every((r) => r.status === 'done')).toBe(true);
   });
 
+  it('seeds Test Quality Reviewer with 4 linked skills; the imported one lands unvetted', async () => {
+    const { db } = pg.handle;
+    const [agent] = await db.select().from(t.agents).where(eq(t.agents.name, 'Test Quality Reviewer'));
+    const links = await db
+      .select({ name: t.skills.name, source: t.skills.source, skillEnabled: t.skills.enabled, order: t.agentSkills.order })
+      .from(t.agentSkills)
+      .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
+      .where(eq(t.agentSkills.agentId, agent!.id));
+    expect(links).toHaveLength(4);
+    for (const l of links) expect(l.skillEnabled).toBe(l.source === 'manual');
+    expect(links.find((l) => l.source === 'imported_url')?.name).toBe('Test Coverage Nudge');
+  });
+
   it('re-seeding does not duplicate agent_runs (idempotent)', async () => {
     const { db } = pg.handle;
     const before = (await db.select().from(t.agentRuns)).length;

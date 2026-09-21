@@ -5,15 +5,14 @@ you, so the next agent/session doesn't relearn it.
 
 ## Recurring Errors & Fixes
 
-- **2026-09-17** — `pnpm test`/`pnpm install` here can fail with
-  `ERR_PNPM_IGNORED_BUILDS` (esbuild's postinstall script blocked by pnpm's
-  build-approval gate). `client/` and `server/` already work around this via
-  a local `pnpm-workspace.yaml` with an `allowBuilds: { esbuild: true, ... }`
-  block (added in L01 sub-task 1; `client/pnpm-workspace.yaml:1-2`,
-  `server/pnpm-workspace.yaml:1,3`); `reviewer-core/` has no such file yet.
-  Until one is added, run `node_modules/.bin/vitest run` directly instead of
-  `pnpm test` to bypass the install-time gate (works fine once deps are
-  already present on disk). General playbook for this class of issue:
+- **2026-09-17** (corrected 2026-09-21) — `reviewer-core/` is **npm**-managed
+  (`package-lock.json`, no pnpm lockfile or `pnpm-workspace.yaml`): use
+  `npm install` / `npm test`, which run clean (25/25 on 2026-09-21). Running
+  `pnpm` here by habit (as in `client/`/`server/`) fails with
+  `ERR_PNPM_IGNORED_BUILDS` — esbuild's postinstall is blocked because only
+  those two packages carry an `allowBuilds` block
+  (`client/pnpm-workspace.yaml:1-2`, `server/pnpm-workspace.yaml:1,3`). Don't
+  add one here; switch to npm. General playbook:
   `.claude/skills/esbuild-arch-mismatch/SKILL.md:1`.
 - **2026-09-18** — Nothing told the model which language to write in, so
   DeepSeek (`deepseek/deepseek-v4-flash`) reviewed an English PR entirely in

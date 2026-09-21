@@ -6,6 +6,7 @@ import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
+  TEST_QUALITY_REVIEWER_PROMPT,
 } from './seed-prompts.js';
 import { PR_482_PATCHES, patchStats } from './seed-patches.js';
 
@@ -220,6 +221,17 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       version: 1,
       createdBy: userId,
     },
+    {
+      workspaceId,
+      name: 'Test Quality Reviewer',
+      description: 'Ensures test suites are comprehensive, catch edge cases, and avoid fragile mocks.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: TEST_QUALITY_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
   ];
   for (const a of seedAgents) {
     const [existing] = await db
@@ -236,13 +248,50 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
   const agentByName = (n: string) => agentRows.find((a) => a.name === n)!;
 
   // ---- demo skills (across the 4 types) ----
-  const seedSkills: Array<{ name: string; type: (typeof t.skills.$inferInsert)['type']; description: string; body: string }> = [
+  const seedSkills: Array<{
+    name: string;
+    type: (typeof t.skills.$inferInsert)['type'];
+    source?: (typeof t.skills.$inferInsert)['source'];
+    description: string;
+    body: string;
+  }> = [
     { name: 'Bug & Correctness Rubric', type: 'rubric', description: 'Score a diff for correctness, edge cases and error handling.', body: 'Rate correctness 0-5; flag unhandled errors, off-by-one, and race conditions.' },
     { name: 'Readability Rubric', type: 'rubric', description: 'Judge naming, cohesion and comment quality.', body: 'Prefer intention-revealing names; flag functions over ~40 lines.' },
     { name: 'Repo Naming Conventions', type: 'convention', description: 'Kebab-case files, PascalCase components.', body: 'Enforce the naming rules from AGENTS.md across changed files.' },
     { name: 'Error Handling Convention', type: 'convention', description: 'Errors go through the domain error taxonomy.', body: 'No bare throws in routes; use AppError subclasses.' },
     { name: 'Lethal Trifecta Guard', type: 'security', description: 'Secrets, injection, SSRF and the lethal trifecta.', body: 'Block hardcoded secrets and unsanitised sinks before merge.' },
     { name: 'Payments Domain Notes', type: 'custom', description: 'Domain rules specific to the payments service.', body: 'Money is integer minor units; never log full card numbers.' },
+    {
+      name: 'Test Completeness & Edge Cases Rubric',
+      type: 'rubric',
+      description: 'Score test suites for branch completeness, boundary conditions, and negative tests.',
+      body: 'Rate test completeness 0-5. Flag any missing tests for error branches, edge cases (empty inputs, null/undefined, boundaries), and verify that all code paths introduced or modified by the PR are exercised by corresponding test assertions.',
+    },
+    {
+      name: 'Overmocking & Fragile Test Guard',
+      type: 'security',
+      description: 'Detect over-mocked tests and fragile implementation coupling.',
+      body: 'Flag tests that mock internal domain logic or database layers to the point where tests pass without asserting true system behavior. Recommend integration or contract tests with real or containerized boundaries.',
+    },
+    {
+      name: 'Async & Flakiness Convention',
+      type: 'convention',
+      description: 'Prevent flaky tests caused by unhandled async operations or leaked state.',
+      body: 'All async operations in tests must be properly awaited. Avoid arbitrary sleep/setTimeout calls in tests; use deterministic event triggers or condition polling instead. Ensure test isolation by cleaning state in beforeEach/afterEach.',
+    },
+    {
+      name: 'Test Coverage Nudge',
+      type: 'custom',
+      source: 'imported_url',
+      description: 'Ensure PRs adding features include corresponding unit or integration tests.',
+      body: 'When a PR introduces new public endpoints, utility functions, or business logic, ensure matching test files are added or updated. Suggest specific test cases for any uncovered public APIs.',
+    },
+    {
+      name: 'API Breaking Change Rubric',
+      type: 'rubric',
+      description: 'Flag breaking changes in route signatures, response payloads, or query parameters.',
+      body: 'Any modification to existing public API route parameters, status codes, request schemas, or response schemas must be backwards-compatible or explicitly versioned. Flag removed fields or newly required parameters as CRITICAL.',
+    },
   ];
   for (const sk of seedSkills) {
     const [existing] = await db
@@ -250,9 +299,31 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       .from(t.skills)
       .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, sk.name)));
     if (!existing) {
-      await db
+      const [inserted] = await db
         .insert(t.skills)
-        .values({ workspaceId, name: sk.name, description: sk.description, type: sk.type, source: 'manual', body: sk.body });
+        .values({
+          workspaceId,
+          name: sk.name,
+          description: sk.description,
+          type: sk.type,
+          source: sk.source ?? 'manual',
+          body: sk.body,
+          // Same rule as SkillsService.create: a non-manual skill lands unvetted.
+          // The demo's "Test Coverage Nudge" stays linked, but the reviewer
+          // ignores it until someone reads and enables it on /skills.
+          enabled: (sk.source ?? 'manual') === 'manual',
+        })
+        .returning();
+      if (inserted) {
+        await db
+          .insert(t.skillVersions)
+          .values({
+            skillId: inserted.id,
+            version: 1,
+            body: inserted.body,
+          })
+          .onConflictDoNothing();
+      }
     }
   }
   const skillRows = await db
@@ -269,6 +340,10 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     { agent: 'Security Reviewer', skill: 'Lethal Trifecta Guard', order: 0, enabled: true },
     { agent: 'Security Reviewer', skill: 'Error Handling Convention', order: 1, enabled: false },
     { agent: 'Performance Reviewer', skill: 'Payments Domain Notes', order: 0, enabled: true },
+    { agent: 'Test Quality Reviewer', skill: 'Test Completeness & Edge Cases Rubric', order: 0, enabled: true },
+    { agent: 'Test Quality Reviewer', skill: 'Overmocking & Fragile Test Guard', order: 1, enabled: true },
+    { agent: 'Test Quality Reviewer', skill: 'Async & Flakiness Convention', order: 2, enabled: true },
+    { agent: 'Test Quality Reviewer', skill: 'Test Coverage Nudge', order: 3, enabled: true },
   ];
   for (const l of skillLinks) {
     await db
@@ -457,6 +532,21 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
         tokensIn: 6000 + i * 400,
         tokensOut: 1300 + i * 90,
         findings: i === 1 ? 2 : 1,
+        withTrace: i < 2,
+      });
+    }
+    // Test Quality Reviewer: 3 runs.
+    const testOffsets = [1, 10, 21];
+    for (let i = 0; i < testOffsets.length; i++) {
+      await insertRun({
+        agentName: 'Test Quality Reviewer',
+        daysAgo: testOffsets[i]!,
+        score: 75 + i * 6,
+        costUsd: 0.025 + i * 0.005,
+        durationMs: 11000 + i * 1800,
+        tokensIn: 4800 + i * 350,
+        tokensOut: 1050 + i * 75,
+        findings: i === 0 ? 2 : 1,
         withTrace: i < 2,
       });
     }

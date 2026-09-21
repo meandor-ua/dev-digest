@@ -11,6 +11,7 @@ import type {
   ModelInfo,
   Provider,
   ReviewStrategy,
+  SkillWithStats,
 } from "@devdigest/shared";
 
 export function useAgents() {
@@ -144,12 +145,32 @@ export function useSetAgentSkills(id: string) {
     onMutate: async (skills) => {
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<AgentSkillItem[]>(key);
+
+      // For newly attached skills not yet in cache, try to build them from the global skills cache
+      const skillsCache = qc.getQueryData<SkillWithStats[]>(["skills"]) ?? [];
+      const skillsById = new Map(skillsCache.map((s) => [s.id, s]));
+
       if (prev) {
         const byId = new Map(prev.map((s) => [s.skill_id, s]));
         const next = skills
           .map((it, order) => {
             const base = byId.get(it.skill_id);
-            return base ? { ...base, enabled: it.enabled, order } : undefined;
+            if (base) {
+              return { ...base, enabled: it.enabled, order };
+            }
+            // Try to build from skills cache for newly attached skills
+            const globalSkill = skillsById.get(it.skill_id);
+            if (globalSkill) {
+              return {
+                agent_id: id,
+                skill_id: it.skill_id,
+                name: globalSkill.name,
+                type: globalSkill.type,
+                enabled: it.enabled,
+                order,
+              };
+            }
+            return undefined;
           })
           .filter((s): s is AgentSkillItem => s !== undefined);
         qc.setQueryData<AgentSkillItem[]>(key, next);
@@ -158,6 +179,10 @@ export function useSetAgentSkills(id: string) {
     },
     onError: (_e, _v, context) => {
       if (context?.prev) qc.setQueryData(key, context.prev);
+    },
+    onSuccess: (data) => {
+      // Replace cache with server response (ensures consistency)
+      qc.setQueryData(key, data);
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: key });

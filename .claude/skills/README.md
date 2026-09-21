@@ -28,6 +28,7 @@ do-not-touch section in the root `AGENTS.md`). The `Local` set is mirrored in
 | [frontend-architecture](frontend-architecture/SKILL.md) | Local | Decide where every frontend file belongs — tiered structure, component taxonomy, constants, utils vs helpers, UI/business-logic layering |
 | [onion-architecture](onion-architecture/SKILL.md) | Local | Decide which server layer every file belongs to — inward-only dependencies, ports vs adapters, no Drizzle/rows above the repository, service DI |
 | [pr-self-review](pr-self-review/SKILL.md) | Local | Pre-PR dispatcher: resolve the diff, run deterministic gates, fan out to the matching review skills per package, merge into one verdict |
+| [client-i18n-and-tests](client-i18n-and-tests/SKILL.md) | Local | Ship a client feature: next-intl message files (merge, t.rich, plurals, missing-key test), accessible names for the vendored kit, and this repo's vitest/RTL harness |
 
 ## What Are Skills?
 
@@ -50,7 +51,7 @@ inventory.
 
 Every skill has a `SKILL.md` (required) — frontmatter of exactly `name`
 (kebab-case, identical to the directory) and `description`, then the rules.
-That is all most of them have: 10 of 14 are `SKILL.md`-only.
+Some skills have nothing else; larger ones add files as below.
 
 Beyond that, two patterns are in use, both fine — pick by size:
 

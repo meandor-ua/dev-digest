@@ -62,5 +62,6 @@ entries (and don't duplicate them; add a new dated note only if you learn
 something these don't already cover):
 - `server/INSIGHTS.md` → "Recurring Errors & Fixes" (the `drizzle-kit
   generate` esbuild/Rosetta mismatch + hand-authored-migration workaround).
-- `reviewer-core/INSIGHTS.md` → "Recurring Errors & Fixes" (the
-  `ERR_PNPM_IGNORED_BUILDS` gap vs. `client`/`server`'s `allowBuilds` fix).
+- `reviewer-core/INSIGHTS.md` → "Recurring Errors & Fixes" (reviewer-core is
+  npm-managed — `npm test`; `ERR_PNPM_IGNORED_BUILDS` there means pnpm was
+  used by mistake).

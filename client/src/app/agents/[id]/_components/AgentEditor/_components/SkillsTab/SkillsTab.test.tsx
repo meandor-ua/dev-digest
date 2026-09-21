@@ -2,12 +2,13 @@ import React from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import type { AgentSkillItem } from "@devdigest/shared";
+import type { AgentSkillItem, SkillWithStats } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/agents.json";
 import { ToastProvider } from "../../../../../../../lib/toast";
 
 const mutate = vi.fn();
 let skills: AgentSkillItem[] | undefined;
+let availableSkills: SkillWithStats[] = [];
 
 // jsdom can't drive dnd-kit's pointer sensor, so capture the DndContext's
 // onDragEnd and call it directly with a synthetic drop event.
@@ -26,6 +27,10 @@ vi.mock("@dnd-kit/core", async (importOriginal) => {
 vi.mock("../../../../../../../lib/hooks/agents", () => ({
   useAgentSkills: () => ({ data: skills, isLoading: false }),
   useSetAgentSkills: () => ({ mutate }),
+}));
+
+vi.mock("../../../../../../../lib/hooks/skills", () => ({
+  useSkills: () => ({ data: availableSkills, isLoading: false }),
 }));
 
 import { SkillsTab } from "./SkillsTab";
@@ -140,5 +145,48 @@ describe("SkillsTab", () => {
     fireEvent.keyDown(screen.getByPlaceholderText("Filter skills…"), { key: "Escape" });
     document.removeEventListener("keydown", outer);
     expect(outer).toHaveBeenCalled();
+  });
+
+  it("attaches a skill via dropdown, appending with enabled=true", () => {
+    skills = [mk("s1", "Secrets", 0, true)];
+    availableSkills = [
+      { id: "s1", name: "Secrets", description: "", type: "rubric", enabled: true, source: "manual", body: "", version: 1, evidence_files: null, agent_count: 1, pull_frequency_pct: 50, accept_rate_pct: 100 },
+      { id: "s2", name: "Naming", description: "", type: "convention", enabled: true, source: "manual", body: "", version: 1, evidence_files: null, agent_count: 0, pull_frequency_pct: 0, accept_rate_pct: 100 },
+    ];
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: /Attach skill/ }));
+    expect(screen.queryByRole("button", { name: /^Secrets/ })).not.toBeInTheDocument(); // already linked
+    fireEvent.click(screen.getByRole("button", { name: /Naming/ }));
+    expect(mutate).toHaveBeenCalledWith(
+      [
+        { skill_id: "s1", enabled: true },
+        { skill_id: "s2", enabled: true },
+      ],
+      expect.anything(),
+    );
+  });
+
+  it("detaches a skill via the X button", () => {
+    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, true)];
+    renderTab();
+    const removeButtons = screen.getAllByTitle("Remove from this agent");
+    fireEvent.click(removeButtons[1]!); // remove "Naming"
+    expect(mutate).toHaveBeenCalledWith(
+      [{ skill_id: "s1", enabled: true }],
+      expect.anything(),
+    );
+  });
+
+  it("shows 'Disabled globally' hint for unvetted attached skills", () => {
+    skills = [
+      mk("s1", "Secrets", 0, true),
+      mk("s2", "Naming", 1, true), // will be globally disabled
+    ];
+    availableSkills = [
+      { id: "s1", name: "Secrets", description: "", type: "rubric", enabled: true, source: "manual", body: "", version: 1, evidence_files: null, agent_count: 1, pull_frequency_pct: 50, accept_rate_pct: 100 },
+      { id: "s2", name: "Naming", description: "", type: "convention", enabled: false, source: "manual", body: "", version: 1, evidence_files: null, agent_count: 0, pull_frequency_pct: 0, accept_rate_pct: 100 }, // globally disabled
+    ];
+    renderTab();
+    expect(screen.getByText("Disabled globally — won’t be injected until enabled")).toBeInTheDocument();
   });
 });

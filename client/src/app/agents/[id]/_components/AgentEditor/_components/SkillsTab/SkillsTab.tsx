@@ -21,9 +21,10 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Icon, TextInput, Checkbox, EmptyState, Skeleton } from "@devdigest/ui";
+import { Icon, TextInput, Checkbox, EmptyState, Skeleton, Button, Dropdown } from "@devdigest/ui";
 import type { AgentSkillItem } from "@devdigest/shared";
 import { useAgentSkills, useSetAgentSkills } from "../../../../../../../lib/hooks/agents";
+import { useSkills } from "../../../../../../../lib/hooks/skills";
 import { useToast } from "../../../../../../../lib/toast";
 import { SKILL_TYPE_COLOR } from "./constants";
 import { s } from "./styles";
@@ -41,6 +42,8 @@ export function SkillsTab({ agentId }: { agentId: string }) {
   const filterActive = filter.trim().length > 0;
   const q = filter.trim().toLowerCase();
   const visible = filterActive ? ordered.filter((sk) => sk.name.toLowerCase().includes(q)) : ordered;
+
+  const { data: availableSkills } = useSkills();
 
   const persist = (next: AgentSkillItem[]) =>
     setSkills.mutate(
@@ -60,6 +63,33 @@ export function SkillsTab({ agentId }: { agentId: string }) {
   const toggle = (skillId: string, enabled: boolean) =>
     persist(ordered.map((sk) => (sk.skill_id === skillId ? { ...sk, enabled } : sk)));
 
+  const attachSkill = (skillId: string) => {
+    const skill = availableSkills?.find((s) => s.id === skillId);
+    if (!skill) return;
+    const next = [
+      ...ordered,
+      {
+        agent_id: agentId,
+        skill_id: skillId,
+        name: skill.name,
+        type: skill.type,
+        enabled: true,
+        order: ordered.length,
+      },
+    ];
+    persist(next);
+  };
+
+  const detachSkill = (skillId: string) => {
+    const next = ordered.filter((sk) => sk.skill_id !== skillId);
+    persist(next);
+  };
+
+  // Skills not yet linked
+  const unlinkedSkills = availableSkills?.filter(
+    (s) => !ordered.some((sk) => sk.skill_id === s.id)
+  ) ?? [];
+
   // Escape clears a non-empty filter. An already-empty filter lets the key
   // bubble so other Escape handlers (e.g. closing overlays) still fire.
   const onFilterKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -77,6 +107,25 @@ export function SkillsTab({ agentId }: { agentId: string }) {
       <div style={s.header}>
         <h2 style={s.h2}>{t("skills.title")}</h2>
         <span style={s.count}>{t("skills.enabledCount", { linked: enabledCount, total: ordered.length })}</span>
+        {unlinkedSkills.length > 0 && (
+          <div style={s.attach}>
+            <Dropdown
+              width={260}
+              align="right"
+              trigger={
+                <Button kind="secondary" size="sm" icon="Plus" iconRight="ChevronDown">
+                  {t("skills.attach")}
+                </Button>
+              }
+              items={unlinkedSkills.map((sk) => ({
+                label: sk.name,
+                icon: "Sparkles" as const,
+                hint: sk.enabled ? sk.type : t("skills.attachDisabledHint"),
+                onClick: () => attachSkill(sk.id),
+              }))}
+            />
+          </div>
+        )}
       </div>
 
       {isLoading ? (
@@ -102,14 +151,19 @@ export function SkillsTab({ agentId }: { agentId: string }) {
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
               <SortableContext items={visible.map((sk) => sk.skill_id)} strategy={verticalListSortingStrategy}>
                 <div style={s.list}>
-                  {visible.map((sk) => (
-                    <SkillRow
-                      key={sk.skill_id}
-                      skill={sk}
-                      draggable={!filterActive}
-                      onToggle={(enabled) => toggle(sk.skill_id, enabled)}
-                    />
-                  ))}
+                  {visible.map((sk) => {
+                    const globalSkill = availableSkills?.find((s) => s.id === sk.skill_id);
+                    return (
+                      <SkillRow
+                        key={sk.skill_id}
+                        skill={sk}
+                        draggable={!filterActive}
+                        onToggle={(enabled) => toggle(sk.skill_id, enabled)}
+                        onDetach={() => detachSkill(sk.skill_id)}
+                        isGloballyDisabled={globalSkill ? !globalSkill.enabled : false}
+                      />
+                    );
+                  })}
                 </div>
               </SortableContext>
             </DndContext>
@@ -124,11 +178,16 @@ function SkillRow({
   skill,
   draggable,
   onToggle,
+  onDetach,
+  isGloballyDisabled,
 }: {
   skill: AgentSkillItem;
   draggable: boolean;
   onToggle: (enabled: boolean) => void;
+  onDetach: () => void;
+  isGloballyDisabled: boolean;
 }) {
+  const t = useTranslations("agents");
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: skill.skill_id,
     disabled: !draggable,
@@ -143,14 +202,25 @@ function SkillRow({
     <div ref={setNodeRef} style={style}>
       <span
         style={s.handle(!draggable)}
-        aria-label="Drag to reorder"
+        aria-label={t("skills.dragHandle")}
         {...(draggable ? { ...attributes, ...listeners } : {})}
       >
         <Icon.Menu size={15} />
       </span>
       <Checkbox checked={skill.enabled} onChange={onToggle} />
-      <span style={s.name(skill.enabled)}>{skill.name}</span>
+      <div style={s.nameCol}>
+        <span style={s.name(skill.enabled)}>{skill.name}</span>
+        {isGloballyDisabled && <div style={s.disabledHint}>{t("skills.globallyDisabled")}</div>}
+      </div>
       <span style={s.badge(color)}>{skill.type}</span>
+      <Button
+        kind="ghost"
+        size="sm"
+        icon="X"
+        onClick={onDetach}
+        title={t("skills.detach")}
+        aria-label={t("skills.detach")}
+      />
     </div>
   );
 }

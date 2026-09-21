@@ -1,0 +1,65 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  wrap: {
+    padding: "24px 28px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 24,
+    height: "100%",
+    overflow: "auto",
+    maxWidth: 960,
+  } satisfies CSSProperties,
+  kpiGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, 1fr)",
+    gap: 14,
+  } satisfies CSSProperties,
+  grid2: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 20,
+    alignItems: "start",
+  } satisfies CSSProperties,
+  gaugeValue: { display: "inline-flex", alignItems: "center", gap: 10 } satisfies CSSProperties,
+  muted: { fontSize: 13, color: "var(--text-muted)" } satisfies CSSProperties,
+  card: {
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    padding: 18,
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+  } satisfies CSSProperties,
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: 700,
+    color: "var(--text-primary)",
+    margin: 0,
+  } satisfies CSSProperties,
+  agentList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  } satisfies CSSProperties,
+  agentRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "8px 12px",
+    borderRadius: 6,
+    background: "var(--bg-surface)",
+    border: "1px solid var(--border)",
+    textDecoration: "none",
+    color: "inherit",
+    transition: "background 0.15s",
+  } satisfies CSSProperties,
+  agentInfo: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    fontSize: 13,
+    fontWeight: 600,
+  } satisfies CSSProperties,
+} as const;

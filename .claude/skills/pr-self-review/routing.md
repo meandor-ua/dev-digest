@@ -52,7 +52,8 @@ just because it was found deterministically.
   mismatch. Two reasons it would fire on every run:
   `client/src/vendor/ui` has no server counterpart at all, and the shared
   subtrees are already divergent on `main` (the server copy is a superset --
-  `shared/adapters.ts` and four `shared/contracts/*.ts` files differ today).
+  `shared/adapters.ts` and several `shared/contracts/*.ts` files differ —
+  `diff -rq server/src/vendor/shared client/src/vendor/shared` lists them).
   That drift is pre-existing, so under the severity rubric it is at
   most a `should-fix` labelled pre-existing, never a blocker on someone whose
   diff merely touched the file.

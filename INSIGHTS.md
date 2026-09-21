@@ -37,7 +37,8 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   developer mode, else they check out as a text file; fallback is a one-line
   `CLAUDE.md` containing `@AGENTS.md`. `server/clones/**` holds third-party
   repos with their own `CLAUDE.md` (gitignored) — don't rename those.
-  Evidence: `AGENTS.md:119`, `.gitignore:21`.
+  Evidence: `ls -la CLAUDE.md */CLAUDE.md` (each `-> AGENTS.md`); no prose
+  documents it, so check the links rather than a line.
 
 - **2026-09-20** — The `skip-worktree` rationale for inlining vitest in CI was
   dead and had been copy-pasted into four files (`TESTING.md`,
@@ -61,36 +62,11 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   `.claude/skills/plan-adversarial-review/SKILL.md:1-4`,
   `.claude/skills/frontend-architecture/SKILL.md:1-6`.
 
-- **2026-09-21** — A skill's frontmatter `description` has a hard **1024-char
-  cap** (Claude Code refuses longer ones); `onion-architecture` had drifted to
-  1068. Audit every skill with a one-liner that re-extracts the frontmatter
-  value and measures it after collapsing whitespace — `python3` + `re.search`
-  over `.claude/skills/*/SKILL.md`; the next-closest to the cap are
-  `frontend-architecture` (944) and `plan-adversarial-review` (850), so this
-  recurs. When trimming, cut only what does no *triggering* work: prose that
-  restates the rule (already in the body), `see ` prefixes before sibling skill
-  names, and framework version numbers (`(ESM)`, `Fastify 5` — nobody phrases a
-  request that way). Keep the whole `Use when …` clause list and distinctive
-  stack tokens like `pgvector`, which are what disambiguate one skill from the
-  15+ others competing for the same match. 1068 → 978 this way, body untouched.
-  Evidence: `.claude/skills/onion-architecture/SKILL.md:3` (rule restated in
-  the body at `:62`, `:80`).
-
 - **2026-09-16** — `docs/README.md` and `specs/README.md` stub files use the
   header convention `# <thing> — <package>` (e.g. `# docs — DevDigest`,
   `# specs — client`) — follow it when adding new doc/spec stubs so headers
   stay consistent across packages. Evidence: `docs/README.md:1`,
   `client/specs/README.md:1`.
-- **2026-09-17** — `*/src/vendor/shared/contracts/*.ts` (server + client
-  copies) have no discoverable local source package or re-vendor tooling in
-  this checkout, despite root `CLAUDE.md` describing them as "synced copies —
-  edit the source package and re-vendor." In practice both copies must be
-  hand-edited identically; verified via `diff` they were kept byte-identical
-  (modulo comments) across a real feature. Evidence:
-  `server/src/vendor/shared/contracts/trace.ts:1`,
-  `server/src/vendor/shared/contracts/platform.ts:1` vs the identical
-  `client/` copies (confirmed byte-identical again in this session's own
-  `platform.ts` edits — see `client/INSIGHTS.md`/`server/INSIGHTS.md`).
 - **2026-09-17** — This course repo's lab exercises are built by having the
   teacher develop the FULL feature, then squash-revert `main` back to a
   "starter" state before each lesson. When a feature/column looks entirely
@@ -101,17 +77,20 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   `server/src/db/schema/runs.ts:23`.
 
 - **2026-09-20** — `docker-compose.yml` exists twice (repo root and
-  `server/`), byte-identical, and **both pin `name: devdigest`** — so they
+  `server/`), identical below their header comments, and **both pin
+  `name: devdigest`** — so they
   address the same compose project, container and volume. Running
   `docker compose up -d` from either directory is equivalent; the duplication
   looks like a container-name collision but is not one. Separately,
   `scripts/e2e.sh` does NOT use compose at all — it runs a throwaway Postgres
   on :5433 via `docker run --rm`, so the e2e stack never touches the dev
-  volume. Evidence: `docker-compose.yml:7`, `scripts/e2e.sh:91`.
+  volume. Evidence: `docker-compose.yml:7`, `scripts/e2e.sh:91`; check with
+  `diff <(sed 1,6d docker-compose.yml) <(sed 1,4d server/docker-compose.yml)`.
 
-- **2026-09-21** — Supersedes the 2026-09-21 "hard 1024-char cap (Claude Code
-  refuses longer ones)" entry above: there are **two different limits and
-  Claude Code's is not the 1024 one**. Claude Code truncates `description` +
+- **2026-09-21** — A skill `description` has **two different limits, and
+  Claude Code's is not the 1024 one** (`onion-architecture` once drifted to
+  1068 chars; trimmed to 978 by cutting only non-triggering prose, keeping the
+  `Use when …` clauses and stack tokens). Claude Code truncates `description` +
   `when_to_use` **combined** at **1536 characters**, and does so *silently in
   the skill listing* — the skill still loads, it just loses the trailing text,
   which is exactly where the `Use when …` trigger phrases live. The **1024**
@@ -150,8 +129,8 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   `skills-lock.json`, but locally-authored ones have no such backstop, so the
   catalog row is their only discoverability path. `.claude/skills/README.md`
   now documents the "catalog row in the same commit as SKILL.md" rule.
-  Evidence: `.claude/skills/README.md:19-20` (the two catalog rows),
-  `.claude/skills/README.md:47` (the rule itself).
+  Evidence: `.claude/skills/README.md:25-26` (the two catalog rows),
+  `.claude/skills/README.md:69-72` (the rule itself).
 - **2026-09-18** — Running `./scripts/e2e.sh` while `pnpm dev` is up used to
   break the DEV app with "Cannot reach the DevDigest engine at
   http://localhost:3101" (e.g. Agents → "Could not load agents"). Cause: both
@@ -170,27 +149,17 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   include line up front (`client/tsconfig.json:33`) means Next finds nothing
   to add and leaves the file alone.
 
-- **2026-09-18** — Don't trust `docker exec devdigest-postgres psql … '\dt'`
-  to show this app's data: in this checkout it reported no relations while the
-  API on :3001 served full data from `DATABASE_URL` on localhost:5432. Verify
-  DB facts via the API (`curl localhost:3001/…`) or `pnpm db:*` from
-  `server/`. Evidence: `server/.env:2` (`DATABASE_URL`). (Later corrected —
-  see the CORRECTION entry below.)
 - **2026-09-18** — Name collision: `@devdigest/shared` already exports a
   `PrBrief` contract (`client/src/vendor/shared/contracts/brief.ts:116`) for
   the L05 LLM-generated brief.
   The Overview card is a different, LLM-free, props-only thing and is
   deliberately named `ReviewBriefCard`.
-- **2026-09-18** — CORRECTION to the `docker exec … psql` entry above: re-run
-  later the same day, `docker exec devdigest-postgres psql -U devdigest -d
-  devdigest -c '\dt'` DID list the app's tables (`agent_runs`, `agents`, …),
-  matching `DATABASE_URL=…@localhost:5432/devdigest` (`server/.env:2`). The
-  earlier "no relations" reading came from a prior session and was never
-  reproduced; the container is the app's DB. Still prefer the API for app-level
+- **2026-09-18** — `docker exec devdigest-postgres psql -U devdigest -d
+  devdigest -c '\dt'` lists the app's tables (`agent_runs`, `agents`, …) — the
+  container IS the app's DB (`DATABASE_URL=…@localhost:5432/devdigest`). An
+  earlier "no relations" reading was never reproduced; don't repeat it. Still prefer the API for app-level
   facts (derived fields like PR score exist only there), but `docker exec` is
   a valid way to inspect raw tables. Evidence: `server/.env:2`.
-- **2026-09-18** — Exact evidence for the `PrBrief` entry above:
-  `client/src/vendor/shared/contracts/brief.ts:116`.
 - **2026-09-18** — Don't trust agent-guide rules as ground truth — count
   before you repeat them. Root and `client/CLAUDE.md` both said "relative
   imports carry `.js` … server, client, reviewer-core all do this", but the
@@ -202,22 +171,20 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
 
 - **2026-09-20** — Naive repo-wide `find`/`grep` counts are wrong twice over.
   (a) `server/clones/**` is a gitignored clone of THIS repo, so counting
-  `server/` without excluding it double-counts: a prior audit reported 35
-  DB-free + 17 DB-backed server tests; the real numbers are **16 and 11**, all
-  in `server/test/`. That bad count had already leaked into
-  `.github/workflows/server-unit.yml` (which said "~19"). (b) `src/vendor/**`
-  holds 70 of client's 269 `.ts`/`.tsx` files, so vendor-inclusive stats
-  overstate local convention — non-vendor figures are 199 files, 351
-  `style={`, 33 `className=`, 22 tests. Vendor is do-not-touch, so it is never
+  `server/` without excluding it double-counts (a 2026-09-20 audit reported
+  35 + 17 server tests when the real split was 16 + 11, all in `server/test/`).
+  (b) `src/vendor/**` holds 70 of client's `.ts`/`.tsx` files, so
+  vendor-inclusive stats overstate local convention. Re-measure rather than
+  quoting counts — they drift with every feature. Vendor is do-not-touch, so it is never
   evidence of how code here is written. Always exclude both. Evidence:
   `find server -name '*.test.ts' -not -path '*/clones/*' -not -path '*/node_modules/*'`.
 
-- **2026-09-20** — Supersedes the 2026-09-17 note that both `vendor/shared`
-  copies "must be hand-edited identically": they have **drifted**, and the
-  drift is currently **inert**. `server/src/vendor/shared` is ahead of the
-  client copy in 5 files (`adapters.ts` 49 lines, `contracts/knowledge.ts` 35,
-  `contracts/eval-ci.ts` 33, `contracts/trace.ts` 5 comment-only,
-  `contracts/productionize.ts` 2). It doesn't bite today because the client
+- **2026-09-20** — The two `vendor/shared` copies have no source package or
+  re-vendor tooling, and they have **drifted**; the drift is currently
+  **inert**. `server/src/vendor/shared` is ahead of the client copy in
+  `adapters.ts`, `contracts/eval-ci.ts`, `contracts/trace.ts` (comment-only)
+  and `contracts/productionize.ts` (`contracts/knowledge.ts` was re-synced by
+  the 2026-09-21 Skills work — edit both copies identically and `diff` them). It doesn't bite today because the client
   imports none of the server-only symbols (`AgentManifest`, `AgentVersion`,
   `CommitFilesPayload`, `getAuthenticatedUser`, `sessionId`) and does **zero
   runtime Zod parsing** of shared schemas — `.parse`/`.safeParse` appear
@@ -235,14 +202,11 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   so any automated check built on it is a permanent false blocker. Two
   independent reasons. (1) `client/src/vendor/ui` has no server counterpart at
   all, so the trees can never match. (2) The shared subtrees are **already
-  divergent on `main`** — 5 files differ (`shared/adapters.ts` plus
-  `shared/contracts/{eval-ci,knowledge,productionize,trace}.ts`), the server
+  divergent** — `diff -rq server/src/vendor/shared client/src/vendor/shared`
+  lists them (`shared/adapters.ts` plus several `shared/contracts/*.ts`), the server
   copy being a superset that carries server-only surface (`CommitFilesPayload`,
   `commitFiles`, `findOpenPr`, `getAuthenticatedUser`, `sync`, `diffNameOnly`,
-  the `'openrouter'` provider id). This supersedes the 2026-09-17 entry's
-  "verified via `diff` they were kept byte-identical (modulo comments)" — that
-  held for the two `contracts/` files it checked, not for the vendor trees as a
-  whole. The invariant that *is* enforceable is per-file and diff-scoped: if a
+  the `'openrouter'` provider id). The invariant that *is* enforceable is per-file and diff-scoped: if a
   change-set touches one package's `vendor/` path, the mirrored path under the
   other package must be in the same change-set. Pre-existing drift is at most a
   `should-fix` labelled pre-existing, never a blocker on whoever merely touched
@@ -256,6 +220,32 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   and treat "agent finished but `git status` is clean" as the tell. Evidence:
   this session's two `pr-self-review` delegations, the first producing only
   `~/.claude/plans/…-agent-<id>.md`.
+
+- **2026-09-21** — Applying `onion-architecture`'s R6 ("services depend on
+  ports, received by constructor — never the `Container`") literally as a
+  `pr-self-review` blocker on a brand-new module is a false-positive trap: R6
+  is not the exception in this codebase, it's the rule — `AgentsService`,
+  `ReviewsService`, `RepoService` and `RepoIntelService` *all* take
+  `constructor(private container: Container)` today (documented as baseline
+  violation V5 in `onion-architecture/SKILL.md`'s own appendix), and the
+  skill's `enforcement.md` explicitly defers wiring any lint gate for it to a
+  future PR. A new module (e.g. `SkillsService`) copying that exact
+  established pattern isn't introducing a novel deviation, it's matching
+  every sibling service that exists — treat it as `should-fix` (note the rule,
+  cite the future migration), not `blocker`, or every `pr-self-review` run on
+  server code produces an unfair wall of R6 findings. R5 (Drizzle row types
+  leaking into `service.ts`) is a sharper case: it's also worth checking
+  whether a *local, same-feature* exemplar already shows the clean pattern
+  (here, `agents/helpers.ts:12` keeps `AgentRow` out of `agents/service.ts`
+  entirely) before deciding severity — if one exists and the new file skipped
+  it, that's stronger grounds for should-fix than "the rule says so" (this
+  one was then fixed: mappers moved to `skills/helpers.ts`). Evidence:
+  `server/src/modules/skills/service.ts` (constructor) vs
+  `server/src/modules/agents/service.ts` (no `Container`-narrowing either, but
+  no raw row-type import) and `server/src/modules/agents/helpers.ts:3,12`;
+  `.claude/skills/onion-architecture/SKILL.md:244-248` (V2/V5 baseline),
+  `.claude/skills/onion-architecture/enforcement.md:8-9` (enforcement
+  explicitly deferred).
 
 ## Session Notes
 

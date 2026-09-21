@@ -1,7 +1,7 @@
 # Duplicate of the repo-root docker-compose.yml, kept so `docker compose up -d`
 # also works from server/. Both pin `name: devdigest`, so they address the SAME
 # compose project, container and volume — running either is equivalent, and
-# neither shadows the other. Keep the two files byte-identical if you edit one.
+# neither shadows the other. Keep everything below the header comments identical.
 name: devdigest
 
 services:
