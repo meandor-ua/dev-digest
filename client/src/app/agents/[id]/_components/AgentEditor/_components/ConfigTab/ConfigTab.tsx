@@ -52,6 +52,31 @@ export function ConfigTab({ agent }: { agent: Agent }) {
   const strategyOptions = STRATEGY_VALUES.map((v) => ({ value: v, label: t(`config.strategyOptions.${v}`) }));
   const ciFailOnOptions = CI_FAIL_ON_VALUES.map((v) => ({ value: v, label: t(`config.ciFailOnOptions.${v}`) }));
 
+  // Dirty = any field diverges from the loaded agent; drives Cancel visibility.
+  const dirty =
+    name !== agent.name ||
+    description !== agent.description ||
+    provider !== agent.provider ||
+    model !== agent.model ||
+    systemPrompt !== agent.system_prompt ||
+    strategy !== agent.strategy ||
+    ciFailOn !== agent.ci_fail_on ||
+    repoIntel !== agent.repo_intel ||
+    enabled !== agent.enabled;
+
+  // Revert every field to the last loaded agent (no server call).
+  const cancel = () => {
+    setName(agent.name);
+    setDescription(agent.description);
+    setProvider(agent.provider);
+    setModel(agent.model);
+    setSystemPrompt(agent.system_prompt);
+    setStrategy(agent.strategy);
+    setCiFailOn(agent.ci_fail_on);
+    setRepoIntel(agent.repo_intel);
+    setEnabled(agent.enabled);
+  };
+
   const save = () =>
     update.mutate(
       {
@@ -137,7 +162,12 @@ export function ConfigTab({ agent }: { agent: Agent }) {
         <Button kind="primary" icon="Check" onClick={save} disabled={update.isPending}>
           {update.isPending ? t("config.saving") : t("config.save")}
         </Button>
-        {update.isSuccess && (
+        {dirty && (
+          <Button kind="ghost" onClick={cancel} disabled={update.isPending}>
+            {t("config.cancel")}
+          </Button>
+        )}
+        {update.isSuccess && !dirty && (
           <span style={s.savedNote}>{t("config.saved", { version: update.data?.version })}</span>
         )}
       </div>

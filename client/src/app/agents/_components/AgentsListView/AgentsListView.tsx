@@ -7,7 +7,8 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, EmptyState, ErrorState, Skeleton, Icon } from "@devdigest/ui";
 import { AppShell } from "../../../../components/app-shell";
-import { useAgents, useUpdateAgent } from "../../../../lib/hooks/agents";
+import { useAgents, useUpdateAgent, useAgentCardStats } from "../../../../lib/hooks/agents";
+import { useActiveRepo } from "../../../../lib/repo-context";
 import { AgentCard } from "../AgentCard";
 import { CreateAgentModal } from "./_components/CreateAgentModal";
 import { TEMPLATES } from "./constants";
@@ -19,6 +20,12 @@ export function AgentsListView() {
   const router = useRouter();
   const { data: agents, isLoading, isError, refetch } = useAgents();
   const update = useUpdateAgent();
+  const { repoId } = useActiveRepo();
+  const { data: cardStats } = useAgentCardStats(repoId);
+  const statsById = React.useMemo(
+    () => new Map((cardStats ?? []).map((cs) => [cs.agent_id, cs])),
+    [cardStats],
+  );
   const [creating, setCreating] = React.useState(false);
   const [search, setSearch] = React.useState("");
 
@@ -86,6 +93,7 @@ export function AgentsListView() {
               <AgentCard
                 key={a.id}
                 ag={a}
+                stats={statsById.get(a.id)}
                 onClick={() => router.push(`/agents/${a.id}?tab=config`)}
                 onToggle={(enabled) => update.mutate({ id: a.id, patch: { enabled } })}
               />

@@ -189,5 +189,20 @@ export const AgentSkillLink = z.object({
   agent_id: z.string(),
   skill_id: z.string(),
   order: z.number().int(),
+  // Whether this linked skill is active for the agent (Skills tab toggle).
+  enabled: z.boolean(),
 });
 export type AgentSkillLink = z.infer<typeof AgentSkillLink>;
+
+// A linked skill enriched with the skill's own name/type, as returned by
+// GET /agents/:id/skills for the Skills tab (link fields + skill display data),
+// ordered by `order` ascending.
+export const AgentSkillItem = z.object({
+  agent_id: z.string(),
+  skill_id: z.string(),
+  order: z.number().int(),
+  enabled: z.boolean(),
+  name: z.string(),
+  type: SkillType,
+});
+export type AgentSkillItem = z.infer<typeof AgentSkillItem>;

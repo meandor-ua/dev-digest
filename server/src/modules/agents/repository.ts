@@ -1,9 +1,10 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
 import { DEFAULT_AGENT_DESCRIPTION, INITIAL_AGENT_VERSION } from './constants.js';
 import { isConfigChange } from './helpers.js';
+import type { RunRow, FindingRow } from './stats.js';
 
 /**
  * A2 — agents data-access. Owns `agents`, `agent_versions`, and the
@@ -42,10 +43,11 @@ export interface UpdateAgent {
   enabled?: boolean;
 }
 
-/** A skill linked to an agent (with its order), joined from agent_skills. */
+/** A skill linked to an agent (with its order + enabled flag), joined from agent_skills. */
 export interface LinkedSkillRow {
   skill: typeof t.skills.$inferSelect;
   order: number;
+  enabled: boolean;
 }
 
 export class AgentsRepository {
@@ -191,12 +193,12 @@ export class AgentsRepository {
   /** Skills linked to an agent, in `order` ascending. */
   async linkedSkills(agentId: string): Promise<LinkedSkillRow[]> {
     const rows = await this.db
-      .select({ skill: t.skills, order: t.agentSkills.order })
+      .select({ skill: t.skills, order: t.agentSkills.order, enabled: t.agentSkills.enabled })
       .from(t.agentSkills)
       .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
       .where(eq(t.agentSkills.agentId, agentId))
       .orderBy(asc(t.agentSkills.order));
-    return rows.map((r) => ({ skill: r.skill, order: r.order }));
+    return rows.map((r) => ({ skill: r.skill, order: r.order, enabled: r.enabled }));
   }
 
   async skillIdsForAgent(agentId: string): Promise<string[]> {
@@ -222,15 +224,171 @@ export class AgentsRepository {
   }
 
   /**
-   * Replace the full set of linked skills for an agent with `skillIds`, assigning
-   * order = index. Used by the "Skills" editor tab (attach/reorder). Skills not in
-   * the list are unlinked.
+   * Replace the full set of linked skills for an agent with `items`, assigning
+   * order = index and persisting each `enabled` flag (default true). Used by the
+   * "Skills" editor tab (attach/reorder/toggle). Skills not in the list are unlinked.
    */
-  async setSkills(agentId: string, skillIds: string[]): Promise<void> {
+  async setSkills(
+    agentId: string,
+    items: Array<{ skillId: string; enabled?: boolean }>,
+  ): Promise<void> {
     await this.db.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
-    if (skillIds.length === 0) return;
+    if (items.length === 0) return;
     await this.db
       .insert(t.agentSkills)
-      .values(skillIds.map((skillId, i) => ({ agentId, skillId, order: i })));
+      .values(items.map((it, i) => ({ agentId, skillId: it.skillId, order: i, enabled: it.enabled ?? true })));
+  }
+
+  /** The subset of `skillIds` that actually belong to `workspaceId` (ownership guard). */
+  async skillIdsInWorkspace(workspaceId: string, skillIds: string[]): Promise<Set<string>> {
+    if (skillIds.length === 0) return new Set();
+    const rows = await this.db
+      .select({ id: t.skills.id })
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), inArray(t.skills.id, skillIds)));
+    return new Set(rows.map((r) => r.id));
+  }
+
+  // ---- stats aggregation source rows (see ./stats.ts) ---------------------
+
+  /** DONE runs of any agent whose PR is in `repoId` (card stats across agents). */
+  async doneRunsForRepo(
+    workspaceId: string,
+    repoId: string,
+  ): Promise<Array<RunRow & { agentId: string }>> {
+    const rows = await this.db
+      .select({
+        agentId: t.agentRuns.agentId,
+        runId: t.agentRuns.id,
+        prId: t.agentRuns.prId,
+        prNumber: t.pullRequests.number,
+        ranAt: t.agentRuns.ranAt,
+        score: t.agentRuns.score,
+        costUsd: t.agentRuns.costUsd,
+        durationMs: t.agentRuns.durationMs,
+        tokensIn: t.agentRuns.tokensIn,
+        tokensOut: t.agentRuns.tokensOut,
+        findingsCount: t.agentRuns.findingsCount,
+        source: t.agentRuns.source,
+        traceRunId: t.runTraces.runId,
+      })
+      .from(t.agentRuns)
+      .innerJoin(t.pullRequests, eq(t.pullRequests.id, t.agentRuns.prId))
+      .leftJoin(t.runTraces, eq(t.runTraces.runId, t.agentRuns.id))
+      .where(
+        and(
+          eq(t.agentRuns.workspaceId, workspaceId),
+          eq(t.agentRuns.status, 'done'),
+          eq(t.pullRequests.repoId, repoId),
+        ),
+      );
+    return rows
+      .filter((r) => r.agentId !== null)
+      .map((r) => ({
+        agentId: r.agentId!,
+        runId: r.runId,
+        prId: r.prId,
+        prNumber: r.prNumber,
+        ranAt: r.ranAt,
+        score: r.score,
+        costUsd: r.costUsd,
+        durationMs: r.durationMs,
+        tokensIn: r.tokensIn,
+        tokensOut: r.tokensOut,
+        findingsCount: r.findingsCount,
+        source: r.source,
+        hasTrace: r.traceRunId !== null,
+      }));
+  }
+
+  /** DONE runs of one agent whose PR is in `repoId` (Stats tab). */
+  async doneRunsForAgentRepo(agentId: string, repoId: string): Promise<RunRow[]> {
+    const rows = await this.db
+      .select({
+        runId: t.agentRuns.id,
+        prId: t.agentRuns.prId,
+        prNumber: t.pullRequests.number,
+        ranAt: t.agentRuns.ranAt,
+        score: t.agentRuns.score,
+        costUsd: t.agentRuns.costUsd,
+        durationMs: t.agentRuns.durationMs,
+        tokensIn: t.agentRuns.tokensIn,
+        tokensOut: t.agentRuns.tokensOut,
+        findingsCount: t.agentRuns.findingsCount,
+        source: t.agentRuns.source,
+        traceRunId: t.runTraces.runId,
+      })
+      .from(t.agentRuns)
+      .innerJoin(t.pullRequests, eq(t.pullRequests.id, t.agentRuns.prId))
+      .leftJoin(t.runTraces, eq(t.runTraces.runId, t.agentRuns.id))
+      .where(
+        and(
+          eq(t.agentRuns.agentId, agentId),
+          eq(t.agentRuns.status, 'done'),
+          eq(t.pullRequests.repoId, repoId),
+        ),
+      );
+    return rows.map((r) => ({
+      runId: r.runId,
+      prId: r.prId,
+      prNumber: r.prNumber,
+      ranAt: r.ranAt,
+      score: r.score,
+      costUsd: r.costUsd,
+      durationMs: r.durationMs,
+      tokensIn: r.tokensIn,
+      tokensOut: r.tokensOut,
+      findingsCount: r.findingsCount,
+      source: r.source,
+      hasTrace: r.traceRunId !== null,
+    }));
+  }
+
+  /** Findings from an agent's DONE runs within `repoId` (severity/category by run week). */
+  async findingsForAgentRepo(agentId: string, repoId: string): Promise<FindingRow[]> {
+    const rows = await this.db
+      .select({
+        severity: t.findings.severity,
+        category: t.findings.category,
+        ranAt: t.agentRuns.ranAt,
+      })
+      .from(t.agentRuns)
+      .innerJoin(t.pullRequests, eq(t.pullRequests.id, t.agentRuns.prId))
+      .innerJoin(t.reviews, eq(t.reviews.runId, t.agentRuns.id))
+      .innerJoin(t.findings, eq(t.findings.reviewId, t.reviews.id))
+      .where(
+        and(
+          eq(t.agentRuns.agentId, agentId),
+          eq(t.agentRuns.status, 'done'),
+          eq(t.pullRequests.repoId, repoId),
+        ),
+      );
+    return rows.map((r) => ({ severity: r.severity, category: r.category, ranAt: r.ranAt }));
+  }
+
+  /**
+   * Count of ENABLED linked skills per agent in a workspace (card stats). The
+   * card's "N skills" mirrors the Skills tab's "N of M enabled" left-hand
+   * number, so disabled links are excluded here.
+   */
+  async skillCountByAgent(workspaceId: string): Promise<Map<string, number>> {
+    const rows = await this.db
+      .select({ agentId: t.agentSkills.agentId, n: sql<number>`count(*)::int` })
+      .from(t.agentSkills)
+      .innerJoin(t.agents, eq(t.agents.id, t.agentSkills.agentId))
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agentSkills.enabled, true)))
+      .groupBy(t.agentSkills.agentId);
+    return new Map(rows.map((r) => [r.agentId, r.n]));
+  }
+
+  /** Enabled linked-skill names for an agent, in `order` (most-used placeholder). */
+  async enabledSkillNames(agentId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ name: t.skills.name })
+      .from(t.agentSkills)
+      .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
+      .where(and(eq(t.agentSkills.agentId, agentId), eq(t.agentSkills.enabled, true)))
+      .orderBy(asc(t.agentSkills.order));
+    return rows.map((r) => r.name);
   }
 }

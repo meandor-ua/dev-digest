@@ -1,0 +1,205 @@
+{
+  "name": "Agent editor: the five tabs render for a seeded agent",
+  "description": "From /agents, opening the seeded Security Reviewer card lands on the five-tab editor (Config · Skills · Evals · Stats · CI). Config shows the settings form; Skills lists the agent's two seeded linked skills with the '1 of 2 enabled' count (Lethal Trifecta Guard enabled, Error Handling Convention disabled); Stats is repo-scoped to the seeded demo repo and shows the agent's 4 seeded runs (Total runs / Run history / Source), and View trace opens the shared run-trace drawer on a seeded trace; Evals and CI are deterministic placeholders. Read-only seeded data (no model call). Assumes a freshly-seeded DB (hermetic stack).",
+  "steps": [
+    {
+      "cmd": [
+        "open",
+        "{BASE}/agents"
+      ],
+      "label": "load the agents page"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/agents"
+      ],
+      "label": "agents route reached"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "agents fetch settles"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Security Reviewer"
+      ],
+      "label": "seeded agent card is visible"
+    },
+    {
+      "cmd": [
+        "find",
+        "text",
+        "Security Reviewer",
+        "click"
+      ],
+      "label": "open the Security Reviewer editor"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "tab=config"
+      ],
+      "label": "land on the editor's Config tab"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Configuration"
+      ],
+      "label": "Config tab form renders"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Save agent"
+      ],
+      "label": "the Save action is present"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Skills"
+      ],
+      "label": "switch to the Skills tab"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Lethal Trifecta Guard"
+      ],
+      "label": "the enabled seeded skill is listed"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Error Handling Convention"
+      ],
+      "label": "the disabled seeded skill is listed"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "1 of 2 enabled"
+      ],
+      "label": "the enabled-count reflects the seeded links"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Evals"
+      ],
+      "label": "switch to the Evals tab"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "No evals yet"
+      ],
+      "label": "Evals placeholder renders"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "CI"
+      ],
+      "label": "switch to the CI tab"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "No CI activity yet"
+      ],
+      "label": "CI placeholder renders"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Stats"
+      ],
+      "label": "switch to the Stats tab"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "stats fetch settles"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Total runs"
+      ],
+      "label": "the KPI tiles render"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Run history"
+      ],
+      "label": "the run-history table renders the seeded runs"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Source"
+      ],
+      "label": "the run-history Source column renders"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "View trace"
+      ],
+      "label": "open the run trace popup"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Prompt assembly"
+      ],
+      "label": "the trace drawer renders the seeded trace"
+    }
+  ]
+}

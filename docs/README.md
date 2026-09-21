@@ -48,3 +48,25 @@ previously-unused `GET /workspace` endpoint; `client` gained image support on
 the shared `Avatar` primitive and a `useWorkspace()` hook. Single-local-user
 app (no per-request auth), so this is a simple singleton, not per-PR
 authorship.
+
+## Agents editor: five tabs + repo-scoped stats
+
+The Agents editor (`client/src/app/agents/[id]/`) grew from a single Config
+form into a five-tab studio (Config · Skills · Evals · Stats · CI) with a
+richer left rail. Two rationales worth keeping:
+
+- **Why per-PR-then-mean, and why repo-scoped.** An agent's `avg_score` /
+  `avg_cost_usd` (Agents-column cards and the Stats tab) average *per PR first,
+  then across PRs*, over only the DONE runs whose PR is in the active repo. A
+  PR that gets re-reviewed a dozen times would otherwise dominate a naive mean;
+  scoping to the active repo (`useActiveRepo()`, since the agents route has no
+  `:repoId`) keeps "how good is this agent *here*" honest. The exact rules live
+  once in `server/src/modules/agents/stats.ts` and are mirrored in
+  `specs/README.md` "Agent stats".
+- **Why `agent_skills.enabled`.** The Skills tab needs to attach/detach a
+  skill without losing its position in the assembled-prompt order, so linking
+  and enabling are separate: a new `enabled` column (migration
+  `0011_add_agent_skill_enabled.sql`) carries the toggle while `order` carries
+  the drag position. `POST /agents/:id/skills` replaces the whole set in one
+  optimistic call and guards workspace ownership so an agent can't link another
+  workspace's skill.

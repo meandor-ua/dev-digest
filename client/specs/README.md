@@ -85,3 +85,51 @@ Specs / acceptance criteria for the `client` package.
   if the image URL 404s/fails to load.
 - `Avatar`'s `imageUrl` prop is additive/optional — every other existing
   caller (e.g. PR author avatars in `PRRow.tsx`) renders unchanged.
+
+## Agents editor — the five tabs (`/agents/[id]`)
+
+- The editor's left rail (`AgentsColumn`) lists every agent as an `AgentCard`
+  and carries an "Add Agent" menu that opens `CreateAgentModal` (the old
+  no-op "Create from scratch → router.push('/agents')" is gone). Selecting a
+  card keeps the current `?tab=` when it navigates.
+- `AgentCard` renders a stats line — `{runs} runs · {score}% · {avg} avg` —
+  **only when repo-scoped `stats` are provided** (`useAgentCardStats(repoId)`,
+  where `repoId` comes from `useActiveRepo()`). The score is coloured with the
+  CircularScore thresholds (≥75 ok / ≥50 warn / else crit), cost via
+  `formatCost`; a `null` score/cost renders `—`, and `0 runs` shows for an
+  agent with no runs. Cards on `/agents` and in the editor rail share this.
+- Tabs are `Config · Skills · Evals · Stats · CI` (`?tab=` deep-links each).
+  `ConfigTab` stays mounted (hidden) while another tab is active so unsaved
+  edits survive a tab switch. Evals and CI are deterministic placeholders.
+- **ConfigTab Cancel:** the Cancel button appears only while the form is dirty
+  (any field diverges from the loaded agent), reverts every field to that
+  baseline on click with no server call, and disappears again once clean.
+- **SkillsTab:** drag-to-reorder (`@dnd-kit`) + a per-skill enabled checkbox
+  and type badge; the header shows `{enabled} of {total} enabled`. Reordering
+  and toggling autosave optimistically via `useSetAgentSkills` (rollback +
+  error toast on failure). Dragging is disabled while a filter is active (the
+  visible list is a subset, so a drop index would be ambiguous) — the reorder
+  hint swaps for "Clear the filter to reorder skills."
+  Pressing **Escape** in the filter input clears a non-empty filter (and
+  re-enables dragging); with an already-empty filter the key is not swallowed,
+  so other Escape handlers still fire.
+- **StatsTab:** repo-scoped to `useActiveRepo()`. Shows "Select a repo…" with
+  no active repo, "No data yet" when the agent has no runs in the repo, else
+  KPI tiles (Total runs / Avg cost / Avg duration / Avg score with a score
+  sparkline), a signed+coloured cost trend (increase red, decrease green),
+  Most-used skills bars, a stacked findings-by-severity chart (recharts),
+  a findings-by-category donut (each category's **share of all findings** as
+  whole percents that always total exactly 100%, via largest-remainder
+  rounding in `StatsTab/helpers.ts` `toPercentages`), and a run-history table. "View trace" opens
+  the shared `components/run-trace-drawer` and is disabled ("No trace") while
+  `has_trace` is false.
+- **StatsTab run history** columns are When · PR · Tokens · Cost · Findings ·
+  Source · Trace. The PR cell links to `/repos/{activeRepoId}/pulls/{number}`
+  (the stats are already repo-scoped, so the active repo is the right one);
+  Source renders `agent_runs.source` as a badge, amber for `ci` and muted for
+  `local`. Findings-by-severity shows the no-data state when all six weeks are
+  zero, and **Most-pulled memory is a deliberate placeholder** — memory pulls
+  are not recorded per run yet, so it always renders its own no-data line.
+- `AgentCard`'s "N skills" is the **enabled** link count, so it agrees with the
+  Skills tab header; `useSetAgentSkills` therefore invalidates
+  `["agent-card-stats"]` and `["agent-stats"]` as well as its own query.

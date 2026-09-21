@@ -1,31 +1,33 @@
-/* AgentCard — model chip, skills count, enabled toggle. Stats are an A5 mount;
-   we render the provider/model + skill count here. */
+/* AgentCard — name + enabled toggle, description, model chip + skills count,
+   and a stats line (runs · avg score · avg cost) when card stats are available. */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon, Badge, Toggle } from "@devdigest/ui";
-import type { Agent } from "@devdigest/shared";
+import type { Agent, AgentCardStats } from "@devdigest/shared";
 import { useDeleteAgent } from "../../../../lib/hooks/agents";
-import { modelColor } from "./helpers";
+import { formatCost } from "../../../../lib/cost";
+import { modelColor, scoreColor } from "./helpers";
 import { s } from "./styles";
 
 export function AgentCard({
   ag,
   active,
-  skillCount,
+  stats,
   onClick,
   onToggle,
 }: {
   ag: Agent;
   active?: boolean;
-  skillCount?: number;
+  stats?: AgentCardStats;
   onClick?: () => void;
   onToggle?: (enabled: boolean) => void;
 }) {
   const t = useTranslations("agents");
   const del = useDeleteAgent();
   const color = modelColor(ag.model);
+  const skillCount = stats?.skills_count;
   return (
     <div onClick={onClick} style={s.card(!!active, ag.enabled)}>
       <div style={s.headerRow}>
@@ -69,6 +71,26 @@ export function AgentCard({
           </Badge>
         )}
       </div>
+      {stats && (
+        <div style={s.statsRow}>
+          <span className="tnum">{t("card.runs", { count: stats.runs })}</span>
+          <span style={s.dot}>·</span>
+          <span
+            className="tnum"
+            style={{ color: stats.avg_score != null ? scoreColor(stats.avg_score) : "var(--text-muted)" }}
+          >
+            {stats.avg_score != null
+              ? t("card.scorePct", { score: Math.round(stats.avg_score) })
+              : t("card.noValue")}
+          </span>
+          <span style={s.dot}>·</span>
+          <span className="tnum">
+            {stats.avg_cost_usd != null
+              ? t("card.avgCost", { cost: formatCost(stats.avg_cost_usd) })
+              : t("card.noValue")}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

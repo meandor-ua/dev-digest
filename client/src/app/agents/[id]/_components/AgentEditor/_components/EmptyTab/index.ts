@@ -1,0 +1,1 @@
+export { EmptyTab } from "./EmptyTab";

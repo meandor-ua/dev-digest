@@ -40,7 +40,7 @@ function renderWithIntl(ui: React.ReactElement) {
 
 describe("A2 Agent Editor (smoke)", () => {
   it("renders the Config tab fields", () => {
-    renderWithIntl(<AgentEditor agent={AGENT} tab="config" onTab={() => {}} />);
+    renderWithIntl(<AgentEditor agent={AGENT} tab="config" onTab={() => {}} repoId={null} />);
     expect(screen.getByText("Config")).toBeInTheDocument();
     expect(screen.getByText("Configuration")).toBeInTheDocument();
     expect(screen.getByText("Save agent")).toBeInTheDocument();

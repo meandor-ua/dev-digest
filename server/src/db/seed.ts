@@ -229,6 +229,239 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     if (!existing) await db.insert(t.agents).values(a);
   }
 
+  const agentRows = await db
+    .select()
+    .from(t.agents)
+    .where(eq(t.agents.workspaceId, workspaceId));
+  const agentByName = (n: string) => agentRows.find((a) => a.name === n)!;
+
+  // ---- demo skills (across the 4 types) ----
+  const seedSkills: Array<{ name: string; type: (typeof t.skills.$inferInsert)['type']; description: string; body: string }> = [
+    { name: 'Bug & Correctness Rubric', type: 'rubric', description: 'Score a diff for correctness, edge cases and error handling.', body: 'Rate correctness 0-5; flag unhandled errors, off-by-one, and race conditions.' },
+    { name: 'Readability Rubric', type: 'rubric', description: 'Judge naming, cohesion and comment quality.', body: 'Prefer intention-revealing names; flag functions over ~40 lines.' },
+    { name: 'Repo Naming Conventions', type: 'convention', description: 'Kebab-case files, PascalCase components.', body: 'Enforce the naming rules from AGENTS.md across changed files.' },
+    { name: 'Error Handling Convention', type: 'convention', description: 'Errors go through the domain error taxonomy.', body: 'No bare throws in routes; use AppError subclasses.' },
+    { name: 'Lethal Trifecta Guard', type: 'security', description: 'Secrets, injection, SSRF and the lethal trifecta.', body: 'Block hardcoded secrets and unsanitised sinks before merge.' },
+    { name: 'Payments Domain Notes', type: 'custom', description: 'Domain rules specific to the payments service.', body: 'Money is integer minor units; never log full card numbers.' },
+  ];
+  for (const sk of seedSkills) {
+    const [existing] = await db
+      .select()
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, sk.name)));
+    if (!existing) {
+      await db
+        .insert(t.skills)
+        .values({ workspaceId, name: sk.name, description: sk.description, type: sk.type, source: 'manual', body: sk.body });
+    }
+  }
+  const skillRows = await db
+    .select()
+    .from(t.skills)
+    .where(eq(t.skills.workspaceId, workspaceId));
+  const skillByName = (n: string) => skillRows.find((s) => s.name === n)!;
+
+  // ---- link skills to agents (mixed enabled) ----
+  const skillLinks: Array<{ agent: string; skill: string; order: number; enabled: boolean }> = [
+    { agent: 'General Reviewer', skill: 'Bug & Correctness Rubric', order: 0, enabled: true },
+    { agent: 'General Reviewer', skill: 'Readability Rubric', order: 1, enabled: true },
+    { agent: 'General Reviewer', skill: 'Repo Naming Conventions', order: 2, enabled: false },
+    { agent: 'Security Reviewer', skill: 'Lethal Trifecta Guard', order: 0, enabled: true },
+    { agent: 'Security Reviewer', skill: 'Error Handling Convention', order: 1, enabled: false },
+    { agent: 'Performance Reviewer', skill: 'Payments Domain Notes', order: 0, enabled: true },
+  ];
+  for (const l of skillLinks) {
+    await db
+      .insert(t.agentSkills)
+      .values({ agentId: agentByName(l.agent).id, skillId: skillByName(l.skill).id, order: l.order, enabled: l.enabled })
+      .onConflictDoNothing();
+  }
+
+  // ---- demo agent_runs (+reviews/findings) so the Stats tab & cards render ----
+  // Only seed once (idempotent): skip if this workspace already has runs.
+  const existingRuns = await db
+    .select({ id: t.agentRuns.id })
+    .from(t.agentRuns)
+    .where(eq(t.agentRuns.workspaceId, workspaceId));
+  if (existingRuns.length === 0) {
+    const DAY = 24 * 3600 * 1000;
+    const now = Date.now();
+    const sevCat: Array<{ severity: string; category: string }> = [
+      { severity: 'CRITICAL', category: 'security' },
+      { severity: 'WARNING', category: 'perf' },
+      { severity: 'SUGGESTION', category: 'style' },
+      { severity: 'WARNING', category: 'correctness' },
+      { severity: 'SUGGESTION', category: 'maintainability' },
+    ];
+
+    async function insertRun(spec: {
+      agentName: string;
+      daysAgo: number;
+      score: number;
+      costUsd: number;
+      durationMs: number;
+      tokensIn: number;
+      tokensOut: number;
+      findings: number;
+      /** Seed a run_traces row too, so "View trace" is demoable on this run. */
+      withTrace?: boolean;
+    }) {
+      const agent = agentByName(spec.agentName);
+      const ranAt = new Date(now - spec.daysAgo * DAY);
+      const [run] = await db
+        .insert(t.agentRuns)
+        .values({
+          workspaceId,
+          agentId: agent.id,
+          prId: pr!.id,
+          ranAt,
+          provider: agent.provider,
+          model: agent.model,
+          durationMs: spec.durationMs,
+          tokensIn: spec.tokensIn,
+          tokensOut: spec.tokensOut,
+          costUsd: spec.costUsd,
+          status: 'done',
+          source: 'local',
+          findingsCount: spec.findings,
+          score: spec.score,
+        })
+        .returning();
+      if (spec.findings > 0) {
+        const [review] = await db
+          .insert(t.reviews)
+          .values({
+            workspaceId,
+            prId: pr!.id,
+            agentId: agent.id,
+            runId: run!.id,
+            // Backdate to the run's time. Left at the now() default, every demo
+            // review would outrank the original seeded review in the
+            // "latest review by created_at" lookups (PR list score/findings,
+            // PR detail), replacing PR #482's canonical findings.
+            createdAt: ranAt,
+            kind: 'review',
+            verdict: spec.score >= 75 ? 'approve' : 'request_changes',
+            summary: `${agent.name} run: ${spec.findings} finding(s).`,
+            score: spec.score,
+            model: agent.model,
+          })
+          .returning();
+        await db.insert(t.findings).values(
+          Array.from({ length: spec.findings }, (_, i) => {
+            const sc = sevCat[i % sevCat.length]!;
+            return {
+              reviewId: review!.id,
+              file: `src/mod${i}.ts`,
+              startLine: 10 + i,
+              endLine: 10 + i,
+              severity: sc.severity,
+              category: sc.category,
+              title: `${sc.category} issue #${i + 1}`,
+              rationale: 'Seeded demo finding.',
+              confidence: 0.8,
+            };
+          }),
+        );
+      }
+      if (spec.withTrace) {
+        await db.insert(t.runTraces).values({
+          runId: run!.id,
+          trace: {
+            config: {
+              agent: agent.name,
+              version: String(agent.version),
+              provider: agent.provider,
+              model: agent.model,
+              pr: pr!.number,
+              source: 'local',
+            },
+            stats: {
+              duration_ms: spec.durationMs,
+              tokens_in: spec.tokensIn,
+              tokens_out: spec.tokensOut,
+              cost_usd: spec.costUsd,
+              findings: spec.findings,
+              grounding: `${spec.findings}/${spec.findings} passed`,
+            },
+            prompt_assembly: {
+              system: agent.systemPrompt,
+              skills: null,
+              memory: null,
+              specs: null,
+              callers: null,
+              repo_map: null,
+              pr_description: null,
+              user: `Review the diff for PR #${pr!.number}.`,
+            },
+            tool_calls: [
+              { tool: 'read_diff', args: `pr=${pr!.number}`, meta: null, ms: 40 },
+              { tool: 'ground_findings', args: `n=${spec.findings}`, meta: null, ms: 25 },
+            ],
+            raw_output: `Seeded demo trace: ${spec.findings} grounded finding(s).`,
+            memory_pulled: [],
+            specs_read: [],
+            log: [
+              { t: '00.00', kind: 'info', msg: 'Run started (seeded demo).' },
+              { t: '00.31', kind: 'tool', msg: 'read_diff' },
+              {
+                t: String((spec.durationMs / 1000).toFixed(2)),
+                kind: 'result',
+                msg: `Done — ${spec.findings} finding(s), score ${spec.score}.`,
+              },
+            ],
+          },
+        });
+      }
+    }
+
+    // General Reviewer: 14 runs over ~7 weeks (>10 so cost/score trends render).
+    const genOffsets = [2, 5, 9, 13, 18, 22, 26, 30, 34, 38, 42, 45, 47, 49];
+    for (let i = 0; i < genOffsets.length; i++) {
+      await insertRun({
+        agentName: 'General Reviewer',
+        daysAgo: genOffsets[i]!,
+        score: 60 + ((i * 7) % 35),
+        costUsd: 0.02 + (i % 5) * 0.01,
+        durationMs: 9000 + (i % 6) * 2500,
+        tokensIn: 4000 + i * 250,
+        tokensOut: 900 + i * 60,
+        findings: i % 3 === 0 ? 3 : i % 3 === 1 ? 1 : 0,
+        withTrace: i < 5,
+      });
+    }
+    // Security Reviewer: 4 runs.
+    const secOffsets = [3, 12, 20, 33];
+    for (let i = 0; i < secOffsets.length; i++) {
+      await insertRun({
+        agentName: 'Security Reviewer',
+        daysAgo: secOffsets[i]!,
+        score: 70 + i * 5,
+        costUsd: 0.03 + i * 0.005,
+        durationMs: 12000 + i * 1500,
+        tokensIn: 5200 + i * 300,
+        tokensOut: 1100 + i * 80,
+        findings: i === 0 ? 2 : 1,
+        withTrace: i < 2,
+      });
+    }
+    // Performance Reviewer: 3 runs.
+    const perfOffsets = [4, 16, 28];
+    for (let i = 0; i < perfOffsets.length; i++) {
+      await insertRun({
+        agentName: 'Performance Reviewer',
+        daysAgo: perfOffsets[i]!,
+        score: 65 + i * 8,
+        costUsd: 0.04 + i * 0.006,
+        durationMs: 14000 + i * 2000,
+        tokensIn: 6000 + i * 400,
+        tokensOut: 1300 + i * 90,
+        findings: i === 1 ? 2 : 1,
+        withTrace: i < 2,
+      });
+    }
+  }
+
   return { workspaceId, userId };
 }
 

@@ -58,6 +58,10 @@ export const agentSkills = pgTable(
       .notNull()
       .references(() => skills.id, { onDelete: 'cascade' }),
     order: integer('order').notNull().default(0),
+    // Whether this linked skill is active for the agent. Toggled from the
+    // Skills tab; disabled links stay linked/ordered but would be excluded
+    // from prompt assembly once skills are injected into reviews.
+    enabled: boolean('enabled').notNull().default(true),
   },
   (t) => ({ pk: primaryKey({ columns: [t.agentId, t.skillId] }) }),
 );

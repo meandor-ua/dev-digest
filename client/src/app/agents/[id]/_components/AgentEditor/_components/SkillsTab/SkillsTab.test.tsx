@@ -1,0 +1,144 @@
+import React from "react";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import type { AgentSkillItem } from "@devdigest/shared";
+import messages from "../../../../../../../../messages/en/agents.json";
+import { ToastProvider } from "../../../../../../../lib/toast";
+
+const mutate = vi.fn();
+let skills: AgentSkillItem[] | undefined;
+
+// jsdom can't drive dnd-kit's pointer sensor, so capture the DndContext's
+// onDragEnd and call it directly with a synthetic drop event.
+let onDragEnd: ((e: { active: { id: string }; over: { id: string } | null }) => void) | undefined;
+vi.mock("@dnd-kit/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@dnd-kit/core")>();
+  return {
+    ...actual,
+    DndContext: (props: { onDragEnd?: typeof onDragEnd; children?: React.ReactNode }) => {
+      onDragEnd = props.onDragEnd;
+      return <>{props.children}</>;
+    },
+  };
+});
+
+vi.mock("../../../../../../../lib/hooks/agents", () => ({
+  useAgentSkills: () => ({ data: skills, isLoading: false }),
+  useSetAgentSkills: () => ({ mutate }),
+}));
+
+import { SkillsTab } from "./SkillsTab";
+
+afterEach(() => {
+  cleanup();
+  mutate.mockReset();
+  onDragEnd = undefined;
+});
+
+function mk(id: string, name: string, order: number, enabled: boolean): AgentSkillItem {
+  return { agent_id: "ag1", skill_id: id, order, enabled, name, type: "rubric" };
+}
+
+function renderTab() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={{ agents: messages }}>
+      <ToastProvider>
+        <SkillsTab agentId="ag1" />
+      </ToastProvider>
+    </NextIntlClientProvider>,
+  );
+}
+
+describe("SkillsTab", () => {
+  it("shows an empty state when the agent has no linked skills", () => {
+    skills = [];
+    renderTab();
+    expect(screen.getByText("No skills linked to this agent yet.")).toBeInTheDocument();
+  });
+
+  it("renders linked skills with an enabled count", () => {
+    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, false)];
+    renderTab();
+    expect(screen.getByText("Secrets")).toBeInTheDocument();
+    expect(screen.getByText("Naming")).toBeInTheDocument();
+    expect(screen.getByText("1 of 2 enabled")).toBeInTheDocument();
+  });
+
+  it("persists the full set when a skill is toggled", () => {
+    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, false)];
+    renderTab();
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[1]!); // enable "Naming"
+    expect(mutate).toHaveBeenCalledWith(
+      [
+        { skill_id: "s1", enabled: true },
+        { skill_id: "s2", enabled: true },
+      ],
+      expect.anything(),
+    );
+  });
+
+  it("swaps the reorder hint for a filter hint while filtering", () => {
+    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, true)];
+    renderTab();
+    const filter = screen.getByPlaceholderText("Filter skills…");
+    fireEvent.change(filter, { target: { value: "sec" } });
+    expect(screen.getByText("Clear the filter to reorder skills.")).toBeInTheDocument();
+    expect(screen.getByText("Secrets")).toBeInTheDocument();
+    expect(screen.queryByText("Naming")).not.toBeInTheDocument();
+  });
+  it("persists the new order (keeping enabled flags) when a skill is dropped", () => {
+    skills = [mk("s1", "A", 0, true), mk("s2", "B", 1, false), mk("s3", "C", 2, true)];
+    renderTab();
+    onDragEnd!({ active: { id: "s3" }, over: { id: "s1" } }); // drag C above A
+    expect(mutate).toHaveBeenCalledWith(
+      [
+        { skill_id: "s3", enabled: true },
+        { skill_id: "s1", enabled: true },
+        { skill_id: "s2", enabled: false },
+      ],
+      expect.anything(),
+    );
+  });
+
+  it("does not save when dropped onto itself or outside the list", () => {
+    skills = [mk("s1", "A", 0, true), mk("s2", "B", 1, true)];
+    renderTab();
+    onDragEnd!({ active: { id: "s1" }, over: { id: "s1" } });
+    onDragEnd!({ active: { id: "s1" }, over: null });
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it("disables dragging while a filter is active", () => {
+    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, true)];
+    renderTab();
+    expect(screen.getAllByLabelText("Drag to reorder")[0]).toHaveAttribute("role", "button");
+    fireEvent.change(screen.getByPlaceholderText("Filter skills…"), { target: { value: "sec" } });
+    // dnd-kit's attributes (role="button") are only spread on draggable rows
+    expect(screen.getByLabelText("Drag to reorder")).not.toHaveAttribute("role");
+  });
+  it("clears the filter when Escape is pressed in the filter input", () => {
+    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, true)];
+    renderTab();
+    const filter = screen.getByPlaceholderText("Filter skills…");
+    fireEvent.change(filter, { target: { value: "sec" } });
+    expect(screen.queryByText("Naming")).not.toBeInTheDocument();
+    fireEvent.keyDown(filter, { key: "Escape" });
+    expect(filter).toHaveValue("");
+    expect(screen.getByText("Naming")).toBeInTheDocument();
+    expect(screen.getByText("Secrets")).toBeInTheDocument();
+    // dragging is re-enabled once the filter is cleared
+    expect(screen.getAllByLabelText("Drag to reorder")[0]).toHaveAttribute("role", "button");
+  });
+
+  it("lets Escape bubble when the filter is already empty", () => {
+    skills = [mk("s1", "Secrets", 0, true)];
+    renderTab();
+    const outer = vi.fn();
+    document.addEventListener("keydown", outer);
+    fireEvent.keyDown(screen.getByPlaceholderText("Filter skills…"), { key: "Escape" });
+    document.removeEventListener("keydown", outer);
+    expect(outer).toHaveBeenCalled();
+  });
+});

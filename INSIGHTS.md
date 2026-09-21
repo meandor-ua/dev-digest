@@ -6,6 +6,16 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
 
 ## Tool & Library Notes
 
+- **2026-09-21** — `pnpm typecheck|test|lint` can abort with
+  `ERR_PNPM_PACKAGE_MANAGER_REMOVE_MODULES_DIR ... Permission denied` (global
+  pnpm 12 tries to reinstall `node_modules/.pnpm` before running the script).
+  Call the binaries directly: `./node_modules/.bin/tsc --noEmit [-p
+  tsconfig.json]`, `./node_modules/.bin/vitest run`,
+  `./node_modules/.bin/eslint .`. Related: files written by a different OS
+  user (`sov`, dirs `drwxr-xr-x`) were unwritable by the session user, and
+  even `Edit` failed with EACCES. Check `ls -la` ownership first; fix with
+  `sudo chown -R <user>:admin <repo>`. Evidence: `client/package.json` /
+  `server/package.json` `scripts`.
 - **2026-09-18** — On this machine, the global `npm` at `/usr/local/bin/npm`
   is an ancient v5.3.0 that crashes on `npm install`/`npm run` with `node`
   managed via nvm at a much newer version (v26.9.0): `TypeError: cb.apply is
@@ -28,23 +38,6 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   `CLAUDE.md` containing `@AGENTS.md`. `server/clones/**` holds third-party
   repos with their own `CLAUDE.md` (gitignored) — don't rename those.
   Evidence: `AGENTS.md:119`, `.gitignore:21`.
-
-- **2026-09-20** — `tseslint.configs.base` is a single config **object**, not
-  an array: spreading it (`...tseslint.configs.base`) throws `TypeError:
-  object is not iterable` at config load, while `tseslint.configs.recommended`
-  IS an array and must be spread. Related trap: a flat config with no
-  typescript-eslint parser block reports ~150 bogus
-  `Parsing error: Unexpected token :` across `.ts` files — that's a missing
-  parser, not broken sources. Evidence: `client/eslint.config.mjs:12`.
-
-- **2026-09-20** — A session running as a *different* OS user than the repo
-  owner leaves files that later sessions cannot edit: the
-  `.claude/skills/frontend-architecture/` files were written by user `sov`
-  (mode 644) in a repo owned by `oleksandr`, so a subsequent session as
-  `oleksandr` gets `PermissionError` on every write and `git` may refuse with
-  `fatal: detected dubious ownership`. Check `ls -l` before planning edits to
-  files a previous session created; the fix is
-  `sudo chown -R "$(whoami)" <path>`.
 
 - **2026-09-20** — The `skip-worktree` rationale for inlining vitest in CI was
   dead and had been copy-pasted into four files (`TESTING.md`,

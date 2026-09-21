@@ -5,6 +5,12 @@ you, so the next agent/session doesn't relearn it.
 
 ## Codebase Patterns
 
+- **2026-09-21** — Multi-tab editors that must not lose unsaved edits on a tab
+  switch keep the stateful tab **mounted but hidden** (`display: none`) while
+  the other tabs render conditionally — `AgentEditor` does this for `ConfigTab`
+  (which holds the whole form's local state), so switching to Skills/Stats and
+  back preserves in-progress edits. Evidence:
+  `client/src/app/agents/[id]/_components/AgentEditor/AgentEditor.tsx`.
 - **2026-09-17** — `client/src/components/<name>/` (cross-route shared
   components not tied to one page, e.g. `diff-viewer/`, `page-shell/`,
   `app-shell/`, `run-cost-badge/`) use kebab-case directory names — unlike
@@ -139,6 +145,29 @@ you, so the next agent/session doesn't relearn it.
 
 ## What Doesn't Work
 
+- **2026-09-21** — `git mv`-ing a component directory does NOT rewrite the
+  `vi.mock("../../…")` relative paths inside its co-located test. They silently
+  stop matching the (now differently-nested) module, so the REAL hook runs
+  instead of the mock — surfacing as "No QueryClient set" deep in the render.
+  Fix the mock-path depth by hand after any move; typecheck won't catch it
+  (mock specifiers are plain strings). Evidence:
+  `client/src/components/run-trace-drawer/RunTraceDrawer.test.tsx:23`.
+- **2026-09-21** — `vendor/ui/charts/BarRow` renders its `suffix` prop in the
+  right-hand value column and NOTHING from `value` — `value`/`max` only size the
+  bar. To show a number next to the bar you must pass it as `suffix` (e.g.
+  `suffix={`${pct}%`}`), not rely on `value`. Evidence:
+  `client/src/vendor/ui/charts/BarRow.tsx:41`.
+- **2026-09-21** — `vendor/ui/icons.tsx` is a hand-curated lucide-react subset
+  (no `GripVertical`, etc.), and it's a hand-synced vendor file. Don't extend
+  the registry for one glyph — reuse an existing name (`Menu` works as a
+  drag-handle affordance). Evidence: `client/src/vendor/ui/icons.tsx:4`.
+- **2026-09-21** — Co-located component tests import i18n JSON from the client
+  ROOT `messages/` (one level ABOVE `src/`), while `lib`/`components` live under
+  `src/`. So a test nested at
+  `app/agents/[id]/_components/AgentEditor/_components/<Tab>/` needs eight `../`
+  to reach `messages/…` but only seven to reach `src/lib`/`src/components` — an
+  easy off-by-one that fails as a Vite "Failed to resolve import". Evidence:
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/StatsTab/StatsTab.test.tsx:5`.
 - **2026-09-20** — A blanket ESLint ban on deep relative imports
   (`no-restricted-imports` patterns `../../*`, `../../../*`) cannot be
   satisfied by the `@/` alias alone: `@/*` maps to `./src/*`

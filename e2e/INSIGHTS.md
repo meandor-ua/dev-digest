@@ -5,6 +5,11 @@ you, so the next agent/session doesn't relearn it.
 
 ## What Doesn't Work
 
+- **2026-09-21** — Clicking anything after opening the run-trace drawer
+  (`View trace`) fails. The drawer stays open as an overlay, so e.g.
+  `find role button click --name Evals` errors, and no existing flow has a
+  close step to copy. Put drawer-opening steps last in a flow. Evidence:
+  `specs/12-agent-detail.flow.json` (trace steps at the end).
 - **2026-09-18** — `find text X click` right after `wait --url` (no
   intervening `wait --text X`) is a real race against the PR list's async
   fetch — reproduced consistently (not a one-off flake) against the hermetic
@@ -91,7 +96,22 @@ you, so the next agent/session doesn't relearn it.
 
 ## Codebase Conventions
 
-- **2026-09-18** — `server/src/db/seed.ts` writes NO `agent_runs` rows, and the
+- **2026-09-21** — SUPERSEDES the 2026-09-18 "seed writes NO `agent_runs`" note
+  below: `server/src/db/seed.ts` now seeds demo runs for the Agents-stats
+  feature — General Reviewer ×14 (over ~7 weeks), Security ×4, Performance ×3,
+  all `status='done'` and attached to PR #482 — so the Agents editor's Stats
+  tab and the card stats have real, repo-scoped data in e2e. Still NO
+  `run_traces` rows, so `has_trace` stays false everywhere and "View trace" is
+  disabled ("No trace") — flow `12-agent-detail` asserts exactly that. The
+  original *review* row still has no `run_id`, so the PR-detail Timeline
+  run-row widgets remain absent (that half of the older note still holds).
+  Evidence: `server/src/db/seed.ts` (demo runs), `server/src/modules/agents/stats.ts`.
+- **2026-09-21** — Repo-scoped Agents UI resolves its repo via `useActiveRepo()`
+  (`client/src/lib/repo-context.tsx`: URL `:repoId` > localStorage > first repo
+  from the API), so on the `:repoId`-less `/agents` routes it falls back to the
+  first/only seeded repo (`acme/payments-api`). That's why flow `12`'s Stats tab
+  loads without a repo in the URL — it only works because the hermetic DB has
+  exactly one repo. Evidence: `e2e/specs/12-agent-detail.flow.json`.
   seeded review carries no `run_id` (`server/src/db/seed.ts:136-147`). So on
   PR #482's Agent-runs tab the
   Timeline renders COMMIT rows only: every run-row widget (the copy-shareable-

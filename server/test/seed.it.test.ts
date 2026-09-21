@@ -43,4 +43,33 @@ d('seed: demo PR #482 is reviewable (Testcontainers pg)', () => {
     expect(rows).toHaveLength(4);
     for (const r of rows) expect(r.patch && r.patch.length).toBeGreaterThan(0);
   });
+
+  it('seeds demo skills, agent_skills links (mixed enabled) and agent_runs for the Stats tab', async () => {
+    const { db } = pg.handle;
+    const skills = await db.select().from(t.skills);
+    expect(skills.length).toBeGreaterThanOrEqual(6);
+    expect(new Set(skills.map((s) => s.type))).toEqual(
+      new Set(['rubric', 'convention', 'security', 'custom']),
+    );
+
+    const [general] = await db.select().from(t.agents).where(eq(t.agents.name, 'General Reviewer'));
+    const links = await db
+      .select()
+      .from(t.agentSkills)
+      .where(eq(t.agentSkills.agentId, general!.id));
+    expect(links).toHaveLength(3);
+    expect(links.some((l) => !l.enabled)).toBe(true); // at least one disabled link
+
+    const runs = await db.select().from(t.agentRuns).where(eq(t.agentRuns.agentId, general!.id));
+    expect(runs.length).toBe(14); // >10 so cost/score trends render
+    expect(runs.every((r) => r.status === 'done')).toBe(true);
+  });
+
+  it('re-seeding does not duplicate agent_runs (idempotent)', async () => {
+    const { db } = pg.handle;
+    const before = (await db.select().from(t.agentRuns)).length;
+    await seed(db);
+    const after = (await db.select().from(t.agentRuns)).length;
+    expect(after).toBe(before);
+  });
 });

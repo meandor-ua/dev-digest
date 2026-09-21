@@ -51,6 +51,13 @@ you, so the next agent/session doesn't relearn it.
 
 ## Codebase Patterns
 
+- **2026-09-21** — Agent stats (`GET /agents/stats`, `GET /agents/:id/stats`)
+  aggregate over the agent's `status='done'` runs whose PR is in the given repo,
+  and `avg_score`/`avg_cost_usd` are **per-PR-then-mean** (mean within a PR
+  first, then across PRs) so a heavily re-reviewed PR can't dominate. The pure,
+  unit-tested math lives in `server/src/modules/agents/stats.ts` (DB reads stay
+  in `repository.ts`); the rules are mirrored in `specs/README.md` "Agent
+  stats". Evidence: `server/src/modules/agents/stats.ts:14`.
 - **2026-09-18** — `server/src/modules/pulls/status.ts:23` already exported a
   pure, unit-tested `rollupSeverities(rows)` helper, unused anywhere in the
   codebase, well before the findings-by-severity feature existed — clearly
@@ -78,6 +85,14 @@ you, so the next agent/session doesn't relearn it.
 
 ## What Doesn't Work
 
+- **2026-09-21** — Seeding extra `reviews` rows with the default
+  `created_at = now()` silently hijacks PR #482: "latest review" is chosen by
+  `created_at DESC` (`src/modules/pulls/routes.ts:128`,
+  `src/modules/reviews/repository/review.repo.ts:66`), so any review inserted
+  after the canonical seeded one replaces its score/findings on the PR list and
+  PR detail. The server tests stay green, but e2e flows 04/08/11 fail. Backdate
+  demo reviews to their run's `ran_at` (`createdAt: ranAt`). Evidence:
+  `src/db/seed.ts` `insertRun` reviews insert.
 - **2026-09-17** — Auditing every `outcome.<field>` read site is required
   whenever `ReviewOutcome`'s shape changes. `run-executor.ts` silently
   dropped `outcome.costUsd` for a long stretch via an incomplete
