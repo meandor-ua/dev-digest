@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { ConfigTab } from "./ConfigTab";
+import { useSkillDraft } from "./draft";
 
 const MANUAL: Skill = {
   id: "sk1",
@@ -36,10 +37,16 @@ const MANUAL: Skill = {
 };
 const IMPORTED: Skill = { ...MANUAL, source: "imported_url", enabled: false };
 
+// The draft is owned by SkillEditor; this harness plays that role.
+function Harness({ skill }: { skill: Skill }) {
+  const state = useSkillDraft(skill);
+  return <ConfigTab skill={skill} state={state} />;
+}
+
 const wrap = (skill: Skill) => (
   <NextIntlClientProvider locale="en" messages={{ skills: messages }}>
     <ToastProvider>
-      <ConfigTab skill={skill} />
+      <Harness skill={skill} />
     </ToastProvider>
   </NextIntlClientProvider>
 );
@@ -118,11 +125,30 @@ describe("ConfigTab", () => {
     expect(updateMutate).toHaveBeenCalledWith({ id: "sk1", patch: { body: "# my draft" } }, expect.anything());
   });
 
-  it("shows an 'unsaved' chip in the editor header only while dirty", () => {
+  it("shows an 'unsaved' chip next to the version badge (whole form), only while dirty", () => {
     renderTab(MANUAL);
     expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
-    fireEvent.change(body(), { target: { value: "# dirty" } });
-    expect(screen.getByText("Unsaved")).toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue("Detects security issues"), { target: { value: "changed" } });
+    const chip = screen.getByText("Unsaved");
+    expect(chip.parentElement).toBe(screen.getByText("v3").parentElement);
+    expect(screen.getByText(messages.config.configTitle).parentElement).toBe(chip.parentElement);
+  });
+
+  it("colours markdown heading lines in the body editor without rendering them", () => {
+    renderTab({ ...MANUAL, body: "# Title\nplain\n## Sub" });
+    const lines = screen.getByTestId("body-highlight").children;
+    expect([...lines].map((l) => l.getAttribute("data-kind"))).toEqual(["h1", "text", "h2"]);
+    expect(lines[0]).toHaveTextContent("# Title"); // markers kept, not rendered
+    fireEvent.change(body(), { target: { value: "plain\n### New" } });
+    expect(screen.getByTestId("body-highlight").lastElementChild).toHaveAttribute("data-kind", "h3");
+  });
+
+  it("keeps the highlight layer aligned when the body scrolls horizontally", () => {
+    renderTab(MANUAL);
+    const textarea = body() as HTMLTextAreaElement;
+    textarea.scrollLeft = 40;
+    fireEvent.scroll(textarea);
+    expect(screen.getByTestId("body-highlight").style.transform).toBe("translateX(-40px)");
   });
 
   it("sends an optional change note as `message` alongside the patch", () => {

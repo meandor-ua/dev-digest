@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import type { LineKind } from "./highlight";
 
 export const s = {
   wrap: {
@@ -81,13 +82,38 @@ export const s = {
     height: 20,
     display: "block",
   } satisfies CSSProperties,
+  editorPane: {
+    flex: 1,
+    position: "relative",
+    overflow: "hidden",
+    display: "flex",
+  } satisfies CSSProperties,
+  highlightLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    margin: 0,
+    padding: "12px 14px",
+    fontFamily: "var(--font-mono)",
+    fontSize: 13,
+    lineHeight: "20px",
+    whiteSpace: "pre",
+    color: "var(--text-primary)",
+    pointerEvents: "none",
+  } satisfies CSSProperties,
+  highlightLine: (kind: LineKind): CSSProperties =>
+    kind === "text"
+      ? { minHeight: 20 }
+      : { minHeight: 20, color: "var(--accent-text)", fontWeight: kind === "h3" ? 500 : 600 },
   textarea: {
+    position: "relative",
     flex: 1,
     padding: "12px 14px",
     border: "none",
     outline: "none",
     background: "transparent",
-    color: "var(--text-primary)",
+    color: "transparent",
+    caretColor: "var(--text-primary)",
     fontFamily: "var(--font-mono)",
     fontSize: 13,
     lineHeight: "20px",

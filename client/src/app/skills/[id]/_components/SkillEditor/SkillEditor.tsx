@@ -4,7 +4,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Tabs } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
-import { ConfigTab } from "./_components/ConfigTab";
+import { ConfigTab, useSkillDraft } from "./_components/ConfigTab";
 import { PreviewTab } from "./_components/PreviewTab";
 import { StatsTab } from "./_components/StatsTab";
 import { VersionsTab } from "./_components/VersionsTab";
@@ -23,6 +23,8 @@ export function SkillEditor({
   onTab: (t: string) => void;
 }) {
   const t = useTranslations("skills");
+  // Owned here, not in ConfigTab, so Preview renders the unsaved body too.
+  const draftState = useSkillDraft(skill);
   const tabs = SKILL_TABS.map((tb) => ({ key: tb.key, label: t(`editor.tabs.${tb.key}`) }));
 
   return (
@@ -34,11 +36,18 @@ export function SkillEditor({
       <div style={s.body}>
         {/* ConfigTab stays mounted to preserve unsaved form edits across tab switching */}
         <div style={{ display: tab === "config" ? "block" : "none", height: "100%" }}>
-          <ConfigTab skill={skill} />
+          <ConfigTab skill={skill} state={draftState} />
         </div>
 
         {tab === "context" && <ContextTab skill={skill} />}
-        {tab === "preview" && <PreviewTab skill={skill} />}
+        {tab === "preview" && (
+          <PreviewTab
+            body={draftState.draft.body}
+            dirty={draftState.dirty}
+            version={skill.version}
+            onRestore={draftState.reset}
+          />
+        )}
         {tab === "evals" && <EvalsTab />}
         {tab === "stats" && <StatsTab skillId={skill.id} />}
         {tab === "versions" && <VersionsTab skill={skill} />}

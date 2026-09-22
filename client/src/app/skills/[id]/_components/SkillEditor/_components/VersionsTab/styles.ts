@@ -11,7 +11,7 @@ export const s = {
   header: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 10,
   } satisfies CSSProperties,
   h2: {
     fontSize: 16,
@@ -53,10 +53,19 @@ export const s = {
     gap: 14,
   } satisfies CSSProperties,
   messageCol: { display: "flex", flexDirection: "column", gap: 2 } satisfies CSSProperties,
-  versionBadge: {
-    fontWeight: 700,
+  versionBadge: (isCurrent: boolean): CSSProperties => ({
+    minWidth: 44,
+    height: 36,
+    borderRadius: 6,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontFamily: "var(--font-mono)",
     fontSize: 13,
-  } satisfies CSSProperties,
+    fontWeight: 600,
+    color: isCurrent ? "var(--accent)" : "var(--text-secondary)",
+    background: isCurrent ? "var(--accent-bg)" : "var(--bg-hover)",
+  }),
   dateText: {
     fontSize: 12,
     color: "var(--text-muted)",
@@ -75,6 +84,13 @@ export const s = {
     fontFamily: "var(--font-mono)",
     maxHeight: 400,
     overflow: "auto",
+  } satisfies CSSProperties,
+  diffLabel: {
+    fontFamily: "var(--font-sans, inherit)",
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+    marginBottom: 8,
   } satisfies CSSProperties,
   diffLine: (kind: "same" | "add" | "del"): CSSProperties => {
     const baseStyle: CSSProperties = {

@@ -10,7 +10,8 @@ import { useUpdateSkill, useDeleteSkill } from "@/lib/hooks/skills";
 import { useToast } from "@/lib/toast";
 import { estimateTokens } from "@/lib/tokens";
 import { s } from "./styles";
-import { toDraft, sameDraft, rebaseDraft, draftPatch, type SkillDraft } from "./draft";
+import { draftPatch, type SkillDraft, type SkillDraftState } from "./draft";
+import { markdownLineKinds } from "./highlight";
 
 /** Filename shown in the editor header — lowercase, dash-joined, `.md`-suffixed. */
 function slugify(name: string): string {
@@ -22,7 +23,7 @@ function slugify(name: string): string {
   return `${slug || "skill"}.md`;
 }
 
-export function ConfigTab({ skill }: { skill: Skill }) {
+export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftState }) {
   const t = useTranslations("skills");
   const toast = useToast();
   const router = useRouter();
@@ -32,17 +33,9 @@ export function ConfigTab({ skill }: { skill: Skill }) {
   const isUntrusted = skill.source !== "manual";
   const [changeNote, setChangeNote] = React.useState("");
 
-  const server = toDraft(skill);
-  const [draft, setDraft] = React.useState<SkillDraft>(server);
-  // The server copy the draft was last reconciled with (see rebaseDraft).
-  const [base, setBase] = React.useState<{ id: string; draft: SkillDraft }>({ id: skill.id, draft: server });
-  if (base.id !== skill.id) {
-    setBase({ id: skill.id, draft: server });
-    setDraft(server);
-  } else if (!sameDraft(base.draft, server)) {
-    setBase({ id: skill.id, draft: server });
-    setDraft((d) => rebaseDraft(d, base.draft, server));
-  }
+  // Draft state lives in SkillEditor (useSkillDraft) so Preview renders the same unsaved body.
+  const { draft, setDraft, server, dirty, reset: cancel } = state;
+  const highlightRef = React.useRef<HTMLPreElement>(null);
 
   const { name, description, type, body, enabled } = draft;
   const set = <K extends keyof SkillDraft>(key: K) => (value: SkillDraft[K]) =>
@@ -53,10 +46,8 @@ export function ConfigTab({ skill }: { skill: Skill }) {
   const setEnabled = set("enabled");
   const setType = set("type");
 
-  const dirty = !sameDraft(draft, server);
   // The server records a change note only on a body change (a new version).
   const bodyChanged = draft.body !== server.body;
-  const cancel = () => setDraft(server);
 
   const handleSave = () => {
     const note = changeNote.trim();
@@ -93,6 +84,7 @@ export function ConfigTab({ skill }: { skill: Skill }) {
   const lineCount = Math.max(body.split("\n").length, 14);
   const estimatedTokens = estimateTokens(body);
   const fileName = slugify(server.name);
+  const kinds = markdownLineKinds(body);
 
   return (
     <div style={s.wrap}>
@@ -107,6 +99,11 @@ export function ConfigTab({ skill }: { skill: Skill }) {
           <Badge color="var(--text-secondary)" mono>
             v{skill.version}
           </Badge>
+          {dirty && (
+            <Badge color="var(--warn)" mono>
+              {t("config.unsaved")}
+            </Badge>
+          )}
         </div>
         <label style={s.enabledLabel}>
           {t("config.enabledLabel")}
@@ -139,11 +136,6 @@ export function ConfigTab({ skill }: { skill: Skill }) {
             <div style={s.editorTab}>
               <Icon.FileText size={13} style={{ color: "var(--accent)" }} />
               <span>{fileName}</span>
-              {dirty && (
-                <Badge color="var(--warn)" mono style={{ fontSize: 10 }}>
-                  {t("config.unsaved")}
-                </Badge>
-              )}
             </div>
             <span style={s.tokenBadge}>{t("config.tokens", { count: estimatedTokens })}</span>
           </div>
@@ -155,14 +147,28 @@ export function ConfigTab({ skill }: { skill: Skill }) {
                 </span>
               ))}
             </div>
-            <textarea
-              style={s.textarea}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={lineCount}
-              spellCheck={false}
-              aria-label={t("config.bodyLabel")}
-            />
+            <div style={s.editorPane}>
+              {/* Headings are coloured in a layer under the transparent-text textarea — never rendered. */}
+              <pre ref={highlightRef} aria-hidden data-testid="body-highlight" style={s.highlightLayer}>
+                {body.split("\n").map((line, i) => (
+                  <div key={i} data-kind={kinds[i]} style={s.highlightLine(kinds[i] ?? "text")}>
+                    {line || " "}
+                  </div>
+                ))}
+              </pre>
+              <textarea
+                style={s.textarea}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                onScroll={(e) => {
+                  const layer = highlightRef.current;
+                  if (layer) layer.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`;
+                }}
+                rows={lineCount}
+                spellCheck={false}
+                aria-label={t("config.bodyLabel")}
+              />
+            </div>
           </div>
         </div>
       </FormField>

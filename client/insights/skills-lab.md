@@ -22,8 +22,32 @@ the package's `insights/INSIGHTS.md`.
   blocks, not full YAML, so nothing in an imported file can expand or execute.
   The URL import path (server `deriveSkillName`) does not parse frontmatter
   yet. Evidence: `client/src/app/skills/_components/CreateSkillModal/skill-markdown.ts:47`.
+- **2026-09-22** — The skill draft (unsaved form state + rebase) lives in
+  `useSkillDraft`, called by `SkillEditor`, not inside ConfigTab. That way
+  Preview renders the unsaved body and its Restore button drops the edits. A
+  ConfigTab test must render through a harness that calls the hook. Evidence:
+  `client/src/app/skills/[id]/_components/SkillEditor/_components/ConfigTab/draft.ts:56`.
+- **2026-09-22** — The Skill body highlights headings without an editor
+  library. An `aria-hidden` `<pre>` sits under a textarea with transparent
+  text (`caretColor` keeps the caret visible). Both must share font, padding,
+  line-height and `whiteSpace: pre`. The textarea never scrolls vertically
+  (`rows={lineCount}`), so only `scrollLeft` needs syncing, through a
+  transform. Evidence: `.../ConfigTab/ConfigTab.tsx` (`highlightRef`) and
+  `.../ConfigTab/styles.ts` (`highlightLayer`).
+- **2026-09-22** — Versions → Diff compares a version with version n-1 (what
+  that save changed), not with the current body. Comparing with the current
+  body showed every change since that version, and gave the Current row
+  nothing to diff. Evidence: `.../VersionsTab/VersionsTab.tsx` (`prev`).
 
 ## What Doesn't Work
+
+- **2026-09-22** — ReactMarkdown lists render without bullets here: the app's
+  CSS reset strips `list-style`, so `<ul>` needs an explicit
+  `listStyle: "disc"` (and `<ol>` needs `"decimal"`). Evidence:
+  `.../PreviewTab/styles.ts` (`mdUl`/`mdOl`).
+- **2026-09-22** — Don't run `npx prettier` in `client/`. Prettier isn't a
+  project dependency, and its default 80-column width re-wraps whole files
+  written at ~110 columns, which buries the real diff. Evidence: `client/package.json`.
 
 - **2026-09-22** — `vendor/ui/charts/Donut`'s legend defaults to a currency
   string (`valuePrefix = "$"`, rendering `$52.00`) unless the caller passes

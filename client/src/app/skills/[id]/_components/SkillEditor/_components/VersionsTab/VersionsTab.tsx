@@ -81,12 +81,16 @@ export function VersionsTab({ skill }: { skill: Skill }) {
         {versions.map((ver) => {
           const isCurrent = ver.version === skill.version;
           const isExpanded = expandedVersions.has(ver.version);
+          // What this save changed: diff against the version right before it.
+          const prev = versions.find((v) => v.version === ver.version - 1);
 
           return (
             <div key={ver.version} style={s.versionCard(isCurrent)}>
               <div style={s.cardHeader}>
                 <div style={s.leftMeta}>
-                  <span style={s.versionBadge}>v{ver.version}</span>
+                  <span style={s.versionBadge(isCurrent)} data-current={isCurrent}>
+                    v{ver.version}
+                  </span>
                   <div style={s.messageCol}>
                     <span style={s.messageText}>{ver.message || t("versions.savedBodyFallback")}</span>
                     <span style={s.dateText}>{formatDate(ver.created_at)}</span>
@@ -94,37 +98,33 @@ export function VersionsTab({ skill }: { skill: Skill }) {
                 </div>
 
                 <div style={s.actionsRow}>
+                  <Button kind="ghost" size="sm" icon="Eye" onClick={() => toggleExpand(ver.version)}>
+                    {t("versions.diff")}
+                  </Button>
                   {isCurrent ? (
                     <Badge color="var(--ok)" bg="var(--ok-bg)" dot>
                       {t("versions.currentBadge")}
                     </Badge>
                   ) : (
-                    <>
-                      <Button
-                        kind="ghost"
-                        size="sm"
-                        icon="Eye"
-                        onClick={() => toggleExpand(ver.version)}
-                      >
-                        {t("versions.diff")}
-                      </Button>
-                      <Button
-                        kind="secondary"
-                        size="sm"
-                        icon="History"
-                        onClick={() => handleRestore(ver.version)}
-                        disabled={restoreMutation.isPending}
-                      >
-                        {t("versions.restore")}
-                      </Button>
-                    </>
+                    <Button
+                      kind="secondary"
+                      size="sm"
+                      icon="History"
+                      onClick={() => handleRestore(ver.version)}
+                      disabled={restoreMutation.isPending}
+                    >
+                      {t("versions.restore")}
+                    </Button>
                   )}
                 </div>
               </div>
 
-              {isExpanded && !isCurrent && (
+              {isExpanded && (
                 <div style={s.diffContainer}>
-                  <VersionDiff from={ver.body} to={skill.body} />
+                  <div style={s.diffLabel}>
+                    {prev ? t("versions.diffFrom", { version: prev.version }) : t("versions.diffInitial")}
+                  </div>
+                  <VersionDiff from={prev?.body ?? ""} to={ver.body} />
                 </div>
               )}
             </div>
@@ -135,7 +135,7 @@ export function VersionsTab({ skill }: { skill: Skill }) {
   );
 }
 
-/** Line diff from an old version to the current body — O(n·m), so memoised on the two bodies. */
+/** Line diff between two version bodies — O(n·m), so memoised on the two bodies. */
 function VersionDiff({ from, to }: { from: string; to: string }) {
   const lines = React.useMemo(() => diffLines(from, to), [from, to]);
   return (

@@ -90,30 +90,58 @@ describe("VersionsTab", () => {
     expect(screen.getByText("2026-09-21")).toBeInTheDocument();
   });
 
-  it("marks the current version with a green Current pill and no actions", () => {
+  it("puts the count chip right next to the title", () => {
+    renderWithProviders(<VersionsTab skill={SKILL} />);
+    expect(screen.getByText("2 versions").parentElement).toBe(screen.getByText("Version history").parentElement);
+  });
+
+  it("highlights only the current version's pill", () => {
+    renderWithProviders(<VersionsTab skill={SKILL} />);
+    expect(screen.getByText("v2")).toHaveAttribute("data-current", "true");
+    expect(screen.getByText("v1")).toHaveAttribute("data-current", "false");
+  });
+
+  it("marks the current version with a green Current pill and no Restore, but still a Diff", () => {
     renderWithProviders(<VersionsTab skill={SKILL} />);
     expect(screen.getByText(messages.versions.currentBadge)).toBeInTheDocument();
-    // Only v1 (the non-current row) gets Diff/Restore buttons.
-    expect(screen.getAllByRole("button", { name: "Diff" })).toHaveLength(1);
+    // Every version can show what it changed; only older ones can be restored.
+    expect(screen.getAllByRole("button", { name: "Diff" })).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "Restore" })).toHaveLength(1);
   });
 
   it("starts with every row collapsed — no body or diff shown until Diff is clicked", () => {
     renderWithProviders(<VersionsTab skill={SKILL} />);
     expect(screen.queryByText(/Updated rules/)).not.toBeInTheDocument();
-    expect(screen.queryByText("+")).not.toBeInTheDocument();
-    expect(screen.queryByText("-")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Original rules/)).not.toBeInTheDocument();
   });
 
-  it("expands an older version's diff when Diff is clicked, and collapses on a second click", async () => {
+  // VERSIONS is [v1, v2] — rows render in that order.
+  const diffButton = (version: number) => screen.getAllByRole("button", { name: "Diff" })[version - 1]!;
+  // A diff row is a <div> whose whole text is the marker plus the line.
+  const hasDiffLine = (text: string) =>
+    screen.queryAllByText((_, el) => el?.tagName === "DIV" && el.textContent === text).length > 0;
+
+  it("diffs a version against the one before it, not against the current body", () => {
+    renderWithProviders(<VersionsTab skill={{ ...SKILL, body: "# Something else entirely", version: 3 }} />);
+    fireEvent.click(diffButton(2));
+    expect(screen.getByText(messages.versions.diffFrom.replace("{version}", "1"))).toBeInTheDocument();
+    expect(hasDiffLine("- # Security Rubric v1")).toBe(true);
+    expect(hasDiffLine("+ # Security Rubric v2")).toBe(true);
+    expect(screen.queryByText(/Something else entirely/)).not.toBeInTheDocument();
+  });
+
+  it("shows v1's whole body as added, labelled as the initial version", () => {
     renderWithProviders(<VersionsTab skill={SKILL} />);
-    fireEvent.click(screen.getByRole("button", { name: "Diff" }));
+    fireEvent.click(diffButton(1));
+    expect(screen.getByText(messages.versions.diffInitial)).toBeInTheDocument();
+    expect(hasDiffLine("+ Original rules...")).toBe(true);
+  });
 
-    await waitFor(() => {
-      expect(screen.getByText(/Original rules/)).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Diff" }));
+  it("collapses a diff on a second click", async () => {
+    renderWithProviders(<VersionsTab skill={SKILL} />);
+    fireEvent.click(diffButton(1));
+    expect(screen.getByText(/Original rules/)).toBeInTheDocument();
+    fireEvent.click(diffButton(1));
     await waitFor(() => {
       expect(screen.queryByText(/Original rules/)).not.toBeInTheDocument();
     });

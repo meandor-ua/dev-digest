@@ -47,6 +47,8 @@
   "preview": {
     "title": "Preview",
     "subtitle": "Rendered as the reviewing agent receives it.",
+    "draftBadge": "Unsaved draft — previewing your edits",
+    "restore": "Restore v{version}",
     "untrustedNotice": "This skill came from an external source. Read its body before enabling it — once enabled, it is injected into agent prompts as instructions."
   },
   "typeOptions": {
@@ -96,6 +98,8 @@
     "subtitle": "Every save snapshots the body — restore any earlier version at any time.",
     "currentBadge": "Current",
     "diff": "Diff",
+    "diffFrom": "Changes from v{version}",
+    "diffInitial": "Initial version",
     "restore": "Restore",
     "savedBodyFallback": "Saved body",
     "noHistory": "No version history",
