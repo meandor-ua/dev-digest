@@ -5,7 +5,7 @@ description: Repo-specific checklist for shipping a client feature in DevDigest'
 
 # Client i18n + component tests — DevDigest
 
-Everything here was paid for in real rework (see `client/INSIGHTS.md`,
+Everything here was paid for in real rework (see `client/insights/INSIGHTS.md`,
 2026-09-21). Follow it when you add UI to `client/`, then run the checks at
 the end. Generic RTL guidance lives in `react-testing-library`; this skill is
 only what is specific to this repo.

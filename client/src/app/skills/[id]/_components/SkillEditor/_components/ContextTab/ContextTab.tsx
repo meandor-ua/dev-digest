@@ -1,4 +1,4 @@
-/* ContextTab — project docs (specs/docs/INSIGHTS.md) attached to this skill.
+/* ContextTab — project docs (specs/docs/insights) attached to this skill.
    Any agent using this skill inherits these documents at review time (they're
    re-read from the repo clone, not stored as content). Autosaves optimistically
    on every checkbox toggle / reorder via useSetSkillContext (rollback + toast

@@ -2,7 +2,8 @@
 
 Non-obvious findings and gotchas that span more than one package. Add an
 entry whenever something surprised you, so the next agent/session doesn't
-relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
+relearn it. Package-local findings go in `<package>/insights/INSIGHTS.md`
+instead.
 
 ## Tool & Library Notes
 

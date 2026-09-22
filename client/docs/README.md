@@ -22,7 +22,7 @@ colocated with that route's `page.tsx`, so a reviewer can delete or move a
 route without hunting for orphaned files elsewhere. Anything used by *more
 than one route* — `run-cost-badge/`, `findings-by-severity/` — moves to
 `src/components/<name>/` (kebab-case) instead. This distinction is easy to
-get backwards; see the `client/INSIGHTS.md` entry on this.
+get backwards; see the `client/insights/INSIGHTS.md` entry on this.
 
 ## The severity-findings popover: the first portal in this codebase
 

@@ -61,16 +61,7 @@ you, so the next agent/session doesn't relearn it.
   substring check, so it is only trustworthy when the expected count is a
   single digit that cannot be a prefix of a larger real count (the seed has
   exactly one PR row, so "1" is safe here).
-- **2026-09-18** — Adding `role="menu"`/`role="menuitem"` to
-  `client/src/vendor/ui/kit/Dropdown.tsx` (correct ARIA pairing) silently
-  broke an `agent-browser find role button --name "…"` step targeting a
-  dropdown item: an element with an explicit `role` no longer matches its
-  implicit `button` role. Flows that locate dropdown entries must use
-  `find role menuitem …`. Worth re-running the flows after ANY a11y-role
-  change in `vendor/ui` — unit tests that query by text won't catch it.
-  Evidence: `e2e/specs/09-pr-list-actions.flow.json:39-49` (the dropdown
-  trigger) and `:77-87` (the dropdown item).
-- **2026-09-18 (supersedes the entry above)** — those `role="menu"` /
+- **2026-09-18** — those `role="menu"` /
   `role="menuitem"` attributes have since been REMOVED from
   `client/src/vendor/ui/kit/Dropdown.tsx:133-139`: none of the keyboard contract the
   ARIA menu pattern promises (arrow keys, focus move on open, Escape,

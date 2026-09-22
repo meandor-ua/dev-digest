@@ -113,7 +113,7 @@
     "noRepo": "Select a repo",
     "noRepoBody": "Choose a repo to browse its project docs.",
     "empty": "No project docs found",
-    "emptyBody": "This repo has no specs/, docs/, or INSIGHTS.md files yet.",
+    "emptyBody": "This repo has no specs/, docs/, or insights/ files yet.",
     "noMatch": "No docs match \"{query}\"",
     "category": {
       "specs": "specs",

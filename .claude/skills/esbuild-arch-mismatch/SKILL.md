@@ -55,13 +55,13 @@ If the package you're in doesn't have one yet, either add one matching that
 convention, or work around it for now by invoking the already-installed
 binary directly (e.g. `node_modules/.bin/vitest run` instead of `pnpm test`).
 
-## Related INSIGHTS.md entries
+## Related insights/INSIGHTS.md entries
 
 The workarounds above were exercised for real in this repo — see the dated
 entries (and don't duplicate them; add a new dated note only if you learn
 something these don't already cover):
-- `server/INSIGHTS.md` → "Recurring Errors & Fixes" (the `drizzle-kit
+- `server/insights/INSIGHTS.md` → "Recurring Errors & Fixes" (the `drizzle-kit
   generate` esbuild/Rosetta mismatch + hand-authored-migration workaround).
-- `reviewer-core/INSIGHTS.md` → "Recurring Errors & Fixes" (reviewer-core is
+- `reviewer-core/insights/INSIGHTS.md` → "Recurring Errors & Fixes" (reviewer-core is
   npm-managed — `npm test`; `ERR_PNPM_IGNORED_BUILDS` there means pnpm was
   used by mistake).

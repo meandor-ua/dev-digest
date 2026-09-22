@@ -86,7 +86,7 @@ export function Dropdown({
   // Click-outside must check BOTH the trigger AND the menu: once the menu is
   // portaled it is no longer a DOM descendant of `ref`, so a `mousedown` on a
   // menu item would close the menu before that item's own `click` ever fired
-  // (documented in client/INSIGHTS.md; same dual-ref shape as
+  // (documented in client/insights/INSIGHTS.md; same dual-ref shape as
   // SeverityFindingsPopover's trigger/panel refs).
   React.useEffect(() => {
     const h = (e: MouseEvent) => {

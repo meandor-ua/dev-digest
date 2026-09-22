@@ -2,7 +2,7 @@
 
 ## Before answering
 
-Search `server/docs/`, `server/specs/`, `server/INSIGHTS.md` first.
+Search `server/docs/`, `server/specs/`, `server/insights/` first.
 
 ## Tech stack
 
@@ -55,5 +55,5 @@ required to boot — every secret is optional and settable at runtime.
 
 - Stack, request/DI flow, API map, env vars → read `README.md`
 - Indexing pipeline / repo map / blast radius → `src/modules/repo-intel/README.md`
-- Deep-dives / specs / running notes → `docs/` · `specs/` · `INSIGHTS.md`
+- Deep-dives / specs / running notes → `docs/` · `specs/` · `insights/`
 - Cross-package rules (vendoring, migrations, ESM imports) → `../AGENTS.md`

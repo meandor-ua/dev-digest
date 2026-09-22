@@ -85,7 +85,7 @@ receives a *derived* prop and never learns the rule.
 
 ## 2. A metadata map duplicated in two files → one owner
 
-This one really happened here (`client/INSIGHTS.md:53-55`): a local
+This one really happened here (`client/insights/pr-review.md:85-96`): a local
 `VERDICT_COLOR` in `ReviewRunAccordion.tsx` disagreed with
 `VerdictBanner/constants.ts`'s `VERDICT_META` for the same verdict, so the
 same run rendered two different colours in two panels.

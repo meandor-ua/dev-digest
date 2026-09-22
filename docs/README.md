@@ -52,7 +52,7 @@ authorship.
 ## Skills Context tab: doc paths, not doc content
 
 A skill's attached project-context docs (`skill_context_docs`) store the
-repo-relative **path** of each `specs/`/`docs/`/`INSIGHTS.md` file, never a
+repo-relative **path** of each `specs/`/`docs/`/`insights/` file, never a
 copy of its text. Two reasons this is deliberate, not an oversight:
 
 1. **Freshness.** The doc is re-read from the repo's local clone at review

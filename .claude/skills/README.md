@@ -22,7 +22,7 @@ do-not-touch section in the root `AGENTS.md`). The `Local` set is mirrored in
 | [typescript-expert](typescript-expert/SKILL.md) | Full-stack | Type-level programming, performance, tooling, migrations |
 | [security](security/SKILL.md) | Full-stack | OWASP Top 10:2025, auth, injection, uploads, secrets |
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
-| [engineering-insights](engineering-insights/SKILL.md) | Local | Capture non-obvious findings into the right `INSIGHTS.md` during/after a session |
+| [engineering-insights](engineering-insights/SKILL.md) | Local | Capture non-obvious findings into the right `insights/INSIGHTS.md` during/after a session |
 | [esbuild-arch-mismatch](esbuild-arch-mismatch/SKILL.md) | Local | Diagnose/work around esbuild native-binary CPU-arch mismatches in this repo |
 | [plan-adversarial-review](plan-adversarial-review/SKILL.md) | Local | Independently re-verify a drafted implementation plan against live code, project docs and tests before coding |
 | [frontend-architecture](frontend-architecture/SKILL.md) | Local | Decide where every frontend file belongs — tiered structure, component taxonomy, constants, utils vs helpers, UI/business-logic layering |

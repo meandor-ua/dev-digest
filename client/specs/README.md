@@ -40,7 +40,7 @@ instead.
   `body` actually changed (a message-only patch is a no-op, matching `PUT`'s
   "empty patch" contract in `server/specs/README.md`). A danger-zone row at
   the bottom holds Delete (`useDeleteSkill` + `confirm()`).
-- **Context** — attach project docs (`specs/`, `docs/`, `INSIGHTS.md`) from
+- **Context** — attach project docs (`specs/`, `docs/`, `insights/`) from
   the active repo (`useActiveRepo()`; no repo → "Select a repo" state). Rows:
   drag handle (`@dnd-kit`, same pattern as the Agent editor's Skills tab;
   disabled while a filter is active), checkbox, filename + dir, a

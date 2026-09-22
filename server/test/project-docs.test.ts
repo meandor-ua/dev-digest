@@ -42,7 +42,7 @@ describe('GitProjectDocsAdapter', () => {
   it('lists .md files under specs/ and docs/, and any INSIGHTS.md, with categories', async () => {
     await writeFileAt(root, 'specs/README.md', '# Specs');
     await writeFileAt(root, 'docs/guide.md', '# Guide');
-    await writeFileAt(root, 'INSIGHTS.md', '# Root insights');
+    await writeFileAt(root, 'INSIGHTS.md', '# Root insights'); // flat-file convention (other repos)
     await writeFileAt(root, 'server/INSIGHTS.md', '# Server insights');
     await writeFileAt(root, 'src/index.ts', 'export {};'); // not a doc — excluded
 
@@ -59,6 +59,22 @@ describe('GitProjectDocsAdapter', () => {
     expect(docs.find((d) => d.path === 'docs/guide.md')).toMatchObject({ category: 'docs', dir: 'docs' });
     expect(docs.find((d) => d.path === 'INSIGHTS.md')).toMatchObject({ category: 'insights', dir: '' });
     expect(docs.find((d) => d.path === 'server/INSIGHTS.md')).toMatchObject({ category: 'insights', dir: 'server' });
+  });
+
+  it('lists any .md under an insights/ dir as category insights (our own convention)', async () => {
+    await writeFileAt(root, 'insights/INSIGHTS.md', '# Root insights');
+    await writeFileAt(root, 'insights/repo-intel.md', '# Repo-intel insights');
+    await writeFileAt(root, 'server/insights/INSIGHTS.md', '# Server insights');
+
+    const adapter = new GitProjectDocsAdapter(stubGitClient(root));
+    const docs = await adapter.list(repo);
+
+    expect(docs.map((d) => d.path).sort()).toEqual([
+      'insights/INSIGHTS.md',
+      'insights/repo-intel.md',
+      'server/insights/INSIGHTS.md',
+    ]);
+    expect(docs.every((d) => d.category === 'insights')).toBe(true);
   });
 
   it('skips node_modules and .git', async () => {

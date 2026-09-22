@@ -160,8 +160,11 @@ A skill's `skill_context_docs` rows (`skill_id, path, order`) store the
 **path only**, never the file's content. `server/src/adapters/project-docs`
 (`GitProjectDocsAdapter`, behind the module-owned `ProjectDocsAdapter` port in
 `src/modules/skills/ports.ts`) walks a repo's local clone for `*.md` files
-under `specs/`, `docs/`, `insights/`, plus any `INSIGHTS.md` at any depth
-(root or per-package), categorizing each as `specs` | `docs` | `insights`;
+under `specs/`, `docs/`, `insights/` dirs (our own convention nests these under
+`insights/INSIGHTS.md` plus split-out `insights/<topic>.md` files), plus any
+standalone `INSIGHTS.md` at any depth (root or per-package, for repos that
+still use the flat-file convention), categorizing each as `specs` | `docs` |
+`insights`;
 `node_modules` and dotdirs (`.git`, …) are skipped, and the walk is capped
 (depth 10 / 300 docs) as a backstop; entries are name-sorted so the list
 order is stable across filesystems. `read()` re-validates the requested path

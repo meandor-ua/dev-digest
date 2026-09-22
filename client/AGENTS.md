@@ -2,7 +2,7 @@
 
 ## Before answering
 
-Search `client/docs/`, `client/specs/`, `client/INSIGHTS.md` first.
+Search `client/docs/`, `client/specs/`, `client/insights/` first.
 
 ## Tech stack
 
@@ -53,6 +53,6 @@ GitHub or Postgres directly.
 
 - Route map, commands → read `README.md`
 - Deep-dives → `client/docs/` · UI/flow specs → `client/specs/` · running
-  notes → `client/INSIGHTS.md`
+  notes → `client/insights/`
 - Real-browser verification of a flow → `../e2e/README.md`
 - Cross-package rules (vendoring, ESM imports) → `../AGENTS.md`

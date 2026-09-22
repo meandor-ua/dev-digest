@@ -164,4 +164,4 @@ Postgres); everything else is hermetic. The browser e2e flows live in
 ---
 
 Agent-facing map, conventions, and do-not-touch zones: [`AGENTS.md`](./AGENTS.md) ·
-deeper notes: [`docs/`](./docs/) · [`specs/`](./specs/) · [`INSIGHTS.md`](./INSIGHTS.md)
+deeper notes: [`docs/`](./docs/) · [`specs/`](./specs/) · [`insights/`](./insights/)

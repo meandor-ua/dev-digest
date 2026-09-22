@@ -12,6 +12,6 @@ export const SKILL_TYPE_COLOR: Record<SkillType, string> = {
  * Every skill type, in display order — derived from the exhaustive map above so
  * a new `SkillType` member can't be forgotten. (Not `SkillType.options`: a
  * runtime import from `@devdigest/shared` breaks the Next build — see
- * client/INSIGHTS.md.)
+ * client/insights/INSIGHTS.md.)
  */
 export const SKILL_TYPES = Object.keys(SKILL_TYPE_COLOR) as SkillType[];

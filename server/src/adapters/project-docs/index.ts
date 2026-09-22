@@ -1,7 +1,8 @@
 /**
  * project-docs adapter — walks a repo's local clone for markdown project docs
- * (`specs/`, `docs/`, `INSIGHTS.md` at any depth) for the Skills Context tab
- * and review-time doc injection. Implements `ProjectDocsAdapter`
+ * (`specs/`, `docs/`, `insights/` dirs, plus any standalone `INSIGHTS.md` at
+ * any depth for repos still on the flat-file convention) for the Skills
+ * Context tab and review-time doc injection. Implements `ProjectDocsAdapter`
  * (`modules/skills/ports.ts`).
  */
 import { readdir } from 'node:fs/promises';

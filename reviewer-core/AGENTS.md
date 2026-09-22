@@ -3,7 +3,7 @@
 ## Before answering
 
 Search `reviewer-core/docs/`, `reviewer-core/specs/`,
-`reviewer-core/INSIGHTS.md` first.
+`reviewer-core/insights/` first.
 
 ## Tech stack
 
@@ -46,6 +46,6 @@ alias (`@devdigest/reviewer-core` → `../reviewer-core/src`).
 ## Use when
 
 - Pipeline, public API → read `README.md`
-- Deep-dives / specs / running notes → `docs/` · `specs/` · `INSIGHTS.md`
+- Deep-dives / specs / running notes → `docs/` · `specs/` · `insights/`
 - How the server actually calls in → `../server/src/modules/reviews/run-executor.ts`
 - Cross-package rules → `../AGENTS.md`

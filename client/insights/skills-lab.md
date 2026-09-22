@@ -1,0 +1,49 @@
+# Insights — client / Skills Lab
+
+Findings and gotchas specific to the Skills editor (Config / Context /
+Preview / Stats tabs) and skill import. General client conventions live in
+the package's `insights/INSIGHTS.md`.
+
+## Codebase Patterns
+
+- **2026-09-21** — jsdom's `File` has no `arrayBuffer()`/`text()`, so code that
+  reads uploads can't be tested with `new File(...)`. Type the input as
+  `Pick<File, "name" | "size" | "arrayBuffer">` and pass plain objects in tests.
+  Evidence: `client/src/app/skills/_components/CreateSkillModal/file-extractor.ts:27`.
+- **2026-09-21** — ZIPs made by macOS Finder set general-purpose bit 3, so the
+  *local* headers carry 0 sizes — a local-header walker silently finds nothing.
+  Parse via EOCD + central directory, and cap the inflated size while streaming
+  (the declared size can lie — zip bomb). Evidence: same file `:72`
+  (`extractFromZip`), `:127` (`inflateCapped`).
+
+## What Doesn't Work
+
+- **2026-09-22** — `vendor/ui/charts/Donut`'s legend defaults to a currency
+  string (`valuePrefix = "$"`, rendering `$52.00`) unless the caller passes
+  `formatValue`. A percentage-shares donut (or any non-money donut) that
+  forgets this prop silently shows a `$` value instead of erroring — this is
+  exactly the bug a Skills-Lab design mockup shipped with (`$52.00` where a
+  `%` share was intended). The fix is always at the call site
+  (`formatValue={(v) => \`${v}%\`}`), never in `Donut` itself. The Skill
+  Stats tab already passes it correctly:
+  `client/src/app/skills/[id]/_components/SkillEditor/_components/StatsTab/StatsTab.tsx`
+  (`formatValue={(v) => \`${v}%\`}`) + `client/src/lib/category-chart.ts`
+  (`categoryDonutSegments` — largest-remainder rounding so shares always sum
+  to 100). Evidence: `client/src/vendor/ui/charts/Donut.tsx:15,52`.
+- **2026-09-21** — A form that stays mounted across tabs (SkillEditor keeps
+  ConfigTab mounted to keep unsaved edits) and resets only on `skill.id` goes
+  stale after a restore or a list toggle — Save then overwrote the restore with
+  the old body. Rebase per field (take the server value for fields the user hasn't
+  touched) and send only changed fields. Evidence:
+  `client/src/app/skills/[id]/_components/SkillEditor/_components/ConfigTab/draft.ts:24,33`.
+- **2026-09-21** — next-intl: markup passed as a `t()` argument renders as literal
+  `<code>` text — use `t.rich`. Missing keys fail only at runtime on the one
+  screen that renders them; restructuring `skills.json` by overwrite dropped
+  keys still in use (`preview.untrustedNotice`, `detail.loadError`). Merge
+  message files, and `client/src/app/skills/i18n-keys.test.ts` now checks every
+  static `t("…")` key. Evidence: `.../PreviewTab/PreviewTab.tsx:28`.
+- **2026-09-21** — `vi.mock` factories are hoisted: referencing a top-level
+  `const fn = vi.fn()` throws "Cannot access … before initialization" — use
+  `vi.hoisted`. A `vi.mock` path with one `../` too few doesn't error, it just
+  doesn't apply, and the real hook runs. Evidence:
+  `client/src/app/skills/[id]/_components/SkillEditor/_components/StatsTab/StatsTab.test.tsx:8`.

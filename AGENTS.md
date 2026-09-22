@@ -7,8 +7,8 @@ each course lesson adds one feature back (see `README.md`).
 
 Search FIRST — curated, may already answer it — then read code:
 
-- Root-level or cross-package question → root `docs/`, `specs/`, `INSIGHTS.md`.
-- Package-specific question → that package's `docs/`, `specs/`, `INSIGHTS.md`.
+- Root-level or cross-package question → root `docs/`, `specs/`, `insights/`.
+- Package-specific question → that package's `docs/`, `specs/`, `insights/`.
 - Unsure which, or it could be either → check both root and the package's.
 
 ## Monorepo structure
@@ -78,16 +78,17 @@ Check (tests / typecheck / lint), per package:
   DB-backed tests MUST be `*.it.test.ts`, unit tests `*.test.ts`.
 - e2e: flows are `specs/NN-name.flow.json`, numbered in run order.
 - Docs: `docs/README.md` / `specs/README.md` start with `# <thing> — <package>`;
-  insights live in `INSIGHTS.md` (root = repo-wide, `<package>/INSIGHTS.md` =
-  package-local).
+  insights live under `insights/` (root `insights/INSIGHTS.md` = repo-wide,
+  `<package>/insights/INSIGHTS.md` = package-local), split into sibling
+  `insights/<topic>.md` files as they grow.
 
 ## Engineering insights (always)
 
 Invoke the `engineering-insights` skill **without being asked** at the end of
 every task that fixed a bug, made a non-obvious decision, or hit a gotcha —
 before reporting the task done — and again on "wrap up". It writes to the
-touched package's `INSIGHTS.md` (root only for repo-wide facts); every entry
-carries a date and a `file:line`.
+touched package's `insights/INSIGHTS.md` (root only for repo-wide facts);
+every entry carries a date and a `file:line`.
 
 ## Conventions (not obvious from code)
 
@@ -121,5 +122,5 @@ carries a date and a `file:line`.
 - Working inside a package → read that package's AGENTS.md: `server/AGENTS.md`
   · `client/AGENTS.md` · `reviewer-core/AGENTS.md` · `e2e/AGENTS.md`
 - Root-level deep-dives / specs / running notes → `docs/` · `specs/` ·
-  `INSIGHTS.md`
+  `insights/`
 - Built-in agent prompt templates → `docs/agent-prompts/`

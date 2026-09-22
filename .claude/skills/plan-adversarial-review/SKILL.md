@@ -97,7 +97,7 @@ prose the planner skimmed. Read what applies to the touched area:
   step that edits one of those is a must-fix on its own.
 - **`docs/`, `specs/`** — prior decisions and explicit acceptance criteria a
   plan can quietly contradict or under-deliver against.
-- **`INSIGHTS.md` / running notes** — this is where a project records the
+- **`insights/` / running notes** — this is where a project records the
   gotcha it already paid for once. Plans re-introduce those bugs regularly.
   Search these for the components, libraries, and interactions the plan
   touches; if a note describes the exact failure mode the plan is walking

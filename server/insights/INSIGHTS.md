@@ -261,8 +261,8 @@ you, so the next agent/session doesn't relearn it.
   input limits, N+1-free `GET /skills` stats, prompt-injection integration test
   (`server/test/reviews.it.test.ts`, "injects only enabled, vetted skills").
 - Row→DTO mappers moved to `server/src/modules/skills/helpers.ts`, so
-  `skills/service.ts` no longer imports Drizzle row types (root `INSIGHTS.md`'s
-  R5 entry updated to match).
+  `skills/service.ts` no longer imports Drizzle row types (root
+  `insights/INSIGHTS.md`'s R5 entry updated to match).
 - Not done: the plan's manual control experiments (real LLM run with/without the
   Test Quality skills) — needs the app running with an API key.
 

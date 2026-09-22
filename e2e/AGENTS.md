@@ -2,7 +2,7 @@
 
 ## Before answering
 
-Search `e2e/docs/` and `e2e/INSIGHTS.md` first. (`e2e/specs/` here means
+Search `e2e/docs/` and `e2e/insights/` first. (`e2e/specs/` here means
 agent-browser flow definitions, not narrative specs — see below.)
 
 ## Tech stack
@@ -45,7 +45,7 @@ command list run in order against one shared browser session by `run.ts`.
 ## Use when
 
 - Flow anatomy, coverage table, hermetic vs local run → read `README.md`
-- Deep-dives / running notes → `docs/` · `INSIGHTS.md`
+- Deep-dives / running notes → `docs/` · `insights/`
 - What a route/endpoint actually returns → `../client/README.md` ·
   `../server/README.md`
 - Cross-package rules → `../AGENTS.md`
