@@ -6,7 +6,9 @@ import { useTranslations } from "next-intl";
 import { Button, Dropdown, TextInput, Skeleton, EmptyState } from "@devdigest/ui";
 import { SkillCard } from "../SkillCard";
 import { CreateSkillModal } from "../CreateSkillModal";
-import { useSkills, useUpdateSkill } from "../../../../lib/hooks/skills";
+import type { SkillWithStats } from "@devdigest/shared";
+import { useSkills, useUpdateSkill, useDeleteSkill } from "../../../../lib/hooks/skills";
+import { useToast } from "../../../../lib/toast";
 import { s } from "./styles";
 
 export function SkillsColumn({
@@ -20,6 +22,22 @@ export function SkillsColumn({
   const t = useTranslations("skills");
   const { data: skills, isLoading } = useSkills();
   const updateMutation = useUpdateSkill();
+  const deleteMutation = useDeleteSkill();
+  const toast = useToast();
+
+  const handleDelete = (sk: SkillWithStats) => {
+    if (!confirm(t("detail.confirmDelete", { name: sk.name }))) return;
+    deleteMutation.mutate(sk.id, {
+      onSuccess: () => {
+        toast.success(t("detail.deleteSuccess", { name: sk.name }));
+        // Deleting the open skill leaves its page dangling — /skills redirects to the next one.
+        if (sk.id === activeId) router.push("/skills");
+      },
+      onError: (err) => {
+        toast.error((err as Error).message || t("detail.deleteError"));
+      },
+    });
+  };
 
   const [modalState, setModalState] = React.useState<"scratch" | "import" | null>(null);
   const [search, setSearch] = React.useState("");
@@ -99,6 +117,8 @@ export function SkillsColumn({
               onToggle={(enabled) =>
                 updateMutation.mutate({ id: sk.id, patch: { enabled } })
               }
+              onDelete={() => handleDelete(sk)}
+              deleting={deleteMutation.isPending && deleteMutation.variables === sk.id}
             />
           ))
         )}

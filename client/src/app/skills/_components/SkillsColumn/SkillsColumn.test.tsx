@@ -47,6 +47,8 @@ const SKILLS: SkillWithStats[] = [
   },
 ];
 
+const deleteMutate = vi.fn();
+
 vi.mock("../../../../lib/hooks/skills", () => ({
   useSkills: () => ({
     data: SKILLS,
@@ -55,7 +57,21 @@ vi.mock("../../../../lib/hooks/skills", () => ({
   useUpdateSkill: () => ({
     mutate: vi.fn(),
   }),
+  useDeleteSkill: () => ({
+    mutate: deleteMutate,
+    isPending: false,
+    variables: undefined,
+  }),
 }));
+
+vi.mock("../../../../lib/toast", () => ({
+  useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(), toast: vi.fn() }),
+}));
+
+afterEach(() => {
+  deleteMutate.mockReset();
+  vi.restoreAllMocks();
+});
 
 function renderWithProviders(ui: React.ReactElement) {
   const qc = new QueryClient();
@@ -143,5 +159,22 @@ describe("SkillsColumn", () => {
     fireEvent.change(searchInput, { target: { value: "" } });
     expect(screen.getByText("Test Coverage")).toBeInTheDocument();
     expect(screen.getByText("Code Style")).toBeInTheDocument();
+  });
+
+  it("deletes a skill after the user confirms", () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderWithProviders(<SkillsColumn activeId="sk1" tab="config" />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete skill" })[1]!);
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Delete skill "Test Coverage"? This will unlink it from all agents.',
+    );
+    expect(deleteMutate).toHaveBeenCalledWith("sk2", expect.any(Object));
+  });
+
+  it("does not delete when the user cancels the confirm", () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderWithProviders(<SkillsColumn activeId="sk1" tab="config" />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete skill" })[0]!);
+    expect(deleteMutate).not.toHaveBeenCalled();
   });
 });

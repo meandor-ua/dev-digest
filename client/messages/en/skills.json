@@ -25,6 +25,7 @@
   "listItem": {
     "needsVetting": "needs vetting",
     "vettingTitle": "Untrusted source — vet before enabling",
+    "deleteTitle": "Delete skill",
     "type": {
       "rubric": "rubric",
       "convention": "convention",

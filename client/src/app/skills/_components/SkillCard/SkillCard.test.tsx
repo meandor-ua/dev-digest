@@ -83,6 +83,31 @@ describe("SkillCard", () => {
     expect(onToggle).not.toHaveBeenCalled();
   });
 
+  it("calls onDelete (not onClick) when the delete button is clicked", () => {
+    const onClick = vi.fn();
+    const onDelete = vi.fn();
+    renderWithIntl(
+      <SkillCard skill={SKILL} active={false} onClick={onClick} onToggle={vi.fn()} onDelete={onDelete} />,
+    );
+    const btn = screen.getByRole("button", { name: "Delete skill" });
+    expect(btn).toHaveAttribute("title", "Delete skill");
+    fireEvent.click(btn);
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("disables the delete button while deleting", () => {
+    renderWithIntl(
+      <SkillCard skill={SKILL} active={false} onClick={vi.fn()} onToggle={vi.fn()} onDelete={vi.fn()} deleting />,
+    );
+    expect(screen.getByRole("button", { name: "Delete skill" })).toBeDisabled();
+  });
+
+  it("renders no delete button without onDelete", () => {
+    renderWithIntl(<SkillCard skill={SKILL} active={false} onClick={vi.fn()} onToggle={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Delete skill" })).not.toBeInTheDocument();
+  });
+
   it("shows the needs-vetting badge when the skill is untrusted and disabled", () => {
     const onClick = vi.fn();
     const onToggle = vi.fn();

@@ -13,11 +13,15 @@ export function SkillCard({
   active,
   onClick,
   onToggle,
+  onDelete,
+  deleting = false,
 }: {
   skill: SkillWithStats;
   active: boolean;
   onClick: () => void;
   onToggle: (enabled: boolean) => void;
+  onDelete?: () => void;
+  deleting?: boolean;
 }) {
   const t = useTranslations("skills");
   const color = SKILL_TYPE_COLOR[skill.type] ?? "var(--text-secondary)";
@@ -63,6 +67,22 @@ export function SkillCard({
         >
           <Toggle on={skill.enabled} onChange={onToggle} size={14} />
         </div>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            disabled={deleting}
+            title={t("listItem.deleteTitle")}
+            aria-label={t("listItem.deleteTitle")}
+            style={s.deleteBtn(deleting)}
+          >
+            <Icon.Trash size={14} style={deleting ? s.spin : undefined} />
+          </button>
+        )}
       </div>
 
       {skill.description ? (

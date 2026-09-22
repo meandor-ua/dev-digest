@@ -35,6 +35,15 @@ export const s = {
     overflow: "hidden",
     textOverflow: "ellipsis",
   } satisfies CSSProperties,
+  deleteBtn: (pending: boolean): CSSProperties => ({
+    background: "none",
+    border: "none",
+    cursor: pending ? "not-allowed" : "pointer",
+    color: "var(--text-muted)",
+    display: "inline-flex",
+    padding: 4,
+  }),
+  spin: { animation: "ddspin 1s linear infinite" } satisfies CSSProperties,
   description: {
     fontSize: 13,
     color: "var(--text-muted)",
