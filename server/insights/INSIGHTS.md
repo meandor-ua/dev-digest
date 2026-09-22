@@ -299,6 +299,16 @@ you, so the next agent/session doesn't relearn it.
   Covered by the "concurrent body edits" case in `test/skills.it.test.ts`.
   Evidence: `server/src/modules/skills/repository.ts:174`.
 
+- **2026-09-22** — A "fix onion-architecture row-type leak" commit that fixes
+  only the flagged method can leave sibling occurrences of the identical
+  anti-pattern in the same file untouched. Commit `ed0fb55` replaced
+  `repo: typeof schema.repos.$inferSelect` with `RepoRef` in `buildContextDocs`
+  only; `executeRuns` and `runOneAgent` in the same file still take the raw
+  Drizzle row type. Grep the whole file for the exact type pattern before
+  considering a row-type-leak fix complete. Evidence:
+  `server/src/modules/reviews/run-executor.ts:68`, `:163` (still raw), vs.
+  `:421` (fixed to `RepoRef`).
+
 ## Session Notes
 
 ### 2026-09-18
