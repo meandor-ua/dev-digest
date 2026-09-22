@@ -143,12 +143,16 @@ describe("ConfigTab", () => {
     expect(screen.getByTestId("body-highlight").lastElementChild).toHaveAttribute("data-kind", "h3");
   });
 
-  it("keeps the highlight layer aligned when the body scrolls horizontally", () => {
+  it("keeps the highlight layer and gutter aligned when the body scrolls on either axis", () => {
     renderTab(MANUAL);
     const textarea = body() as HTMLTextAreaElement;
     textarea.scrollLeft = 40;
+    textarea.scrollTop = 15;
     fireEvent.scroll(textarea);
-    expect(screen.getByTestId("body-highlight").style.transform).toBe("translateX(-40px)");
+    const layer = screen.getByTestId("body-highlight");
+    expect(layer.style.transform).toBe("translate(-40px, -15px)");
+    // The line-number gutter follows vertical scroll only.
+    expect(screen.getByTestId("body-gutter").style.transform).toBe("translateY(-15px)");
   });
 
   it("sends an optional change note as `message` alongside the patch", () => {

@@ -5,7 +5,7 @@
  * Context tab and review-time doc injection. Implements `ProjectDocsAdapter`
  * (`modules/skills/ports.ts`).
  */
-import { readdir } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { join, relative, dirname, sep } from 'node:path';
 import type { GitClient, RepoRef } from '@devdigest/shared';
 import { ValidationError } from '../../platform/errors.js';
@@ -14,6 +14,12 @@ import type { ProjectDoc, ProjectDocsAdapter } from '../../modules/skills/ports.
 /** Bounds a runaway walk (vendored dirs excluded, but caps stay as a backstop). */
 const MAX_DEPTH = 10;
 const MAX_DOCS = 300;
+/**
+ * Per-doc byte cap. Attached docs are injected verbatim into every review
+ * prompt, and the clone's content is repo-controlled — one huge file must not
+ * blow the model's context window or the token bill.
+ */
+export const MAX_DOC_BYTES = 64 * 1024;
 const SKIP_DIR_NAMES = new Set(['node_modules', '.git']);
 
 function categorize(relPath: string, filename: string): ProjectDoc['category'] | null {
@@ -41,6 +47,9 @@ export class GitProjectDocsAdapter implements ProjectDocsAdapter {
     if (!docs.some((d) => d.path === path)) {
       throw new ValidationError('Not a recognized project doc for this repo');
     }
+    if (!(await this.withinCap(repo, path))) {
+      throw new ValidationError(`Project doc exceeds ${MAX_DOC_BYTES / 1024} KB`);
+    }
     return this.git.readFile(repo, path);
   }
 
@@ -50,12 +59,18 @@ export class GitProjectDocsAdapter implements ProjectDocsAdapter {
     for (const path of paths) {
       if (!known.has(path)) continue;
       try {
+        if (!(await this.withinCap(repo, path))) continue; // oversize — caller logs the gap
         out.push({ path, text: await this.git.readFile(repo, path) });
       } catch {
         // Vanished between list and read — same as not listed.
       }
     }
     return out;
+  }
+
+  private async withinCap(repo: RepoRef, path: string): Promise<boolean> {
+    const { size } = await stat(join(this.git.clonePathFor(repo), path));
+    return size <= MAX_DOC_BYTES;
   }
 
   private async walk(root: string, dir: string, depth: number, out: ProjectDoc[]): Promise<void> {

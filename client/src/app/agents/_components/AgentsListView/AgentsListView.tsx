@@ -10,8 +10,7 @@ import { AppShell } from "../../../../components/app-shell";
 import { useAgents, useUpdateAgent, useAgentCardStats } from "../../../../lib/hooks/agents";
 import { useActiveRepo } from "../../../../lib/repo-context";
 import { AgentCard } from "../AgentCard";
-import { CreateAgentModal } from "./_components/CreateAgentModal";
-import { TEMPLATES } from "./constants";
+import { CreateAgentModal, TEMPLATES } from "../CreateAgentModal";
 import { filterAgents } from "./helpers";
 import { s } from "./styles";
 

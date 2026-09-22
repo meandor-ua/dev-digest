@@ -57,6 +57,10 @@ Specs / acceptance criteria for the `server` package.
   enabled }] }`, array order becoming the new `order`. Skills not in the
   caller's workspace are rejected (ownership guard) so an agent can never link a
   foreign workspace's skill.
+- A duplicate `skill_id` in `skills` (or in the legacy `skill_ids` form) is
+  rejected with **422** before anything is written. The delete + re-insert of
+  the set runs in **one transaction**, so a failed insert can never leave the
+  agent with its links already deleted.
 - Covered by `test/agents-stats.it.test.ts` and the seed assertions in
   `test/seed.it.test.ts`.
 
@@ -112,12 +116,33 @@ reviewed (edited, linked to agents, tested) before they can influence reviews.
 Manual skills respect the `enabled` flag as provided; imported skills can only
 be enabled later via `PUT /skills/:id`.
 
+Provenance is **one-way**: `PUT /skills/:id` with `source: "manual"` on a
+skill whose current `source` is anything else returns **422**
+(`SkillsService.update`). An imported skill can be vetted (enabled), but it can
+never be relabelled as hand-written, which would hide its untrusted origin (the
+"needs vetting" badge and the untrusted notice both key off `source`). The
+client derives `source` from where the form's content came from, never from
+the open tab (see `client/specs/README.md`'s `CreateSkillModal` note).
+
 ### Input limits
-- `name`: 1–200 characters
+- `name`: 1–200 characters. This also applies to the optional `name` on
+  `POST /skills/import`, so an empty string is a 422, not an unnamed skill.
 - `description`: 0–1000 characters
 - `body`: 0–100,000 characters
+- `repo_id` query params (`/skills/:id/context`, `/skills/context/doc`) must
+  be UUIDs. A malformed id is a clean 422 at the edge, not a Postgres `22P02` → 500.
+- `POST /skills/:id/restore` `version`: a JSON integer ≥ 1 (not coerced).
 
 Violations of these limits return `422 Unprocessable Entity` (Zod validation).
+
+### Versioning is serialised per skill
+Create, update and restore each run in one transaction. Update and restore
+first lock the skill row (`SELECT … FOR UPDATE`), then compute `version + 1`,
+so concurrent body edits get consecutive versions and every one gets its own
+snapshot. There is deliberately no `ON CONFLICT DO NOTHING` on
+`skill_versions`: a version-PK conflict is a bug and must fail loudly, never
+silently drop a snapshot. The newest `skill_versions` row always matches
+`skills.body`.
 
 ### Endpoint list
 - `GET /skills` — list all skills in the workspace (with optional stats)
@@ -169,14 +194,18 @@ still use the flat-file convention), categorizing each as `specs` | `docs` |
 (depth 10 / 300 docs) as a backstop; entries are name-sorted so the list
 order is stable across filesystems. `read()` re-validates the requested path
 against a fresh `list()` before reading — a path not currently listed is
-rejected, closing path traversal.
+rejected, closing path traversal. Each doc is also capped at **64 KB**
+(`MAX_DOC_BYTES`, checked with `stat` before reading): `read()` answers 422
+for an oversized doc, and `readMany()` skips it.
 
 At review time (`run-executor.ts`), for each of an agent's **linked and
 enabled** skills, `SkillsRepository.listContextPaths` is read (deduped, skill
 link order then doc order) and the whole set is read with ONE
 `readMany(repo, paths)` call — one clone walk per review, not one per doc;
 a path that no longer resolves (renamed/deleted since
-the skill attached it) is silently skipped rather than failing the run. The
+the skill attached it) or is over the 64 KB cap is skipped rather than failing
+the run, and the run log names every skipped path (`Context: skipped N doc(s)
+(missing or over size cap): …`). The
 resulting doc text is passed as `specs` to `reviewer-core`'s existing
 `## Project context` prompt slot (`reviewer-core/src/prompt.ts`) — unchanged,
 since that slot already existed for a later course lesson and was simply

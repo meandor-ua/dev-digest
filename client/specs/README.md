@@ -39,7 +39,16 @@ instead.
   sent as `message` on save — server-side, a message only takes effect when
   `body` actually changed (a message-only patch is a no-op, matching `PUT`'s
   "empty patch" contract in `server/specs/README.md`). A danger-zone row at
-  the bottom holds Delete (`useDeleteSkill` + `confirm()`).
+  the bottom holds Delete (`useDeleteSkill` + `confirm()`). The body editor's
+  highlight layer and line-number gutter follow the textarea's scroll on
+  **both** axes: a horizontal scrollbar steals height, so the textarea also
+  scrolls vertically.
+- **Unsaved edits are guarded.** The page wraps the side list and the editor
+  in `UnsavedChangesProvider` (`src/lib/unsaved-changes.tsx`). While the
+  draft is dirty, clicking another skill in `SkillsColumn` asks "Discard
+  them?" first, and closing or reloading the tab gets the browser's native
+  prompt. The draft itself is the shared `useDraft` (`src/lib/draft.ts`): it
+  rebases onto server changes and saves only the changed fields.
 - **Context** — attach project docs (`specs/`, `docs/`, `insights/`) from
   the active repo (`useActiveRepo()`; no repo → "Select a repo" state). Rows:
   drag handle (`@dnd-kit`, same pattern as the Agent editor's Skills tab;
@@ -84,7 +93,8 @@ also used by the Agent editor's Skills tab); translucent fills go through
 `var(--…)` token and a hex-alpha suffix (`color + "1a"`) is invalid CSS on
 one.
 
-`SkillCard` (skills list): type-tinted icon box, a
+`SkillCard` (skills list): type-tinted icon box, an i18n'd type badge
+(`listItem.type.*`, not the raw enum), a
 source icon + i18n'd label (`listItem.source.*`, not a hardcoded map), and a
 stats line (below a divider) where `accept_rate_pct` shows **`—`** when the
 field is absent or `null` (no findings yet) — never a fabricated `100%`. The
@@ -97,6 +107,20 @@ skill" then saves through the normal `POST /skills` create path (`source:
 "imported_url"`, `enabled: false`) — it no longer calls `POST /skills/import`
 directly, closing the gap where a URL import skipped preview/confirm
 entirely.
+
+**Provenance comes from the content, not the tab.** The modal keeps an
+`origin` state that becomes `"imported"` the moment a file or URL prefills
+the shared fields. Switching tabs keeps it, so imported text submitted from
+"From scratch" is still saved as `source: "imported_url"`, `enabled: false`.
+On the scratch tab, imported content shows a notice with a "Start blank"
+action, the only thing that resets `origin` to `"manual"`. Typed content
+submitted from the Import tab stays manual. File-import errors are typed
+(`ExtractError.code` in `file-extractor.ts`) and shown as
+`create.file.errors.<code>`, never as the English `message`. A file without a
+frontmatter description gets the translated "Imported from {filename}"
+default. Deleting a skill drops it from the cached `["skills"]` list before
+navigating to `/skills`, so that page's redirect to the first skill never
+lands on the one just deleted.
 
 ## Read-only popover — `components/findings-by-severity/`
 
@@ -181,6 +205,12 @@ entirely.
 - **ConfigTab Cancel:** the Cancel button appears only while the form is dirty
   (any field diverges from the loaded agent), reverts every field to that
   baseline on click with no server call, and disappears again once clean.
+- **ConfigTab draft:** because the tab stays mounted, the form is a `useDraft`
+  (`src/lib/draft.ts`, shared with the skill editor). A server change made
+  elsewhere, such as the rail's enable toggle, rebases into every field the user
+  hasn't touched, so it neither shows a spurious Cancel nor gets reverted by
+  the next Save. Save sends **only the edited fields**, and is disabled while
+  the form is clean.
 - **SkillsTab:** drag-to-reorder (`@dnd-kit`) + a per-skill enabled checkbox
   and type badge; the header shows `{enabled} of {total} enabled`. Reordering
   and toggling autosave optimistically via `useSetAgentSkills` (rollback +
@@ -190,6 +220,13 @@ entirely.
   Pressing **Escape** in the filter input clears a non-empty filter (and
   re-enables dragging); with an already-empty filter the key is not swallowed,
   so other Escape handlers still fire.
+  Reordering also works from the keyboard (`KeyboardSensor`: focus the handle,
+  Space, arrows, Space). Every row's checkbox is named "Enable {skill} for this
+  agent", and the filter has an accessible label. An inert handle (filter
+  active) is `aria-hidden`.
+  Overlapping autosaves are safe: `useSetAgentSkills` has a `mutationKey`, and
+  only the last in-flight save writes its response or rolls back, so an older
+  response can't clobber a newer edit.
 - **StatsTab:** repo-scoped to `useActiveRepo()`. Shows "Select a repo…" with
   no active repo, "No data yet" when the agent has no runs in the repo, else
   KPI tiles (Total runs / Avg cost / Avg duration / Avg score with a score
@@ -209,4 +246,10 @@ entirely.
   are not recorded per run yet, so it always renders its own no-data line.
 - `AgentCard`'s "N skills" is the **enabled** link count, so it agrees with the
   Skills tab header; `useSetAgentSkills` therefore invalidates
-  `["agent-card-stats"]` and `["agent-stats"]` as well as its own query.
+  `["agent-card-stats"]` and `["agent-stats"]`, plus `["skills"]` and
+  `["skill-stats"]`, because skill cards and a skill's Stats tab are derived
+  from the same links. `useDeleteAgent` invalidates `["skills"]` and
+  `["skill-stats"]` too (links cascade). "N skills" / "N runs" are ICU plurals.
+- `CreateAgentModal` (with its `TEMPLATES`) lives in
+  `app/agents/_components/CreateAgentModal/`, shared by the list view and the
+  editor rail.

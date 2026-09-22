@@ -117,3 +117,25 @@ you, so the next agent/session doesn't relearn it.
   `/agents` fine. Root cause not yet investigated — the menu item calls
   `router.push("/agents")` (`client/src/components/run-review-dropdown/RunReviewDropdown.tsx:97`).
   Evidence: `e2e/specs/09-pr-list-actions.flow.json:77-95`.
+
+- **2026-09-22** — Follow-up on flow 09: it still fails after the
+  pr-self-review fix pass, and fails the same way with those fixes stashed.
+  Leading hypothesis, not yet verified: this branch added `maxHeight: 320` and
+  `overflowY: auto` to the vendored `Dropdown`. With five seeded agents as
+  two-line items, "Configure agents…" sits below the menu's fold.
+  agent-browser's scroll-into-view then likely scrolls an ancestor too, and the
+  portaled menu's capture-phase close-on-scroll dismisses it before the click.
+  To confirm, raise `maxHeight` for `RunReviewDropdown`, or scroll the menu
+  before clicking in the flow. Evidence: `client/src/vendor/ui/kit/Dropdown.tsx`
+  (`maxHeight = 320`).
+- **2026-09-22** — RESOLVED (supersedes the two flow-09 entries above).
+  Measured on the hermetic stack: the Run Review menu was 318px tall with 444px
+  of content and ran past a 633px viewport (menu bottom 673). "Configure
+  agents…" sat at y=754. agent-browser's click scrolled it into view, and a
+  scroll outside the menu closes a portaled `Dropdown`, so the click missed
+  and the URL never changed. A real UI bug, not a flaky flow. Fixed in the
+  component, not the flow: `portalPosition()` caps the menu's `maxHeight` to
+  the viewport room (or flips it above). 12/12 flows pass. To debug a flow
+  interactively, run a copy of `scripts/e2e.sh` whose final `npm test` line
+  is replaced by a wait loop, then drive `agent-browser` against :3100.
+  Evidence: `client/src/vendor/ui/kit/Dropdown.tsx` (`portalPosition`).

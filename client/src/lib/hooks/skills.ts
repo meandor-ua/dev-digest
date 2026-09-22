@@ -83,6 +83,10 @@ export function useDeleteSkill() {
   return useMutation({
     mutationFn: (id: string) => api.del<{ ok: boolean }>(`/skills/${id}`),
     onSuccess: (_d, id) => {
+      // Drop it from the cached list synchronously, before the caller's own
+      // onSuccess navigates to /skills — that page redirects to the list's
+      // first skill, and a stale list could send it to the one just deleted.
+      qc.setQueryData<SkillWithStats[]>(["skills"], (list) => list?.filter((sk) => sk.id !== id));
       qc.invalidateQueries({ queryKey: ["skills"] });
       qc.removeQueries({ queryKey: ["skill", id] });
       qc.removeQueries({ queryKey: ["skill-stats", id] });

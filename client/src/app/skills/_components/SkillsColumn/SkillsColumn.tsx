@@ -7,8 +7,9 @@ import { Button, Dropdown, TextInput, Skeleton, EmptyState } from "@devdigest/ui
 import { SkillCard } from "../SkillCard";
 import { CreateSkillModal } from "../CreateSkillModal";
 import type { SkillWithStats } from "@devdigest/shared";
-import { useSkills, useUpdateSkill, useDeleteSkill } from "../../../../lib/hooks/skills";
-import { useToast } from "../../../../lib/toast";
+import { useSkills, useUpdateSkill, useDeleteSkill } from "@/lib/hooks/skills";
+import { useToast } from "@/lib/toast";
+import { useConfirmDiscard } from "@/lib/unsaved-changes";
 import { s } from "./styles";
 
 export function SkillsColumn({
@@ -24,6 +25,7 @@ export function SkillsColumn({
   const updateMutation = useUpdateSkill();
   const deleteMutation = useDeleteSkill();
   const toast = useToast();
+  const confirmDiscard = useConfirmDiscard();
 
   const handleDelete = (sk: SkillWithStats) => {
     if (!confirm(t("detail.confirmDelete", { name: sk.name }))) return;
@@ -113,9 +115,16 @@ export function SkillsColumn({
               key={sk.id}
               skill={sk}
               active={sk.id === activeId}
-              onClick={() => router.push(`/skills/${sk.id}?tab=${tab}`)}
+              onClick={() => {
+                // Opening another skill replaces the editor — don't drop an unsaved draft silently.
+                if (sk.id !== activeId && !confirmDiscard(t("column.discardConfirm"))) return;
+                router.push(`/skills/${sk.id}?tab=${tab}`);
+              }}
               onToggle={(enabled) =>
-                updateMutation.mutate({ id: sk.id, patch: { enabled } })
+                updateMutation.mutate(
+                  { id: sk.id, patch: { enabled } },
+                  { onError: (err) => toast.error((err as Error).message || t("column.toggleError")) },
+                )
               }
               onDelete={() => handleDelete(sk)}
               deleting={deleteMutation.isPending && deleteMutation.variables === sk.id}

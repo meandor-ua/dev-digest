@@ -1,6 +1,6 @@
-/** Row → DTO mappers for the skills module (keeps Drizzle row types out of service.ts). */
+/** Row → DTO mappers — used only by repository.ts, so Drizzle rows never leave it. */
 import type { Skill, SkillSource, SkillType, SkillVersion } from '@devdigest/shared';
-import type { SkillRow, SkillVersionRow } from './repository.js';
+import type { SkillRow, SkillVersionRow } from '../../db/rows.js';
 
 export function toSkillDto(row: SkillRow): Skill {
   return {

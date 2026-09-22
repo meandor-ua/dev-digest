@@ -5,12 +5,12 @@
 import React from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button, ErrorState, Skeleton, Icon, Badge } from "@devdigest/ui";
-import { AppShell } from "../../../components/app-shell";
+import { AppShell } from "@/components/app-shell";
 import { AgentsColumn } from "./_components/AgentsColumn";
 import { AgentEditor } from "./_components/AgentEditor";
-import { useAgent } from "../../../lib/hooks/agents";
-import { useActiveRepo } from "../../../lib/repo-context";
-import { ApiError } from "../../../lib/api";
+import { useAgent } from "@/lib/hooks/agents";
+import { useActiveRepo } from "@/lib/repo-context";
+import { ApiError } from "@/lib/api";
 
 const VALID_TABS = ["config", "skills", "evals", "stats", "ci"];
 

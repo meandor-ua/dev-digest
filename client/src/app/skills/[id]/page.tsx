@@ -10,6 +10,7 @@ import { SkillHeader } from "./_components/SkillHeader";
 import { ErrorState, Skeleton } from "@devdigest/ui";
 import { useSkill } from "@/lib/hooks/skills";
 import { ApiError } from "@/lib/api";
+import { UnsavedChangesProvider } from "@/lib/unsaved-changes";
 
 const VALID_TABS: string[] = SKILL_TABS.map((tb) => tb.key);
 
@@ -50,25 +51,28 @@ export default function SkillDetailPage() {
 
   return (
     <AppShell crumb={crumb}>
-      <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
-        <SkillsColumn activeId={id} tab={tab} />
+      {/* The side list asks before discarding the editor's unsaved draft. */}
+      <UnsavedChangesProvider>
+        <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
+          <SkillsColumn activeId={id} tab={tab} />
 
-        {isLoading || !skill ? (
-          <div style={{ flex: 1, padding: 28, display: "flex", flexDirection: "column", gap: 16 }}>
-            <Skeleton height={24} width={240} />
-            <Skeleton height={200} />
-          </div>
-        ) : (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
-            <SkillHeader skill={skill} />
-
-            {/* Editor content */}
-            <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-              <SkillEditor skill={skill} tab={tab} onTab={setTab} />
+          {isLoading || !skill ? (
+            <div style={{ flex: 1, padding: 28, display: "flex", flexDirection: "column", gap: 16 }}>
+              <Skeleton height={24} width={240} />
+              <Skeleton height={200} />
             </div>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
+              <SkillHeader skill={skill} />
+
+              {/* Editor content */}
+              <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+                <SkillEditor skill={skill} tab={tab} onTab={setTab} />
+              </div>
+            </div>
+          )}
+        </div>
+      </UnsavedChangesProvider>
     </AppShell>
   );
 }

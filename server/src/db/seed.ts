@@ -25,8 +25,8 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  * Performance + Test Quality + API Contract), all on the default
  * openrouter/deepseek-v4-flash provider+model, with their demo skills linked.
  *
- * Course lessons populate the other tables (skills, conventions, memory, eval,
- * …) once their features are built — they start empty here.
+ * Course lessons populate the other tables (conventions, memory, eval, …) once
+ * their features are built — they start empty here.
  */
 
 export const DEFAULT_WORKSPACE_NAME = 'default';

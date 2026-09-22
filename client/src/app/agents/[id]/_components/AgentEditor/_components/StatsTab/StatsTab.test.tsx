@@ -7,12 +7,12 @@ import messages from "../../../../../../../../messages/en/agents.json";
 let stats: AgentRepoStats | undefined;
 let loading = false;
 
-vi.mock("../../../../../../../lib/hooks/agents", () => ({
+vi.mock("@/lib/hooks/agents", () => ({
   useAgentStats: () => ({ data: stats, isLoading: loading }),
 }));
 
 // RunTraceDrawer pulls in run hooks/query — stub it (never opened in these tests).
-vi.mock("../../../../../../../components/run-trace-drawer", () => ({
+vi.mock("@/components/run-trace-drawer", () => ({
   default: () => null,
 }));
 

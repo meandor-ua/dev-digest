@@ -39,6 +39,17 @@ element's ref AND the portaled panel's ref (`FindingsBySeverityBadge.tsx`),
 since they're no longer DOM-nested — a single `ref.contains()` check (as
 `Dropdown.tsx` uses) isn't enough once a portal is involved.
 
+`Dropdown`'s own `portal` mode (the PR list's Run Review menu) follows the same
+approach, plus one more rule: **a portaled menu must fit the viewport**.
+It closes on any scroll outside itself, because it's fixed at a rect measured
+once. So an item hanging below the fold could never be clicked: reaching it
+scrolls the page, which closes the menu first. This broke e2e flow 09 once
+five seeded agents pushed "Configure agents…" off-screen. `portalPosition()`
+(`vendor/ui/kit/Dropdown.tsx`) therefore opens the menu below the trigger with
+its `maxHeight` capped to the room left, or flips it above when there's clearly
+more room there. A long list then scrolls **inside** the menu, which never
+closes it.
+
 ## Two different "which findings count" rules on purpose
 
 `FindingsPanel`'s severity pills (Review-runs accordion) and

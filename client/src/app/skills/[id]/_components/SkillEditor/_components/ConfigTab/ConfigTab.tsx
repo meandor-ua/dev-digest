@@ -36,6 +36,7 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
   // Draft state lives in SkillEditor (useSkillDraft) so Preview renders the same unsaved body.
   const { draft, setDraft, server, dirty, reset: cancel } = state;
   const highlightRef = React.useRef<HTMLPreElement>(null);
+  const gutterRef = React.useRef<HTMLDivElement>(null);
 
   const { name, description, type, body, enabled } = draft;
   const set = <K extends keyof SkillDraft>(key: K) => (value: SkillDraft[K]) =>
@@ -140,7 +141,7 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
             <span style={s.tokenBadge}>{t("config.tokens", { count: estimatedTokens })}</span>
           </div>
           <div style={s.editorBody}>
-            <div style={s.gutter}>
+            <div ref={gutterRef} data-testid="body-gutter" style={s.gutter}>
               {Array.from({ length: lineCount }, (_, i) => (
                 <span key={i + 1} style={s.gutterLine}>
                   {i + 1}
@@ -161,8 +162,13 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 onScroll={(e) => {
+                  // Follow BOTH axes: rows fit the line count, but a horizontal
+                  // scrollbar steals height, so the textarea scrolls vertically too.
+                  const { scrollLeft, scrollTop } = e.currentTarget;
                   const layer = highlightRef.current;
-                  if (layer) layer.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`;
+                  if (layer) layer.style.transform = `translate(${-scrollLeft}px, ${-scrollTop}px)`;
+                  const gutter = gutterRef.current;
+                  if (gutter) gutter.style.transform = `translateY(${-scrollTop}px)`;
                 }}
                 rows={lineCount}
                 spellCheck={false}

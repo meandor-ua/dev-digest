@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractMarkdownFiles, MAX_ENTRY_BYTES, type UploadedFile } from "./file-extractor";
+import { extractMarkdownFiles, ExtractError, MAX_ENTRY_BYTES, type UploadedFile } from "./file-extractor";
 
 interface ZipEntry {
   path: string;
@@ -170,7 +170,11 @@ describe("extractMarkdownFiles", () => {
 
   it("stops inflating a zip bomb that lies about its size", async () => {
     const bomb = { path: "bomb.md", content: "a".repeat(MAX_ENTRY_BYTES * 4), deflate: true, declaredSize: 10 };
-    await expect(extractMarkdownFiles(await zipUpload([bomb]))).rejects.toThrow(/256 KB/);
+    // The cap is recognised by its typed code, not by matching the message text.
+    await expect(extractMarkdownFiles(await zipUpload([bomb]))).rejects.toMatchObject({
+      code: "entryTooLarge",
+      params: { name: "bomb.md" },
+    });
   });
 
   it("rejects Markdown with NUL bytes", async () => {
@@ -187,5 +191,18 @@ describe("extractMarkdownFiles", () => {
 
   it("errors on a non-zip payload with a .zip name", async () => {
     await expect(extractMarkdownFiles(upload("fake.zip", "not a zip"))).rejects.toThrow(/Not a valid/);
+  });
+
+  it("throws typed ExtractErrors with a code the UI can translate", async () => {
+    const cases: Array<[Promise<unknown>, string]> = [
+      [extractMarkdownFiles(upload("run.sh", "x")), "unsupportedType"],
+      [extractMarkdownFiles(upload("fake.zip", "not a zip")), "invalidZip"],
+      [extractMarkdownFiles(await zipUpload([{ path: "run.sh", content: "x" }])), "noMarkdown"],
+    ];
+    for (const [p, code] of cases) {
+      const err = await p.catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ExtractError);
+      expect((err as ExtractError).code).toBe(code);
+    }
   });
 });

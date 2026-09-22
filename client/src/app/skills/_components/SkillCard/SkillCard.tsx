@@ -90,7 +90,7 @@ export function SkillCard({
       ) : null}
 
       <div style={s.metaRow}>
-        <span style={s.typeBadge(color)}>{skill.type}</span>
+        <span style={s.typeBadge(color)}>{t(`listItem.type.${skill.type}`)}</span>
         <span style={s.sourceBadge}>
           <SourceIcon size={11} />
           {sourceLabel}

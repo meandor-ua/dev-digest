@@ -1,9 +1,11 @@
 /* Editable fields of a skill and the rebase rule that keeps the Config form
-   in step with the server without clobbering the user's unsaved edits. */
-import React from "react";
+   in step with the server without clobbering the user's unsaved edits.
+   The generic machinery lives in `@/lib/draft` (shared with the agent editor). */
 import type { Skill } from "@devdigest/shared";
+import * as draft from "@/lib/draft";
 
 export type SkillDraft = Pick<Skill, "name" | "description" | "type" | "body" | "enabled">;
+export type SkillDraftState = draft.DraftState<SkillDraft>;
 
 const FIELDS = ["name", "description", "type", "body", "enabled"] as const;
 
@@ -15,55 +17,17 @@ export const toDraft = (skill: Skill): SkillDraft => ({
   enabled: skill.enabled,
 });
 
-export const sameDraft = (a: SkillDraft, b: SkillDraft) => FIELDS.every((k) => a[k] === b[k]);
+export const sameDraft = (a: SkillDraft, b: SkillDraft) => draft.sameDraft(FIELDS, a, b);
 
-/**
- * Three-way merge after the server copy changed (a restore, a toggle in the
- * list, a save): take the server's value for every field the user hasn't
- * touched since `base`, keep the user's value for the ones they have.
- */
-export function rebaseDraft(draft: SkillDraft, base: SkillDraft, server: SkillDraft): SkillDraft {
-  const next = { ...draft };
-  for (const k of FIELDS) {
-    if (draft[k] === base[k]) (next as Record<string, unknown>)[k] = server[k];
-  }
-  return next;
-}
+export const rebaseDraft = (d: SkillDraft, base: SkillDraft, server: SkillDraft): SkillDraft =>
+  draft.rebaseDraft(FIELDS, d, base, server);
 
-/** Only the fields that differ from the server — a save never re-sends stale values. */
-export function draftPatch(draft: SkillDraft, server: SkillDraft): Partial<SkillDraft> {
-  const patch: Partial<SkillDraft> = {};
-  for (const k of FIELDS) {
-    if (draft[k] !== server[k]) (patch as Record<string, unknown>)[k] = draft[k];
-  }
-  return patch;
-}
-
-export interface SkillDraftState {
-  draft: SkillDraft;
-  setDraft: React.Dispatch<React.SetStateAction<SkillDraft>>;
-  server: SkillDraft;
-  dirty: boolean;
-  /** Drop unsaved edits — back to the saved copy. */
-  reset: () => void;
-}
+export const draftPatch = (d: SkillDraft, server: SkillDraft): Partial<SkillDraft> =>
+  draft.draftPatch(FIELDS, d, server);
 
 /**
  * The editor's unsaved form state, owned above the tabs so Config edits it and
- * Preview renders it. Resets on a different skill; rebases (see rebaseDraft)
- * when the same skill changes on the server.
+ * Preview renders it. Resets on a different skill; rebases when the same skill
+ * changes on the server.
  */
-export function useSkillDraft(skill: Skill): SkillDraftState {
-  const server = toDraft(skill);
-  const [draft, setDraft] = React.useState<SkillDraft>(server);
-  // The server copy the draft was last reconciled with.
-  const [base, setBase] = React.useState<{ id: string; draft: SkillDraft }>({ id: skill.id, draft: server });
-  if (base.id !== skill.id) {
-    setBase({ id: skill.id, draft: server });
-    setDraft(server);
-  } else if (!sameDraft(base.draft, server)) {
-    setBase({ id: skill.id, draft: server });
-    setDraft((d) => rebaseDraft(d, base.draft, server));
-  }
-  return { draft, setDraft, server, dirty: !sameDraft(draft, server), reset: () => setDraft(server) };
-}
+export const useSkillDraft = (skill: Skill): SkillDraftState => draft.useDraft(skill.id, toDraft(skill), FIELDS);

@@ -1,8 +1,8 @@
 {
   "card": {
     "noDescription": "No description",
-    "skillCount": "{count} skills",
-    "runs": "{count} runs",
+    "skillCount": "{count, plural, one {# skill} other {# skills}}",
+    "runs": "{count, plural, one {# run} other {# runs}}",
     "scorePct": "{score}%",
     "avgCost": "{cost} avg",
     "noValue": "—"
@@ -105,7 +105,9 @@
     "attachDisabledHint": "disabled",
     "globallyDisabled": "Disabled globally — won’t be injected until enabled",
     "detach": "Remove from this agent",
-    "dragHandle": "Drag to reorder"
+    "dragHandle": "Drag to reorder {name}",
+    "filterLabel": "Filter linked skills",
+    "toggleSkill": "Enable {name} for this agent"
   },
   "empty": {
     "evalsTitle": "No evals yet",
@@ -120,6 +122,7 @@
     "avgCost": "Avg cost / run",
     "avgDuration": "Avg duration",
     "avgScore": "Avg score",
+    "costTrend": "{delta} vs. earlier",
     "mostUsedSkills": "Most-used skills",
     "mostPulledMemory": "Most-pulled memory",
     "mostPulledMemoryEmpty": "Memory pulls aren’t recorded per run yet.",

@@ -60,6 +60,46 @@ function DropdownItem({ it, onClose }: { it: DropdownItemDef; onClose: () => voi
   );
 }
 
+/** Gap between trigger and menu, and the minimum clearance kept from the viewport edge. */
+const MENU_GAP = 6;
+const VIEWPORT_MARGIN = 8;
+/** Below this much room under the trigger, open upward if there is more room above. */
+const MIN_COMFORTABLE_HEIGHT = 160;
+
+export interface PortalPos {
+  top?: number;
+  bottom?: number;
+  left: number;
+  maxHeight: number;
+}
+
+/**
+ * Where a portaled (`position: fixed`) menu goes: below the trigger, or above
+ * it when there's clearly more room there, with its height capped so the whole
+ * menu stays inside the viewport. It must fit: reaching an item that hangs
+ * off-screen means scrolling the page, and any scroll outside the menu closes a
+ * portaled menu, so the item could never be clicked.
+ */
+export function portalPosition(
+  r: Pick<DOMRect, "top" | "bottom" | "left" | "right">,
+  viewportHeight: number,
+  align: "left" | "right",
+  width: number,
+  maxHeight: number,
+): PortalPos {
+  const left = align === "right" ? r.right - width : r.left;
+  const below = viewportHeight - r.bottom - MENU_GAP - VIEWPORT_MARGIN;
+  const above = r.top - MENU_GAP - VIEWPORT_MARGIN;
+  if (below >= Math.min(maxHeight, MIN_COMFORTABLE_HEIGHT) || below >= above) {
+    return { top: r.bottom + MENU_GAP, left, maxHeight: Math.max(0, Math.min(maxHeight, below)) };
+  }
+  return {
+    bottom: viewportHeight - r.top + MENU_GAP,
+    left,
+    maxHeight: Math.max(0, Math.min(maxHeight, above)),
+  };
+}
+
 export function Dropdown({
   trigger,
   items,
@@ -85,7 +125,7 @@ export function Dropdown({
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
   const menuRef = React.useRef<HTMLDivElement>(null);
-  const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = React.useState<PortalPos | null>(null);
 
   // Click-outside must check BOTH the trigger AND the menu: once the menu is
   // portaled it is no longer a DOM descendant of `ref`, so a `mousedown` on a
@@ -133,8 +173,7 @@ export function Dropdown({
   const toggle = () => {
     const next = !open;
     if (next && portal && ref.current) {
-      const r = ref.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 6, left: align === "right" ? r.right - width : r.left });
+      setPos(portalPosition(ref.current.getBoundingClientRect(), window.innerHeight, align, width, maxHeight));
     }
     setOpen(next);
   };
@@ -152,7 +191,7 @@ export function Dropdown({
         portal
           ? {
               position: "fixed",
-              top: pos?.top ?? 0,
+              ...(pos?.bottom !== undefined ? { bottom: pos.bottom } : { top: pos?.top ?? 0 }),
               left: pos?.left ?? 0,
               width,
               background: "var(--bg-elevated)",
@@ -160,7 +199,7 @@ export function Dropdown({
               borderRadius: 9,
               boxShadow: "var(--shadow-modal)",
               padding: 6,
-              maxHeight,
+              maxHeight: pos?.maxHeight ?? maxHeight,
               overflowY: "auto",
               zIndex: 40,
               animation: "ddpop .12s ease",

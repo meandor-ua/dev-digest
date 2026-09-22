@@ -7,7 +7,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { GitClient, RepoRef } from '@devdigest/shared';
-import { GitProjectDocsAdapter } from '../src/adapters/project-docs/index.js';
+import { GitProjectDocsAdapter, MAX_DOC_BYTES } from '../src/adapters/project-docs/index.js';
 import { ValidationError } from '../src/platform/errors.js';
 
 async function writeFileAt(root: string, rel: string, contents: string): Promise<void> {
@@ -128,6 +128,17 @@ describe('GitProjectDocsAdapter', () => {
     ).toEqual([
       { path: 'specs/b.md', text: 'B' },
       { path: 'docs/a.md', text: 'A' },
+    ]);
+  });
+
+  it('enforces the per-doc byte cap: read() rejects, readMany() skips', async () => {
+    await writeFileAt(root, 'docs/small.md', 'ok');
+    await writeFileAt(root, 'docs/huge.md', 'x'.repeat(MAX_DOC_BYTES + 1));
+    const adapter = new GitProjectDocsAdapter(stubGitClient(root));
+
+    await expect(adapter.read(repo, 'docs/huge.md')).rejects.toThrow(ValidationError);
+    expect(await adapter.readMany(repo, ['docs/huge.md', 'docs/small.md'])).toEqual([
+      { path: 'docs/small.md', text: 'ok' },
     ]);
   });
 });

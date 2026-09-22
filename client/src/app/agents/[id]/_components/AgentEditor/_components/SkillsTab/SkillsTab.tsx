@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import {
   DndContext,
   closestCenter,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -17,6 +18,7 @@ import {
 import {
   SortableContext,
   arrayMove,
+  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -36,7 +38,11 @@ export function SkillsTab({ agentId }: { agentId: string }) {
   const setSkills = useSetAgentSkills(agentId);
   const [filter, setFilter] = React.useState("");
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  // Keyboard too: the handle is focusable and announces "press space to pick up".
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const ordered = skills ?? [];
   const filterActive = filter.trim().length > 0;
@@ -143,6 +149,7 @@ export function SkillsTab({ agentId }: { agentId: string }) {
             value={filter}
             onChange={setFilter}
             placeholder={t("skills.filterPlaceholder")}
+            aria-label={t("skills.filterLabel")}
             onKeyDown={onFilterKeyDown}
           />
           <span style={s.hint}>{filterActive ? t("skills.filterActiveHint") : t("skills.orderHint")}</span>
@@ -203,12 +210,17 @@ function SkillRow({
     <div ref={setNodeRef} style={style}>
       <span
         style={s.handle(!draggable)}
-        aria-label={t("skills.dragHandle")}
-        {...(draggable ? { ...attributes, ...listeners } : {})}
+        {...(draggable
+          ? { ...attributes, ...listeners, "aria-label": t("skills.dragHandle", { name: skill.name }) }
+          : { "aria-hidden": true })}
       >
         <Icon.Menu size={15} />
       </span>
-      <Checkbox checked={skill.enabled} onChange={onToggle} />
+      <Checkbox
+        checked={skill.enabled}
+        onChange={onToggle}
+        aria-label={t("skills.toggleSkill", { name: skill.name })}
+      />
       <div style={s.nameCol}>
         <span style={s.name(skill.enabled)}>{skill.name}</span>
         {isGloballyDisabled && <div style={s.disabledHint}>{t("skills.globallyDisabled")}</div>}

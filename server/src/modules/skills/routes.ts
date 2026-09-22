@@ -39,7 +39,7 @@ const UpdateSkillBody = z.object({
 
 const ImportSkillBody = z.object({
   url: z.string().url(),
-  name: z.string().optional(),
+  name: z.string().min(1).max(SKILL_NAME_MAX).optional(),
   type: SkillType.optional(),
 });
 
@@ -48,7 +48,7 @@ const ImportPreviewBody = z.object({
 });
 
 const RestoreSkillBody = z.object({
-  version: z.coerce.number().int().positive(),
+  version: z.number().int().positive(),
   message: z.string().max(SKILL_MESSAGE_MAX).optional(),
 });
 
@@ -56,18 +56,25 @@ const SetContextBody = z.object({
   paths: z.array(z.string().min(1).max(SKILL_CONTEXT_PATH_MAX)).max(SKILL_CONTEXT_MAX_DOCS),
 });
 
+// uuid-validated at the edge: a malformed id is a clean 422, not a Postgres 22P02 → 500.
 const RepoIdQuery = z.object({
-  repo_id: z.string(),
+  repo_id: z.string().uuid(),
 });
 
 const ContextDocQuery = z.object({
-  repo_id: z.string(),
+  repo_id: z.string().uuid(),
   path: z.string().max(SKILL_CONTEXT_PATH_MAX),
 });
 
 export default async function skillsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
-  const service = new SkillsService(app.container);
+  const { container } = app;
+  const service = new SkillsService({
+    skills: container.skillsRepo,
+    repos: container.reposRepo,
+    projectDocs: container.projectDocs,
+    remoteText: container.remoteText,
+  });
 
   app.get('/skills', async (req) => {
     const { workspaceId } = await getContext(app.container, req);

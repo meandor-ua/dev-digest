@@ -16,12 +16,12 @@ import {
 } from "recharts";
 import { MetricCard, BarRow, Donut, Button, EmptyState, Skeleton } from "@devdigest/ui";
 import type { AgentRunHistoryItem } from "@devdigest/shared";
-import { useAgentStats } from "../../../../../../../lib/hooks/agents";
-import { formatCost } from "../../../../../../../lib/cost";
-import RunTraceDrawer from "../../../../../../../components/run-trace-drawer";
+import { useAgentStats } from "@/lib/hooks/agents";
+import { formatCost } from "@/lib/cost";
+import RunTraceDrawer from "@/components/run-trace-drawer";
 import { SEVERITY_BARS } from "./constants";
 import { formatDuration } from "./helpers";
-import { categoryDonutSegments } from "../../../../../../../lib/category-chart";
+import { categoryDonutSegments } from "@/lib/category-chart";
 import { s } from "./styles";
 
 interface OpenTrace {
@@ -59,7 +59,7 @@ export function StatsTab({
   const trendText =
     costTrend == null
       ? t("card.noValue")
-      : `${costTrend > 0 ? "+" : ""}${formatCost(costTrend)} vs. earlier`;
+      : t("stats.costTrend", { delta: `${costTrend > 0 ? "+" : ""}${formatCost(costTrend)}` });
 
   const maxSkill = Math.max(1, ...stats.most_used_skills.map((p) => p.value));
   // All-zero weeks mean the agent produced no findings in the window — show the

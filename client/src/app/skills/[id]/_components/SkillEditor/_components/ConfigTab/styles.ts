@@ -64,6 +64,7 @@ export const s = {
   editorBody: {
     display: "flex",
     minHeight: 320,
+    overflow: "hidden", // clips the gutter when it follows the textarea's scrollTop
     background: "var(--bg-base)",
     fontFamily: "var(--font-mono)",
     fontSize: 13,

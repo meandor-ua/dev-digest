@@ -144,7 +144,9 @@
     "emptyTitle": "No matching skills",
     "emptyBody": "Try another search term",
     "emptyNoSkills": "No skills yet",
-    "emptyNoSkillsBody": "Create or import a skill to get started."
+    "emptyNoSkillsBody": "Create or import a skill to get started.",
+    "discardConfirm": "You have unsaved changes to this skill. Discard them?",
+    "toggleError": "Failed to update skill"
   },
   "editor": {
     "tabs": {
@@ -182,7 +184,9 @@
         "createFailed": "Failed to create skill",
         "importFailed": "Failed to import skill from URL"
       },
-      "success": "Created skill \"{name}\""
+      "success": "Created skill \"{name}\"",
+      "importedNotice": "This content was imported — it will be saved disabled until you vet and enable it.",
+      "startBlank": "Start blank"
     },
     "file": {
       "dropzone": "Click or drag .md or .zip archive here",
@@ -190,6 +194,17 @@
       "hint": "Extracts only markdown (.md) rule blocks. Discards all executable scripts safely.",
       "success": "Extracted {count} markdown file(s)",
       "extractFailed": "Failed to extract markdown from file",
+      "importedDescription": "Imported from {filename}",
+      "errors": {
+        "uploadTooLarge": "File exceeds the 5 MB upload limit.",
+        "entryTooLarge": "\"{name}\" exceeds the 256 KB limit.",
+        "unsupportedType": "Unsupported file type. Upload a .md file or a .zip archive.",
+        "binary": "\"{name}\" is binary, not Markdown.",
+        "invalidZip": "Not a valid .zip archive.",
+        "corruptZip": "Corrupt .zip archive.",
+        "tooManyEntries": "Archive has more than {max} Markdown files.",
+        "noMarkdown": "No Markdown (.md) files found in the archive."
+      },
       "createSuccess": "Imported \"{name}\" — disabled until you vet and enable it."
     },
     "url": {

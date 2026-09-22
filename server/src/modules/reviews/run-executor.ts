@@ -4,11 +4,20 @@ import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
-import type { LinkedSkillRow } from '../agents/repository.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
 import { skillBlock, skillLogLines, taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
+
+/**
+ * The slice of an agent↔skill link the review needs (prompt block + context
+ * lookup). Structural on purpose — `agentsRepo.linkedSkills()` satisfies it
+ * without this module importing the agents module's repository or row types.
+ */
+interface ActiveSkillLink {
+  enabled: boolean;
+  skill: { id: string; name: string; type: string; source: string; body: string; enabled: boolean };
+}
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -408,7 +417,7 @@ export class ReviewRunExecutor {
    * was configured) is silently skipped rather than failing the run.
    */
   private async buildContextDocs(
-    activeLinks: LinkedSkillRow[],
+    activeLinks: ActiveSkillLink[],
     repo: typeof schema.repos.$inferSelect,
     runLog: RunLogger,
   ): Promise<string[] | undefined> {
@@ -429,6 +438,11 @@ export class ReviewRunExecutor {
 
     const docs = await this.container.projectDocs.readMany({ owner: repo.owner, name: repo.name }, paths);
     const contents = docs.map((d) => `### ${d.path}\n${d.text}`);
+    const read = new Set(docs.map((d) => d.path));
+    const skipped = paths.filter((p) => !read.has(p));
+    if (skipped.length > 0) {
+      runLog.info(`Context: skipped ${skipped.length} doc(s) (missing or over size cap): ${skipped.join(', ')}`);
+    }
     if (contents.length === 0) return undefined;
     runLog.info(`Context: ${contents.length} project doc(s) attached`);
     return contents;

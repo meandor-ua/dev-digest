@@ -39,6 +39,17 @@ the package's `insights/INSIGHTS.md`.
   body showed every change since that version, and gave the Current row
   nothing to diff. Evidence: `.../VersionsTab/VersionsTab.tsx` (`prev`).
 
+- **2026-09-22** — Kept-mounted editor forms use the generic
+  `useDraft(id, server, FIELDS)` from `client/src/lib/draft.ts` (three-way
+  rebase plus a `draftPatch` of only the changed fields). Both the skill
+  editor's `draft.ts` and the agent `ConfigTab` are thin wrappers over it. The
+  skill page also wraps the column and editor in `UnsavedChangesProvider`
+  (`client/src/lib/unsaved-changes.tsx`): the editor reports
+  `useReportUnsaved(dirty)`, and `SkillsColumn` calls `confirmDiscard()` before
+  `router.push`. Imported-skill provenance in `CreateSkillModal` is an `origin`
+  state set by the import paths, never derived from the open tab. Evidence:
+  `client/src/lib/draft.ts`, `client/src/app/skills/_components/CreateSkillModal/CreateSkillModal.tsx:55`.
+
 ## What Doesn't Work
 
 - **2026-09-22** — ReactMarkdown lists render without bullets here: the app's

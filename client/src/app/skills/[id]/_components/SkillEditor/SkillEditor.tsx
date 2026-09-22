@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Tabs } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
 import { ConfigTab, useSkillDraft } from "./_components/ConfigTab";
+import { useReportUnsaved } from "@/lib/unsaved-changes";
 import { PreviewTab } from "./_components/PreviewTab";
 import { StatsTab } from "./_components/StatsTab";
 import { VersionsTab } from "./_components/VersionsTab";
@@ -25,6 +26,7 @@ export function SkillEditor({
   const t = useTranslations("skills");
   // Owned here, not in ConfigTab, so Preview renders the unsaved body too.
   const draftState = useSkillDraft(skill);
+  useReportUnsaved(draftState.dirty);
   const tabs = SKILL_TABS.map((tb) => ({ key: tb.key, label: t(`editor.tabs.${tb.key}`) }));
 
   return (

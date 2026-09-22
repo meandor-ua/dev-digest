@@ -14,7 +14,7 @@
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { Dropdown } from "./Dropdown";
+import { Dropdown, portalPosition } from "./Dropdown";
 import type { DropdownItemDef } from "./types";
 
 afterEach(cleanup);
@@ -130,5 +130,46 @@ describe("Dropdown — click-outside checks BOTH refs", () => {
     open(true);
     fireEvent.click(screen.getByText("Open"));
     expect(screen.queryByText("Run all")).not.toBeInTheDocument();
+  });
+});
+
+describe("Dropdown — a portaled menu always fits the viewport", () => {
+  // Regression (e2e flow 09): the menu hung past the viewport bottom, so reaching
+  // its last item meant scrolling the page — which closes a portaled menu first.
+  const rect = (top: number, bottom: number) => ({ top, bottom, left: 100, right: 300 });
+
+  it("opens below with the full cap when there is room", () => {
+    expect(portalPosition(rect(100, 130), 800, "left", 230, 320)).toEqual({ top: 136, left: 100, maxHeight: 320 });
+  });
+
+  it("shrinks the cap to the space left below the trigger", () => {
+    // 633px viewport, trigger bottom at 350 → 633 - 350 - 6 - 8 = 269.
+    expect(portalPosition(rect(320, 350), 633, "right", 230, 320)).toEqual({ top: 356, left: 70, maxHeight: 269 });
+  });
+
+  it("flips above when the room below is cramped and there is more above", () => {
+    // trigger near the bottom: 60px below vs 594px above.
+    expect(portalPosition(rect(600, 626), 700, "left", 230, 320)).toEqual({
+      bottom: 106,
+      left: 100,
+      maxHeight: 320,
+    });
+  });
+
+  it("applies the measured cap to the rendered menu", () => {
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      top: 600, bottom: 626, left: 0, right: 100, width: 100, height: 26, x: 0, y: 600, toJSON: () => ({}),
+    } as DOMRect);
+    const innerHeight = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 700 });
+    try {
+      open(true);
+      const menu = screen.getByTestId("dropdown-menu");
+      expect(menu.style.bottom).toBe("106px");
+      expect(menu.style.top).toBe("");
+    } finally {
+      spy.mockRestore();
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: innerHeight });
+    }
   });
 });

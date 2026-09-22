@@ -1,34 +1,12 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { SkillRow, SkillVersionRow, SkillContextDocRow } from '../../db/rows.js';
-import type { SkillStats, SkillWithStats, SkillType, SkillSource } from '@devdigest/shared';
-import { toSkillDto } from './helpers.js';
+import type { SkillRow } from '../../db/rows.js';
+import type { Skill, SkillStats, SkillVersion, SkillWithStats } from '@devdigest/shared';
+import { toSkillDto, toSkillVersionDto } from './helpers.js';
+import type { InsertSkill, SkillsStore, UpdateSkill } from './ports.js';
 
-export type { SkillRow, SkillVersionRow, SkillContextDocRow };
-
-export interface InsertSkill {
-  workspaceId: string;
-  name: string;
-  description?: string;
-  type: SkillType;
-  source?: SkillSource;
-  body: string;
-  enabled?: boolean;
-  evidenceFiles?: string[] | null;
-}
-
-export interface UpdateSkill {
-  name?: string;
-  description?: string;
-  type?: SkillType;
-  source?: SkillSource;
-  body?: string;
-  enabled?: boolean;
-  evidenceFiles?: string[] | null;
-  /** Change note for the version snapshot — only used when `body` actually changes. */
-  message?: string | null;
-}
+export type { InsertSkill, UpdateSkill };
 
 interface AgentUsage {
   /** Completed runs across the whole workspace (the pull-frequency denominator). */
@@ -59,10 +37,11 @@ function usageRates(usage: AgentUsage, enabledAgentIds: string[]) {
   };
 }
 
-export class SkillsRepository {
+/** Drizzle-backed `SkillsStore`: rows stay in here, DTOs go out (onion R5). */
+export class SkillsRepository implements SkillsStore {
   constructor(private db: Db) {}
 
-  async list(workspaceId: string): Promise<SkillRow[]> {
+  private async list(workspaceId: string): Promise<SkillRow[]> {
     return this.db
       .select()
       .from(t.skills)
@@ -138,7 +117,12 @@ export class SkillsRepository {
     return { totalRuns, runsByAgent, findingsByAgent };
   }
 
-  async getById(workspaceId: string, id: string): Promise<SkillRow | undefined> {
+  async getById(workspaceId: string, id: string): Promise<Skill | undefined> {
+    const row = await this.getRow(workspaceId, id);
+    return row ? toSkillDto(row) : undefined;
+  }
+
+  private async getRow(workspaceId: string, id: string): Promise<SkillRow | undefined> {
     const [row] = await this.db
       .select()
       .from(t.skills)
@@ -146,79 +130,79 @@ export class SkillsRepository {
     return row;
   }
 
-  async insert(values: InsertSkill): Promise<SkillRow> {
-    const [row] = await this.db
-      .insert(t.skills)
-      .values({
-        workspaceId: values.workspaceId,
-        name: values.name,
-        description: values.description ?? '',
-        type: values.type,
-        source: values.source ?? 'manual',
-        body: values.body,
-        enabled: values.enabled ?? true,
-        version: 1,
-        evidenceFiles: values.evidenceFiles ?? null,
-      })
-      .returning();
+  async insert(values: InsertSkill): Promise<Skill> {
+    // The skill row and its v1 snapshot land together or not at all.
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(t.skills)
+        .values({
+          workspaceId: values.workspaceId,
+          name: values.name,
+          description: values.description ?? '',
+          type: values.type,
+          source: values.source ?? 'manual',
+          body: values.body,
+          enabled: values.enabled ?? true,
+          version: 1,
+          evidenceFiles: values.evidenceFiles ?? null,
+        })
+        .returning();
 
-    // Snapshot version 1
-    await this.db
-      .insert(t.skillVersions)
-      .values({
-        skillId: row!.id,
-        version: 1,
-        body: row!.body,
-      })
-      .onConflictDoNothing();
-
-    return row!;
+      await tx.insert(t.skillVersions).values({ skillId: row!.id, version: 1, body: row!.body });
+      return toSkillDto(row!);
+    });
   }
 
   async update(
     workspaceId: string,
     id: string,
     patch: UpdateSkill,
-  ): Promise<SkillRow | undefined> {
-    const existing = await this.getById(workspaceId, id);
-    if (!existing) return undefined;
-
+  ): Promise<Skill | undefined> {
     // `message` targets skill_versions, not a `skills` column — kept out of the
     // "is this patch empty" check below so a message-only patch (no other field)
     // doesn't build an UPDATE with an empty SET (invalid SQL).
     const { message, ...columnPatch } = patch;
-    const bodyChanged = columnPatch.body !== undefined && columnPatch.body !== existing.body;
-    const nextVersion = bodyChanged ? existing.version + 1 : existing.version;
-    if (Object.values(columnPatch).every((v) => v === undefined)) return existing;
 
-    const [row] = await this.db
-      .update(t.skills)
-      .set({
-        ...(columnPatch.name !== undefined ? { name: columnPatch.name } : {}),
-        ...(columnPatch.description !== undefined ? { description: columnPatch.description } : {}),
-        ...(columnPatch.type !== undefined ? { type: columnPatch.type } : {}),
-        ...(columnPatch.source !== undefined ? { source: columnPatch.source } : {}),
-        ...(columnPatch.body !== undefined ? { body: columnPatch.body } : {}),
-        ...(columnPatch.enabled !== undefined ? { enabled: columnPatch.enabled } : {}),
-        ...(columnPatch.evidenceFiles !== undefined ? { evidenceFiles: columnPatch.evidenceFiles } : {}),
-        ...(bodyChanged ? { version: nextVersion } : {}),
-      })
-      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
-      .returning();
+    // Read-lock-write in one transaction: `FOR UPDATE` serialises concurrent
+    // edits of the same skill, so two body changes get N+1 and N+2 instead of
+    // both computing N+1 and one snapshot silently vanishing.
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(t.skills)
+        .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
+        .for('update');
+      if (!existing) return undefined;
 
-    if (bodyChanged && row) {
-      await this.db
-        .insert(t.skillVersions)
-        .values({
+      const bodyChanged = columnPatch.body !== undefined && columnPatch.body !== existing.body;
+      const nextVersion = bodyChanged ? existing.version + 1 : existing.version;
+      if (Object.values(columnPatch).every((v) => v === undefined)) return toSkillDto(existing);
+
+      const [row] = await tx
+        .update(t.skills)
+        .set({
+          ...(columnPatch.name !== undefined ? { name: columnPatch.name } : {}),
+          ...(columnPatch.description !== undefined ? { description: columnPatch.description } : {}),
+          ...(columnPatch.type !== undefined ? { type: columnPatch.type } : {}),
+          ...(columnPatch.source !== undefined ? { source: columnPatch.source } : {}),
+          ...(columnPatch.body !== undefined ? { body: columnPatch.body } : {}),
+          ...(columnPatch.enabled !== undefined ? { enabled: columnPatch.enabled } : {}),
+          ...(columnPatch.evidenceFiles !== undefined ? { evidenceFiles: columnPatch.evidenceFiles } : {}),
+          ...(bodyChanged ? { version: nextVersion } : {}),
+        })
+        .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
+        .returning();
+
+      if (bodyChanged && row) {
+        await tx.insert(t.skillVersions).values({
           skillId: row.id,
           version: nextVersion,
           body: row.body,
           message: message ?? null,
-        })
-        .onConflictDoNothing();
-    }
-
-    return row;
+        });
+      }
+      return row ? toSkillDto(row) : undefined;
+    });
   }
 
   async deleteById(workspaceId: string, id: string): Promise<boolean> {
@@ -229,15 +213,16 @@ export class SkillsRepository {
     return rows.length > 0;
   }
 
-  async listVersions(workspaceId: string, id: string): Promise<SkillVersionRow[] | undefined> {
-    const skill = await this.getById(workspaceId, id);
+  async listVersions(workspaceId: string, id: string): Promise<SkillVersion[] | undefined> {
+    const skill = await this.getRow(workspaceId, id);
     if (!skill) return undefined;
 
-    return this.db
+    const rows = await this.db
       .select()
       .from(t.skillVersions)
       .where(eq(t.skillVersions.skillId, id))
       .orderBy(desc(t.skillVersions.version));
+    return rows.map(toSkillVersionDto);
   }
 
   async restore(
@@ -245,40 +230,39 @@ export class SkillsRepository {
     id: string,
     version: number,
     message?: string | null,
-  ): Promise<SkillRow | undefined> {
-    const skill = await this.getById(workspaceId, id);
-    if (!skill) return undefined;
+  ): Promise<Skill | undefined> {
+    // Same locking as `update`: a restore racing an edit must not reuse its version number.
+    return this.db.transaction(async (tx) => {
+      const [skill] = await tx
+        .select()
+        .from(t.skills)
+        .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
+        .for('update');
+      if (!skill) return undefined;
 
-    const [targetVersion] = await this.db
-      .select()
-      .from(t.skillVersions)
-      .where(and(eq(t.skillVersions.skillId, id), eq(t.skillVersions.version, version)));
+      const [targetVersion] = await tx
+        .select()
+        .from(t.skillVersions)
+        .where(and(eq(t.skillVersions.skillId, id), eq(t.skillVersions.version, version)));
+      if (!targetVersion) return undefined;
 
-    if (!targetVersion) return undefined;
+      const nextVersion = skill.version + 1;
+      const [row] = await tx
+        .update(t.skills)
+        .set({ body: targetVersion.body, version: nextVersion })
+        .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
+        .returning();
 
-    const nextVersion = skill.version + 1;
-    const [row] = await this.db
-      .update(t.skills)
-      .set({
-        body: targetVersion.body,
-        version: nextVersion,
-      })
-      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
-      .returning();
-
-    if (row) {
-      await this.db
-        .insert(t.skillVersions)
-        .values({
+      if (row) {
+        await tx.insert(t.skillVersions).values({
           skillId: row.id,
           version: nextVersion,
           body: row.body,
           message: message ?? `Restored from v${version}`,
-        })
-        .onConflictDoNothing();
-    }
-
-    return row;
+        });
+      }
+      return row ? toSkillDto(row) : undefined;
+    });
   }
 
   // ---- Context docs (skill_context_docs) -----------------------------------
@@ -308,7 +292,7 @@ export class SkillsRepository {
   }
 
   async stats(workspaceId: string, id: string): Promise<SkillStats | undefined> {
-    const skill = await this.getById(workspaceId, id);
+    const skill = await this.getRow(workspaceId, id);
     if (!skill) return undefined;
 
     // 1. Linked agents

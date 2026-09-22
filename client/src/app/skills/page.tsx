@@ -3,10 +3,10 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { AppShell } from "../../components/app-shell";
+import { AppShell } from "@/components/app-shell";
 import { SkillsColumn } from "./_components/SkillsColumn";
 import { EmptyState, Skeleton } from "@devdigest/ui";
-import { useSkills } from "../../lib/hooks/skills";
+import { useSkills } from "@/lib/hooks/skills";
 import { CreateSkillModal } from "./_components/CreateSkillModal";
 
 export default function SkillsPage() {

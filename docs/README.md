@@ -67,7 +67,10 @@ copy of its text. Two reasons this is deliberate, not an oversight:
    disagree, with no mechanism to reconcile them.
 
 The cost of this choice: a doc that isn't in the repo clone (never cloned,
-or since renamed/deleted) can't be previewed or injected. The review-time
+or since renamed/deleted) can't be previewed or injected. The clone's content
+is repo-controlled, so each doc is capped at 64 KB. Anything larger is refused
+by the preview and skipped (and logged) at review time, instead of blowing the
+model's context window. The review-time
 reader skips it without failing the run; the Context tab keeps the row as
 "not in this repo" so it can be unchecked; the eye preview
 (`GET /skills/context/doc`) answers 422 for a path the clone doesn't list. See

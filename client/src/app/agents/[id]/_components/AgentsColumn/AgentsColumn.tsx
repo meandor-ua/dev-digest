@@ -8,10 +8,9 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown } from "@devdigest/ui";
 import { AgentCard } from "../../../_components/AgentCard";
-import { CreateAgentModal } from "../../../_components/AgentsListView/_components/CreateAgentModal";
-import { TEMPLATES } from "../../../_components/AgentsListView/constants";
-import { useAgents, useUpdateAgent, useAgentCardStats } from "../../../../../lib/hooks/agents";
-import { useActiveRepo } from "../../../../../lib/repo-context";
+import { CreateAgentModal, TEMPLATES } from "../../../_components/CreateAgentModal";
+import { useAgents, useUpdateAgent, useAgentCardStats } from "@/lib/hooks/agents";
+import { useActiveRepo } from "@/lib/repo-context";
 import { s } from "./styles";
 
 export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string }) {

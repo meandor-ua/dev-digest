@@ -749,6 +749,14 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
       .map((c) => JSON.stringify((c.req as { messages: unknown }).messages))
       .join('\n');
     expect(prompt).not.toContain('## Project context');
+    // The gap is logged by path, never silent (also covers the 64 KB size cap,
+    // which reaches run-executor the same way: readMany just omits the doc).
+    const log = (await app.inject({ method: 'GET', url: `/runs/${runs[0]!.id}/trace` })).json().log as Array<{
+      msg: string;
+    }>;
+    expect(
+      log.some((l) => l.msg.includes('Context: skipped 1 doc(s)') && l.msg.includes('docs/gone.md')),
+    ).toBe(true);
 
     await app.close();
   });

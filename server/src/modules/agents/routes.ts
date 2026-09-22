@@ -64,10 +64,17 @@ const UpdateAgentBody = z.object({
  */
 const SetSkillsBody = z
   .object({
+    // Duplicate ids would violate agent_skills' (agent_id, skill_id) PK mid-replace.
     skills: z
       .array(z.object({ skill_id: z.string().uuid(), enabled: z.boolean().optional() }))
+      .refine((xs) => new Set(xs.map((x) => x.skill_id)).size === xs.length, {
+        message: 'Duplicate skill_id in skills',
+      })
       .optional(),
-    skill_ids: z.array(z.string().uuid()).optional(),
+    skill_ids: z
+      .array(z.string().uuid())
+      .refine((xs) => new Set(xs).size === xs.length, { message: 'Duplicate id in skill_ids' })
+      .optional(),
     skill_id: z.string().uuid().optional(),
     order: z.number().int().optional(),
   })

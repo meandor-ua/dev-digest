@@ -1,4 +1,3 @@
-import type { Container } from '../../platform/container.js';
 import type {
   Skill,
   SkillContext,
@@ -9,8 +8,8 @@ import type {
   SkillType,
   SkillSource,
 } from '@devdigest/shared';
-import type { InsertSkill, UpdateSkill, SkillsRepository } from './repository.js';
-import { toSkillDto, toSkillVersionDto, deriveSkillName } from './helpers.js';
+import type { InsertSkill, UpdateSkill, SkillsServiceDeps } from './ports.js';
+import { deriveSkillName } from './helpers.js';
 import { SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX } from './constants.js';
 import { NotFoundError, ValidationError } from '../../platform/errors.js';
 
@@ -36,10 +35,10 @@ export interface UpdateSkillDto {
 }
 
 export class SkillsService {
-  private repo: SkillsRepository;
+  constructor(private deps: SkillsServiceDeps) {}
 
-  constructor(private container: Container) {
-    this.repo = container.skillsRepo;
+  private get repo() {
+    return this.deps.skills;
   }
 
   async list(workspaceId: string): Promise<SkillWithStats[]> {
@@ -47,8 +46,7 @@ export class SkillsService {
   }
 
   async get(workspaceId: string, id: string): Promise<Skill | undefined> {
-    const row = await this.repo.getById(workspaceId, id);
-    return row ? toSkillDto(row) : undefined;
+    return this.repo.getById(workspaceId, id);
   }
 
   async create(workspaceId: string, input: CreateSkillDto): Promise<Skill> {
@@ -66,8 +64,7 @@ export class SkillsService {
       enabled,
       evidenceFiles: input.evidence_files,
     };
-    const row = await this.repo.insert(insertValues);
-    return toSkillDto(row);
+    return this.repo.insert(insertValues);
   }
 
   async update(
@@ -75,6 +72,15 @@ export class SkillsService {
     id: string,
     patch: UpdateSkillDto,
   ): Promise<Skill | undefined> {
+    // Provenance is one-way: an imported skill can be vetted (enabled) but never
+    // relabelled 'manual', which would hide its untrusted origin in the UI.
+    if (patch.source === 'manual') {
+      const existing = await this.repo.getById(workspaceId, id);
+      if (!existing) return undefined;
+      if (existing.source !== 'manual') {
+        throw new ValidationError('An imported skill cannot be relabelled as manual');
+      }
+    }
     const updateValues: UpdateSkill = {
       name: patch.name,
       description: patch.description,
@@ -85,8 +91,7 @@ export class SkillsService {
       evidenceFiles: patch.evidence_files,
       message: patch.message,
     };
-    const row = await this.repo.update(workspaceId, id, updateValues);
-    return row ? toSkillDto(row) : undefined;
+    return this.repo.update(workspaceId, id, updateValues);
   }
 
   async delete(workspaceId: string, id: string): Promise<boolean> {
@@ -94,8 +99,7 @@ export class SkillsService {
   }
 
   async listVersions(workspaceId: string, id: string): Promise<SkillVersion[] | undefined> {
-    const rows = await this.repo.listVersions(workspaceId, id);
-    return rows ? rows.map(toSkillVersionDto) : undefined;
+    return this.repo.listVersions(workspaceId, id);
   }
 
   async restore(
@@ -104,8 +108,7 @@ export class SkillsService {
     version: number,
     message?: string,
   ): Promise<Skill | undefined> {
-    const row = await this.repo.restore(workspaceId, id, version, message);
-    return row ? toSkillDto(row) : undefined;
+    return this.repo.restore(workspaceId, id, version, message);
   }
 
   async stats(workspaceId: string, id: string): Promise<SkillStats | undefined> {
@@ -118,7 +121,7 @@ export class SkillsService {
     name?: string,
     type?: SkillType,
   ): Promise<Skill> {
-    const { text: body, finalUrl } = await this.container.remoteText.fetchText(url);
+    const { text: body, finalUrl } = await this.deps.remoteText.fetchText(url);
 
     const derivedName = name ?? deriveSkillName(body, finalUrl);
 
@@ -142,7 +145,7 @@ export class SkillsService {
    * file import, so the user can edit the prefilled form before saving).
    */
   async previewImportFromUrl(url: string): Promise<SkillImportPreview> {
-    const { text: body, finalUrl } = await this.container.remoteText.fetchText(url);
+    const { text: body, finalUrl } = await this.deps.remoteText.fetchText(url);
     if (body.length > SKILL_BODY_MAX) {
       throw new ValidationError(`Skill body exceeds ${SKILL_BODY_MAX} characters`);
     }
@@ -158,11 +161,11 @@ export class SkillsService {
   ): Promise<SkillContext | undefined> {
     const skill = await this.repo.getById(workspaceId, id);
     if (!skill) return undefined;
-    const repoRow = await this.container.reposRepo.getById(workspaceId, repoId);
+    const repoRow = await this.deps.repos.getById(workspaceId, repoId);
     if (!repoRow) throw new NotFoundError('Repo not found');
 
     const [available, attached] = await Promise.all([
-      this.container.projectDocs.list({ owner: repoRow.owner, name: repoRow.name }),
+      this.deps.projectDocs.list({ owner: repoRow.owner, name: repoRow.name }),
       this.repo.listContextPaths(id),
     ]);
     return { available, attached };
@@ -179,8 +182,8 @@ export class SkillsService {
   }
 
   async readContextDoc(workspaceId: string, repoId: string, path: string): Promise<string> {
-    const repoRow = await this.container.reposRepo.getById(workspaceId, repoId);
+    const repoRow = await this.deps.repos.getById(workspaceId, repoId);
     if (!repoRow) throw new NotFoundError('Repo not found');
-    return this.container.projectDocs.read({ owner: repoRow.owner, name: repoRow.name }, path);
+    return this.deps.projectDocs.read({ owner: repoRow.owner, name: repoRow.name }, path);
   }
 }

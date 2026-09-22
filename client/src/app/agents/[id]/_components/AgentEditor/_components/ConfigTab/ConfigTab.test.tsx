@@ -3,16 +3,21 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { Agent } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/agents.json";
-import { ToastProvider } from "../../../../../../../lib/toast";
+import { ToastProvider } from "@/lib/toast";
 
-vi.mock("../../../../../../../lib/hooks/agents", () => ({
-  useUpdateAgent: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, data: undefined }),
+const { mutate } = vi.hoisted(() => ({ mutate: vi.fn() }));
+
+vi.mock("@/lib/hooks/agents", () => ({
+  useUpdateAgent: () => ({ mutate, isPending: false, isSuccess: false, data: undefined }),
   useProviderModels: () => ({ data: [{ id: "gpt-4.1", provider: "openai" }] }),
 }));
 
 import { ConfigTab } from "./ConfigTab";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 const AGENT: Agent = {
   id: "ag1",
@@ -29,14 +34,16 @@ const AGENT: Agent = {
   version: 1,
 };
 
-function renderTab() {
-  return render(
-    <NextIntlClientProvider locale="en" messages={{ agents: messages }}>
-      <ToastProvider>
-        <ConfigTab agent={AGENT} />
-      </ToastProvider>
-    </NextIntlClientProvider>,
-  );
+const wrap = (agent: Agent) => (
+  <NextIntlClientProvider locale="en" messages={{ agents: messages }}>
+    <ToastProvider>
+      <ConfigTab agent={agent} />
+    </ToastProvider>
+  </NextIntlClientProvider>
+);
+
+function renderTab(agent: Agent = AGENT) {
+  return render(wrap(agent));
 }
 
 describe("ConfigTab Cancel", () => {
@@ -57,5 +64,26 @@ describe("ConfigTab Cancel", () => {
     // Reverted to baseline; Cancel disappears again.
     expect(screen.getByDisplayValue("Security Reviewer")).toBeInTheDocument();
     expect(screen.queryByText("Cancel")).not.toBeInTheDocument();
+  });
+});
+
+describe("ConfigTab draft", () => {
+  it("rebases onto an outside change without showing Cancel, and Save sends only edited fields", () => {
+    const { rerender } = renderTab();
+    fireEvent.change(screen.getByDisplayValue("Security Reviewer"), { target: { value: "Renamed" } });
+
+    // The agent is disabled elsewhere (e.g. the rail toggle) while the tab stays mounted.
+    rerender(wrap({ ...AGENT, enabled: false }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Save agent/ }));
+    // Only the user's edit is sent — the stale `enabled: true` is not re-sent.
+    expect(mutate).toHaveBeenCalledWith({ id: "ag1", patch: { name: "Renamed" } }, expect.anything());
+  });
+
+  it("an outside change alone leaves the form clean: no Cancel, Save disabled", () => {
+    const { rerender } = renderTab();
+    rerender(wrap({ ...AGENT, enabled: false }));
+    expect(screen.queryByText("Cancel")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Save agent/ })).toBeDisabled();
   });
 });

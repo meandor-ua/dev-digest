@@ -19,7 +19,7 @@ describe("parseSkillMarkdown", () => {
   it("falls back to the first heading, then the file name, without frontmatter", () => {
     expect(parseSkillMarkdown("# Rule A\nbody", "a.md")).toMatchObject({
       name: "Rule A",
-      description: "Imported from a.md",
+      description: "",
       body: "# Rule A\nbody",
     });
     expect(parseSkillMarkdown("no heading", "dir/rule.md").name).toBe("rule");

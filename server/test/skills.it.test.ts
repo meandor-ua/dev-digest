@@ -8,7 +8,6 @@ import * as t from '../src/db/schema.js';
 import { MockGitClient, MockGitHubClient, MockProjectDocsAdapter } from '../src/adapters/mocks.js';
 import { SkillsService } from '../src/modules/skills/service.js';
 import { SkillsRepository } from '../src/modules/skills/repository.js';
-import type { Container } from '../src/platform/container.js';
 import type { RemoteTextFetcher } from '../src/adapters/remote-text/index.js';
 import { ValidationError, ExternalServiceError } from '../src/platform/errors.js';
 
@@ -88,6 +87,76 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
     expect(versions.map((v: { version: number }) => v.version)).toEqual([2, 1]);
     expect(versions[0].body).toBe('# Rule v2\nCover all error branches and boundary conditions.');
     expect(versions[1].body).toBe('# Rule\nCover all error branches.');
+    await app.close();
+  });
+
+  it('concurrent body edits each get their own version — no snapshot is lost', async () => {
+    const app = await makeApp();
+    const skillId = (
+      await app.inject({ method: 'POST', url: '/skills', payload: createBody })
+    ).json().id as string;
+
+    const bodies = ['# A', '# B', '# C', '# D'];
+    const results = await Promise.all(
+      bodies.map((body) => app.inject({ method: 'PUT', url: `/skills/${skillId}`, payload: { body } })),
+    );
+    expect(results.every((r) => r.statusCode === 200)).toBe(true);
+
+    const skill = (await app.inject({ method: 'GET', url: `/skills/${skillId}` })).json();
+    const versions = (
+      await app.inject({ method: 'GET', url: `/skills/${skillId}/versions` })
+    ).json() as Array<{ version: number; body: string }>;
+    expect(skill.version).toBe(5);
+    expect(versions.map((v) => v.version)).toEqual([5, 4, 3, 2, 1]);
+    // The newest snapshot matches the live body.
+    expect(versions[0]!.body).toBe(skill.body);
+    await app.close();
+  });
+
+  it('a restore racing a body edit gets its own version, and history stays consistent', async () => {
+    const app = await makeApp();
+    const skillId = (
+      await app.inject({ method: 'POST', url: '/skills', payload: createBody })
+    ).json().id as string;
+    await app.inject({ method: 'PUT', url: `/skills/${skillId}`, payload: { body: '# v2' } });
+
+    // Restore v1 and a fresh edit race each other: both must land, with
+    // consecutive versions and one snapshot each (v3 and v4, in some order).
+    const [restored, edited] = await Promise.all([
+      app.inject({ method: 'POST', url: `/skills/${skillId}/restore`, payload: { version: 1 } }),
+      app.inject({ method: 'PUT', url: `/skills/${skillId}`, payload: { body: '# v3-edit' } }),
+    ]);
+    expect([restored.statusCode, edited.statusCode]).toEqual([200, 200]);
+
+    const skill = (await app.inject({ method: 'GET', url: `/skills/${skillId}` })).json();
+    const versions = (
+      await app.inject({ method: 'GET', url: `/skills/${skillId}/versions` })
+    ).json() as Array<{ version: number; body: string }>;
+    expect(skill.version).toBe(4);
+    expect(versions.map((v) => v.version)).toEqual([4, 3, 2, 1]);
+    expect(versions[0]!.body).toBe(skill.body);
+    // Both writes are represented — neither overwrote the other's snapshot.
+    const bodies = versions.map((v) => v.body);
+    expect(bodies).toContain('# v3-edit');
+    expect(bodies).toContain('# Rule\nCover all error branches.');
+    await app.close();
+  });
+
+  it('context endpoints reject a malformed repo_id with 422, not a DB 500', async () => {
+    const app = await makeApp();
+    const skillId = (
+      await app.inject({ method: 'POST', url: '/skills', payload: createBody })
+    ).json().id as string;
+    const ctx = await app.inject({ method: 'GET', url: `/skills/${skillId}/context?repo_id=abc` });
+    expect(ctx.statusCode).toBe(422);
+    const doc = await app.inject({ method: 'GET', url: '/skills/context/doc?repo_id=abc&path=docs/a.md' });
+    expect(doc.statusCode).toBe(422);
+    const imp = await app.inject({
+      method: 'POST',
+      url: '/skills/import',
+      payload: { url: 'https://example.com/a.md', name: '' },
+    });
+    expect(imp.statusCode).toBe(422);
     await app.close();
   });
 
@@ -394,7 +463,12 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
       body: 'foreign body',
     });
 
-    const service = new SkillsService({ skillsRepo: repo } as unknown as Container);
+    const service = new SkillsService({
+      skills: repo,
+      repos: { getById: async () => undefined },
+      projectDocs: new MockProjectDocsAdapter(),
+      remoteText: { fetchText: async () => ({ text: '', finalUrl: '' }) },
+    });
     const [{ id: defaultWs }] = await db
       .select({ id: t.workspaces.id })
       .from(t.workspaces)
@@ -660,6 +734,33 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
       const skill = res.json();
       expect(skill.enabled).toBe(true);
       expect(skill.source).toBe('manual');
+      await app.close();
+    });
+
+    it('PUT /skills/:id cannot relabel an imported skill as manual (422), but can vet-enable it', async () => {
+      const app = await makeApp();
+      const skillId = (
+        await app.inject({
+          method: 'POST',
+          url: '/skills',
+          payload: { name: 'Imported', body: 'x', type: 'rubric', source: 'imported_url' },
+        })
+      ).json().id as string;
+
+      const relabel = await app.inject({
+        method: 'PUT',
+        url: `/skills/${skillId}`,
+        payload: { source: 'manual' },
+      });
+      expect(relabel.statusCode).toBe(422);
+
+      const vetted = await app.inject({
+        method: 'PUT',
+        url: `/skills/${skillId}`,
+        payload: { enabled: true },
+      });
+      expect(vetted.statusCode).toBe(200);
+      expect(vetted.json()).toMatchObject({ source: 'imported_url', enabled: true });
       await app.close();
     });
   });

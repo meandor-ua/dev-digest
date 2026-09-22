@@ -6,6 +6,7 @@ import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
 import * as t from '../src/db/schema.js';
 import { MockGitClient, MockGitHubClient } from '../src/adapters/mocks.js';
+import { AgentsRepository } from '../src/modules/agents/repository.js';
 
 const hasDocker = await dockerAvailable();
 const d = hasDocker ? describe : describe.skip;
@@ -226,6 +227,52 @@ d('GET /agents/stats, GET /agents/:id/stats, POST /agents/:id/skills', () => {
       .from(t.agentSkills)
       .where(and(eq(t.agentSkills.agentId, id), eq(t.agentSkills.skillId, foreignSkill!.id)));
     expect(links).toHaveLength(0);
+    await app.close();
+  });
+
+  it('the legacy skill_ids form rejects duplicates too (422)', async () => {
+    const app = await makeApp();
+    const id = agents['Performance Reviewer'];
+    const dup = skills['Readability Rubric'];
+    const res = await app.inject({
+      method: 'POST',
+      url: `/agents/${id}/skills`,
+      payload: { skill_ids: [dup, dup] },
+    });
+    expect(res.statusCode).toBe(422);
+    await app.close();
+  });
+
+  it('setSkills rolls back: a failing insert leaves the previous links intact', async () => {
+    // Straight at the repository, since the route's Zod guard rejects duplicates
+    // first — this is what makes the delete + insert one transaction, not two.
+    const repo = new AgentsRepository(pg.handle.db);
+    const id = agents['Security Reviewer']!;
+    const before = await repo.linkedSkills(id);
+    expect(before.length).toBeGreaterThan(0);
+
+    const dup = skills['Lethal Trifecta Guard']!;
+    await expect(
+      repo.setSkills(id, [{ skillId: dup }, { skillId: dup }]),
+    ).rejects.toThrow();
+
+    const after = await repo.linkedSkills(id);
+    expect(after.map((l) => l.skill.id)).toEqual(before.map((l) => l.skill.id));
+  });
+
+  it('POST /agents/:id/skills rejects duplicate skill_ids (422) and keeps the existing links', async () => {
+    const app = await makeApp();
+    const id = agents['Performance Reviewer'];
+    const before = (await app.inject({ method: 'GET', url: `/agents/${id}/skills` })).json();
+    const dup = skills['Readability Rubric'];
+    const res = await app.inject({
+      method: 'POST',
+      url: `/agents/${id}/skills`,
+      payload: { skills: [{ skill_id: dup }, { skill_id: dup }] },
+    });
+    expect(res.statusCode).toBe(422);
+    const after = (await app.inject({ method: 'GET', url: `/agents/${id}/skills` })).json();
+    expect(after).toEqual(before);
     await app.close();
   });
 });

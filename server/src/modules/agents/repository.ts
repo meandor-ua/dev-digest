@@ -232,11 +232,14 @@ export class AgentsRepository {
     agentId: string,
     items: Array<{ skillId: string; enabled?: boolean }>,
   ): Promise<void> {
-    await this.db.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
-    if (items.length === 0) return;
-    await this.db
-      .insert(t.agentSkills)
-      .values(items.map((it, i) => ({ agentId, skillId: it.skillId, order: i, enabled: it.enabled ?? true })));
+    // One transaction: a failed insert must not leave the agent with its links already deleted.
+    await this.db.transaction(async (tx) => {
+      await tx.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
+      if (items.length === 0) return;
+      await tx
+        .insert(t.agentSkills)
+        .values(items.map((it, i) => ({ agentId, skillId: it.skillId, order: i, enabled: it.enabled ?? true })));
+    });
   }
 
   /** The subset of `skillIds` that actually belong to `workspaceId` (ownership guard). */

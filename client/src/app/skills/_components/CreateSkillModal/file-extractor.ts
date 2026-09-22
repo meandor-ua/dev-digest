@@ -23,6 +23,35 @@ export interface ExtractedMarkdown {
   content: string;
 }
 
+export type ExtractErrorCode =
+  | "uploadTooLarge"
+  | "entryTooLarge"
+  | "unsupportedType"
+  | "binary"
+  | "invalidZip"
+  | "corruptZip"
+  | "tooManyEntries"
+  | "noMarkdown";
+
+/**
+ * A user-facing extraction failure. `code` (+ `params`) is what the UI
+ * translates; `message` is English for logs/tests only — never shown, and
+ * never matched on (the 256 KB check used to key off the message text).
+ */
+export class ExtractError extends Error {
+  constructor(
+    public readonly code: ExtractErrorCode,
+    message: string,
+    public readonly params: Record<string, string | number> = {},
+  ) {
+    super(message);
+    this.name = "ExtractError";
+  }
+}
+
+const tooLarge = (name: string) =>
+  new ExtractError("entryTooLarge", `"${name}" exceeds the 256 KB limit.`, { name });
+
 /** The part of `File` we need — lets tests pass a plain object. */
 export type UploadedFile = Pick<File, "name" | "size" | "arrayBuffer">;
 
@@ -35,19 +64,19 @@ const METHOD_DEFLATE = 8;
 const isMarkdownName = (name: string) => name.toLowerCase().endsWith(".md");
 
 export async function extractMarkdownFiles(file: UploadedFile): Promise<ExtractedMarkdown[]> {
-  if (file.size > MAX_UPLOAD_BYTES) throw new Error("File exceeds the 5 MB upload limit.");
+  if (file.size > MAX_UPLOAD_BYTES) throw new ExtractError("uploadTooLarge", "File exceeds the 5 MB upload limit.");
   const lower = file.name.toLowerCase();
   if (isMarkdownName(lower)) {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    if (bytes.length > MAX_ENTRY_BYTES) throw new Error(`"${file.name}" exceeds the 256 KB limit.`);
+    if (bytes.length > MAX_ENTRY_BYTES) throw tooLarge(file.name);
     return [{ filename: file.name, content: decodeText(bytes, file.name) }];
   }
   if (lower.endsWith(".zip")) return extractFromZip(new Uint8Array(await file.arrayBuffer()));
-  throw new Error("Unsupported file type. Upload a .md file or a .zip archive.");
+  throw new ExtractError("unsupportedType", "Unsupported file type. Upload a .md file or a .zip archive.");
 }
 
 function decodeText(bytes: Uint8Array, name: string): string {
-  if (bytes.includes(0)) throw new Error(`"${name}" is binary, not Markdown.`);
+  if (bytes.includes(0)) throw new ExtractError("binary", `"${name}" is binary, not Markdown.`, { name });
   return new TextDecoder().decode(bytes);
 }
 
@@ -72,14 +101,14 @@ function isIgnoredEntry(path: string): boolean {
 async function extractFromZip(bytes: Uint8Array): Promise<ExtractedMarkdown[]> {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const eocd = findEocd(view);
-  if (eocd < 0) throw new Error("Not a valid .zip archive.");
+  if (eocd < 0) throw new ExtractError("invalidZip", "Not a valid .zip archive.");
   const entryCount = view.getUint16(eocd + 10, true);
   let pos = view.getUint32(eocd + 16, true);
 
   const results: ExtractedMarkdown[] = [];
   for (let i = 0; i < entryCount; i++) {
     if (pos + 46 > bytes.length || view.getUint32(pos, true) !== SIG_CENTRAL) {
-      throw new Error("Corrupt .zip archive (central directory).");
+      throw new ExtractError("corruptZip", "Corrupt .zip archive (central directory).");
     }
     const flags = view.getUint16(pos + 8, true);
     const method = view.getUint16(pos + 10, true);
@@ -96,26 +125,28 @@ async function extractFromZip(bytes: Uint8Array): Promise<ExtractedMarkdown[]> {
     if (isIgnoredEntry(path) || encrypted) continue;
     if (method !== METHOD_STORED && method !== METHOD_DEFLATE) continue;
     if (results.length >= MAX_MD_ENTRIES) {
-      throw new Error(`Archive has more than ${MAX_MD_ENTRIES} Markdown files.`);
+      throw new ExtractError("tooManyEntries", `Archive has more than ${MAX_MD_ENTRIES} Markdown files.`, {
+        max: MAX_MD_ENTRIES,
+      });
     }
-    if (uncompressedSize > MAX_ENTRY_BYTES) throw new Error(`"${path}" exceeds the 256 KB limit.`);
+    if (uncompressedSize > MAX_ENTRY_BYTES) throw tooLarge(path);
 
     if (localOffset + 30 > bytes.length || view.getUint32(localOffset, true) !== SIG_LOCAL) {
-      throw new Error("Corrupt .zip archive (local header).");
+      throw new ExtractError("corruptZip", "Corrupt .zip archive (local header).");
     }
     const dataStart =
       localOffset + 30 + view.getUint16(localOffset + 26, true) + view.getUint16(localOffset + 28, true);
     const dataEnd = dataStart + compressedSize;
-    if (dataEnd > bytes.length) throw new Error("Corrupt .zip archive (entry data).");
+    if (dataEnd > bytes.length) throw new ExtractError("corruptZip", "Corrupt .zip archive (entry data).");
     const raw = bytes.subarray(dataStart, dataEnd);
 
     const data = method === METHOD_STORED ? raw : await inflateCapped(raw, path);
     if (data === null) continue; // deflate unsupported/corrupt → skip rather than guess
-    if (data.length > MAX_ENTRY_BYTES) throw new Error(`"${path}" exceeds the 256 KB limit.`);
+    if (data.length > MAX_ENTRY_BYTES) throw tooLarge(path);
     results.push({ filename: path, content: decodeText(data, path) });
   }
 
-  if (results.length === 0) throw new Error("No Markdown (.md) files found in the archive.");
+  if (results.length === 0) throw new ExtractError("noMarkdown", "No Markdown (.md) files found in the archive.");
   return results;
 }
 
@@ -141,12 +172,12 @@ async function inflateCapped(raw: Uint8Array, path: string): Promise<Uint8Array 
       total += value.length;
       if (total > MAX_ENTRY_BYTES) {
         await reader.cancel();
-        throw new Error(`"${path}" exceeds the 256 KB limit.`);
+        throw tooLarge(path);
       }
       chunks.push(value);
     }
   } catch (err) {
-    if (err instanceof Error && err.message.includes("256 KB")) throw err;
+    if (err instanceof ExtractError && err.code === "entryTooLarge") throw err;
     return null;
   }
   const out = new Uint8Array(total);

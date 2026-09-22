@@ -9,7 +9,7 @@ import { SKILL_TYPES } from "@/lib/skill-type";
 import { useCreateSkill, usePreviewSkillUrl } from "@/lib/hooks/skills";
 import { useToast } from "@/lib/toast";
 import { estimateTokens } from "@/lib/tokens";
-import { extractMarkdownFiles, type ExtractedMarkdown } from "./file-extractor";
+import { extractMarkdownFiles, ExtractError, type ExtractedMarkdown } from "./file-extractor";
 import { parseSkillMarkdown, preferredEntryIndex } from "./skill-markdown";
 import { s } from "./styles";
 
@@ -49,6 +49,18 @@ export function CreateSkillModal({
   const [importUrl, setImportUrl] = React.useState("");
   const [urlFetched, setUrlFetched] = React.useState(false);
 
+  // Provenance of the shared fields: set to "imported" the moment a file or
+  // URL prefills them and kept across tab switches, so `source`/`enabled` on
+  // submit reflect where the content came from — not which tab is open.
+  const [origin, setOrigin] = React.useState<"manual" | "imported">("manual");
+  const startBlank = () => {
+    setName("");
+    setDescription("");
+    setBody("");
+    setExtractedFiles([]);
+    setOrigin("manual");
+  };
+
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Prefill the shared fields from one extracted file's skill core
@@ -59,8 +71,9 @@ export function CreateSkillModal({
     if (!item) return;
     const parsed = parseSkillMarkdown(item.content, item.filename);
     setName(parsed.name);
-    setDescription(parsed.description);
+    setDescription(parsed.description || t("create.file.importedDescription", { filename: item.filename }));
     setBody(parsed.body);
+    setOrigin("imported");
   };
 
   const handleFile = async (file: File) => {
@@ -71,7 +84,11 @@ export function CreateSkillModal({
       applyExtracted(extracted, preferredEntryIndex(extracted));
       toast.success(t("create.file.success", { count: extracted.length }));
     } catch (err) {
-      toast.error((err as Error).message || t("create.file.extractFailed"));
+      toast.error(
+        err instanceof ExtractError
+          ? t(`create.file.errors.${err.code}`, err.params)
+          : t("create.file.extractFailed"),
+      );
     } finally {
       setImportingFile(false);
     }
@@ -101,9 +118,9 @@ export function CreateSkillModal({
         name: name.trim(),
         description: description.trim(),
         type,
-        source: tab === "import" || tab === "url" ? "imported_url" : "manual",
+        source: origin === "imported" ? "imported_url" : "manual",
         body: body.trim(),
-        enabled: tab === "scratch", // Only manual skills start enabled
+        enabled: origin === "manual", // Imported content starts disabled until vetted
       },
       {
         onSuccess: (created) => {
@@ -132,6 +149,7 @@ export function CreateSkillModal({
         setName(preview.name);
         setDescription(t("create.url.importedDescription", { url: importUrl.trim() }));
         setBody(preview.body);
+        setOrigin("imported");
         setUrlFetched(true);
       },
       onError: (err) => {
@@ -237,6 +255,14 @@ export function CreateSkillModal({
 
         {(tab === "scratch" || tab === "import" || (tab === "url" && urlFetched)) && (
           <>
+            {origin === "imported" && tab === "scratch" && (
+              <div style={s.importedNotice} role="status">
+                <span>{t("create.scratch.importedNotice")}</span>
+                <button type="button" style={s.linkBtn} onClick={startBlank}>
+                  {t("create.scratch.startBlank")}
+                </button>
+              </div>
+            )}
             {/* Name */}
             <div style={s.field}>
               <label style={s.label}>{t("create.scratch.name")}</label>

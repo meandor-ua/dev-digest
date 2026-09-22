@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { assemblePrompt } from '@devdigest/reviewer-core';
 import { SkillsService } from '../src/modules/skills/service.js';
-import type { Container } from '../src/platform/container.js';
-import type { SkillsRepository } from '../src/modules/skills/repository.js';
-import type { SkillRow, SkillVersionRow } from '../src/db/rows.js';
+import type { Skill } from '@devdigest/shared';
+import type { SkillsServiceDeps, SkillsStore } from '../src/modules/skills/ports.js';
+import { toSkillVersionDto } from '../src/modules/skills/helpers.js';
+import { ValidationError } from '../src/platform/errors.js';
 
 describe('assemblePrompt with Skills', () => {
   it('injects skills under ## Skills / rules section', () => {
@@ -41,9 +42,8 @@ describe('assemblePrompt with Skills', () => {
 });
 
 describe('SkillsService unit tests', () => {
-  const mockSkillRow: SkillRow = {
+  const skill: Skill = {
     id: 'skill-1',
-    workspaceId: 'ws-1',
     name: 'Test Skill',
     description: 'A test skill',
     type: 'rubric',
@@ -51,25 +51,23 @@ describe('SkillsService unit tests', () => {
     body: 'Skill body content',
     enabled: true,
     version: 1,
-    evidenceFiles: null,
-    createdAt: new Date(),
+    evidence_files: null,
   };
 
-  const mockVersionRow: SkillVersionRow = {
-    skillId: 'skill-1',
-    version: 1,
-    body: 'Skill body content',
-    message: null,
-    createdAt: new Date(),
-  };
-
-  it('create delegates to repository and maps DTO', async () => {
-    const mockRepo: Partial<SkillsRepository> = {
-      insert: vi.fn().mockResolvedValue(mockSkillRow),
+  /** Plain port fakes — the service takes its dependencies by constructor, no Container. */
+  function makeService(skills: Partial<SkillsStore>) {
+    const deps: SkillsServiceDeps = {
+      skills: skills as SkillsStore,
+      repos: { getById: vi.fn() },
+      projectDocs: { list: vi.fn(), read: vi.fn(), readMany: vi.fn() },
+      remoteText: { fetchText: vi.fn() },
     };
+    return new SkillsService(deps);
+  }
 
-    const container = { skillsRepo: mockRepo as SkillsRepository } as Container;
-    const service = new SkillsService(container);
+  it('create delegates to the store', async () => {
+    const store: Partial<SkillsStore> = { insert: vi.fn().mockResolvedValue(skill) };
+    const service = makeService(store);
 
     const result = await service.create('ws-1', {
       name: 'Test Skill',
@@ -78,7 +76,7 @@ describe('SkillsService unit tests', () => {
       body: 'Skill body content',
     });
 
-    expect(mockRepo.insert).toHaveBeenCalledWith({
+    expect(store.insert).toHaveBeenCalledWith({
       workspaceId: 'ws-1',
       name: 'Test Skill',
       description: 'A test skill',
@@ -88,25 +86,50 @@ describe('SkillsService unit tests', () => {
       enabled: undefined,
       evidenceFiles: undefined,
     });
-    expect(result.id).toBe('skill-1');
-    expect(result.version).toBe(1);
+    expect(result).toEqual(skill);
   });
 
-  it('listVersions maps rows to ISO created_at strings', async () => {
-    const mockRepo: Partial<SkillsRepository> = {
-      listVersions: vi.fn().mockResolvedValue([mockVersionRow]),
+  it('create forces imported skills to start disabled', async () => {
+    const store: Partial<SkillsStore> = { insert: vi.fn().mockResolvedValue(skill) };
+    await makeService(store).create('ws-1', {
+      name: 'x',
+      type: 'rubric',
+      body: 'x',
+      source: 'imported_url',
+      enabled: true,
+    });
+    expect(store.insert).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
+  });
+
+  it('update refuses to relabel an imported skill as manual', async () => {
+    const store: Partial<SkillsStore> = {
+      getById: vi.fn().mockResolvedValue({ ...skill, source: 'imported_url' }),
+      update: vi.fn(),
     };
+    const service = makeService(store);
 
-    const container = { skillsRepo: mockRepo as SkillsRepository } as Container;
-    const service = new SkillsService(container);
+    await expect(service.update('ws-1', 'skill-1', { source: 'manual' })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(store.update).not.toHaveBeenCalled();
+  });
+});
 
-    const versions = await service.listVersions('ws-1', 'skill-1');
-    expect(versions).toHaveLength(1);
-    expect(versions![0]).toMatchObject({
+describe('skills row mappers', () => {
+  it('toSkillVersionDto maps a row to the contract with an ISO created_at', () => {
+    const dto = toSkillVersionDto({
+      skillId: 'skill-1',
+      version: 1,
+      body: 'Skill body content',
+      message: null,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    expect(dto).toEqual({
       skill_id: 'skill-1',
       version: 1,
       body: 'Skill body content',
+      message: null,
+      created_at: '2026-01-01T00:00:00.000Z',
     });
-    expect(typeof versions![0].created_at).toBe('string');
   });
 });

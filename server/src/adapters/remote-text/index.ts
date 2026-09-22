@@ -21,9 +21,9 @@ import * as dns from 'node:dns';
 import * as net from 'node:net';
 import { ValidationError, ExternalServiceError } from '../../platform/errors.js';
 
-export interface RemoteTextFetcher {
-  fetchText(url: string): Promise<{ text: string; finalUrl: string }>;
-}
+import type { RemoteTextFetcher } from '../../modules/skills/ports.js';
+
+export type { RemoteTextFetcher };
 
 const MAX_REDIRECTS = 3;
 const TIMEOUT_MS = 5000;

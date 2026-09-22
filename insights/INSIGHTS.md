@@ -50,6 +50,18 @@ instead.
   `server/package.json` has no `test:unit`/`test:integration` scripts.
   Rationale corrected in place this session. Evidence: `TESTING.md:83-87`.
 
+- **2026-09-22** — `/pr-self-review` invoked while plan mode is on: Steps 0–4
+  (git diff, the four package gates, bucket review) all run fine read-only,
+  and plan mode's "Explore agents only" rule is satisfiable because Explore
+  subagents can load reviewer skills via the Skill tool — use them as the
+  Step 3 bucket reviewers. What plan mode blocks is Step 5's
+  `.devdigest/cache/pr-self-review/verdict.json` write and Step 6's insight;
+  stage the full verdict in the plan file and write both after approval.
+  Also: bucket agents return findings at their own granularity, so the plan's
+  "N findings" estimate drifted (31 planned vs 40 written) — count from the
+  merged list, not by eye. Evidence:
+  `.claude/skills/pr-self-review/SKILL.md` Step 5.
+
 ## Codebase Patterns
 
 - **2026-09-22** — `reviewer-core`'s `skills`/`memory`/`specs`/`callers` prompt

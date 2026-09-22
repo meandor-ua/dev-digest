@@ -10,6 +10,7 @@
 
 export interface ParsedSkillMarkdown {
   name: string;
+  /** Frontmatter description, or "" when absent (the caller supplies a translated default). */
   description: string;
   body: string;
 }
@@ -51,7 +52,9 @@ export function parseSkillMarkdown(content: string, filename: string): ParsedSki
   const body = (fm ? content.slice(fm[0].length) : content).trim();
   const heading = body.match(/^#+\s+(.+)$/m)?.[1]?.trim();
   const name = meta.name || heading || baseName(filename).replace(/\.md$/i, "");
-  const description = meta.description || `Imported from ${filename}`;
+  // Empty when there's no frontmatter description — the modal fills in the
+  // translated "Imported from …" copy (user-visible text stays in next-intl).
+  const description = meta.description ?? "";
   return { name, description, body };
 }
 

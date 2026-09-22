@@ -140,6 +140,19 @@ you, so the next agent/session doesn't relearn it.
   tight (single-digit seconds), or it risks merging two separate, later
   clicks into one inflated total.
 
+- **2026-09-22** — `SkillsService` is the first service that follows onion R6:
+  it takes a `SkillsServiceDeps` object of ports (`SkillsStore`, `RepoLookup`,
+  `ProjectDocsAdapter`, `RemoteTextFetcher`) by constructor, not the
+  `Container`, and `SkillsRepository implements SkillsStore` returns DTOs only.
+  `routes.ts` does the wiring from `app.container`. Unit tests pass plain
+  fakes, with no `as Container` casts. Copy this shape when fixing V5 in the other
+  modules. Evidence: `server/src/modules/skills/ports.ts`,
+  `server/src/modules/skills/routes.ts:70`.
+- **2026-09-22** — `*.test.ts` vs `*.it.test.ts` is decided by DB/Docker use,
+  not by "any I/O". `test/project-docs.test.ts` writes a `mkdtemp` directory and
+  stays a unit test, because it needs no Postgres or testcontainers.
+  Evidence: `server/test/project-docs.test.ts:36`.
+
 ## What Doesn't Work
 
 - **2026-09-22** — Don't wrap imported (non-`manual`) skills with
@@ -252,6 +265,14 @@ you, so the next agent/session doesn't relearn it.
   into every Test Quality Reviewer review with no "needs vetting" badge. The seed
   must apply the same rule. Evidence: `server/src/db/seed.ts:311`,
   `server/test/seed.it.test.ts` ("the imported one lands unvetted").
+
+- **2026-09-22** — Don't compute a skill's next version as `existing.version + 1`
+  outside a transaction and then insert the snapshot with `onConflictDoNothing()`:
+  two concurrent PUTs both pick N+1, the second snapshot is silently swallowed,
+  and `skill_versions` stops matching `skills.body`. Read the row with
+  `.for('update')` inside `db.transaction`, and let a version-PK conflict throw.
+  Covered by the "concurrent body edits" case in `test/skills.it.test.ts`.
+  Evidence: `server/src/modules/skills/repository.ts:174`.
 
 ## Session Notes
 

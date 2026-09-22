@@ -3,7 +3,8 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "../../../../../messages/en/skills.json";
-import { ToastProvider } from "../../../../lib/toast";
+import { ToastProvider } from "@/lib/toast";
+import { ExtractError } from "./file-extractor";
 
 const { createMutate, previewMutate, push, extractMarkdownFiles } = vi.hoisted(() => ({
   createMutate: vi.fn(),
@@ -13,11 +14,14 @@ const { createMutate, previewMutate, push, extractMarkdownFiles } = vi.hoisted((
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: vi.fn() }) }));
-vi.mock("../../../../lib/hooks/skills", () => ({
+vi.mock("@/lib/hooks/skills", () => ({
   useCreateSkill: () => ({ mutate: createMutate, isPending: false }),
   usePreviewSkillUrl: () => ({ mutate: previewMutate, isPending: false }),
 }));
-vi.mock("./file-extractor", () => ({ extractMarkdownFiles }));
+vi.mock("./file-extractor", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./file-extractor")>()),
+  extractMarkdownFiles,
+}));
 
 import { CreateSkillModal } from "./CreateSkillModal";
 
@@ -121,5 +125,76 @@ describe("CreateSkillModal", () => {
       expect.objectContaining({ name: "Fetched Rule", source: "imported_url", enabled: false }),
       expect.anything(),
     );
+  });
+
+  it("keeps imported provenance when the user switches to the scratch tab before creating", async () => {
+    extractMarkdownFiles.mockResolvedValue([{ filename: "a.md", content: "# Rule A\nbody" }]);
+    renderModal("import");
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "a.md")] } });
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("Rule A"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Create from scratch" }));
+    expect(screen.getByText(/This content was imported/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Create Skill/ }));
+
+    expect(createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Rule A", source: "imported_url", enabled: false }),
+      expect.anything(),
+    );
+  });
+
+  it("drops imported provenance on Start blank", async () => {
+    extractMarkdownFiles.mockResolvedValue([{ filename: "a.md", content: "# Rule A\nbody" }]);
+    renderModal("import");
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "a.md")] } });
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("Rule A"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Create from scratch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start blank" }));
+    expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("");
+    type("Skill Name", "Mine");
+    type("Skill Body (Markdown)", "# mine");
+    fireEvent.click(screen.getByRole("button", { name: /Create Skill/ }));
+
+    expect(createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Mine", source: "manual", enabled: true }),
+      expect.anything(),
+    );
+  });
+
+  it("keeps manual provenance for typed content submitted from the import tab", () => {
+    renderModal("scratch");
+    type("Skill Name", "Typed");
+    type("Skill Body (Markdown)", "# typed");
+    fireEvent.click(screen.getByRole("button", { name: "Import from file (.md / .zip)" }));
+    fireEvent.click(screen.getByRole("button", { name: /Import Skill/ }));
+
+    expect(createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Typed", source: "manual", enabled: true }),
+      expect.anything(),
+    );
+  });
+
+  it("fills a translated description when the imported file has no frontmatter one", async () => {
+    extractMarkdownFiles.mockResolvedValue([{ filename: "pkg/rule.md", content: "# Rule A\nbody" }]);
+    renderModal("import");
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "pkg.zip")] } });
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "Directive Description" })).toHaveValue(
+        "Imported from pkg/rule.md",
+      ),
+    );
+  });
+
+  it("shows extraction failures as translated copy keyed by the error code", async () => {
+    extractMarkdownFiles.mockRejectedValue(new ExtractError("tooManyEntries", "english only", { max: 50 }));
+    renderModal("import");
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "a.zip")] } });
+    expect(await screen.findByText("Archive has more than 50 Markdown files.")).toBeInTheDocument();
+    expect(screen.queryByText("english only")).not.toBeInTheDocument();
   });
 });

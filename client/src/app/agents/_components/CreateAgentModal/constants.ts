@@ -9,3 +9,6 @@ export const PROVIDER_OPTIONS: readonly Provider[] = ["openai", "anthropic", "op
 
 /** Modal width (px). */
 export const MODAL_WIDTH = 620;
+
+/** Quick-start agent templates surfaced in the "Add Agent" dropdowns (list view + editor rail). */
+export const TEMPLATES = ["Security", "Performance", "Mentor", "Conformance", "Architecture"] as const;

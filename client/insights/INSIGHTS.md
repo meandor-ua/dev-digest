@@ -217,6 +217,15 @@ Preview/Stats tabs, skill import).
   contract every flow here relies on. Covered by `FilterBar.test.tsx`
   instead; noted in flow `09-pr-list-actions.flow.json`'s description.
 
+- **2026-09-22** — For a full-set-replace autosave mutation (the agent Skills
+  tab), an unconditional `setQueryData(key, data)` in `onSuccess`, or a rollback
+  in `onError`, clobbers a newer in-flight optimistic edit. The next save is
+  then built from that stale cache and silently undoes the edit. Give the
+  mutation a `mutationKey`, and only write or roll back when
+  `qc.isMutating({ mutationKey }) === 1`: TanStack runs these callbacks while
+  the mutation still counts as pending, so 1 means "only me". Evidence:
+  `client/src/lib/hooks/agents.ts:153`, test `client/src/lib/hooks/agents.test.tsx`.
+
 ## Session Notes
 
 ### 2026-09-18

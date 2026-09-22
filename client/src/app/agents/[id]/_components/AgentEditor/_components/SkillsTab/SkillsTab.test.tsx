@@ -4,7 +4,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { AgentSkillItem, SkillWithStats } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/agents.json";
-import { ToastProvider } from "../../../../../../../lib/toast";
+import { ToastProvider } from "@/lib/toast";
 
 const mutate = vi.fn();
 let skills: AgentSkillItem[] | undefined;
@@ -13,23 +13,25 @@ let availableSkills: SkillWithStats[] = [];
 // jsdom can't drive dnd-kit's pointer sensor, so capture the DndContext's
 // onDragEnd and call it directly with a synthetic drop event.
 let onDragEnd: ((e: { active: { id: string }; over: { id: string } | null }) => void) | undefined;
+let sensors: Array<{ sensor: unknown }> | undefined;
 vi.mock("@dnd-kit/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@dnd-kit/core")>();
   return {
     ...actual,
-    DndContext: (props: { onDragEnd?: typeof onDragEnd; children?: React.ReactNode }) => {
+    DndContext: (props: { onDragEnd?: typeof onDragEnd; sensors?: typeof sensors; children?: React.ReactNode }) => {
       onDragEnd = props.onDragEnd;
+      sensors = props.sensors;
       return <>{props.children}</>;
     },
   };
 });
 
-vi.mock("../../../../../../../lib/hooks/agents", () => ({
+vi.mock("@/lib/hooks/agents", () => ({
   useAgentSkills: () => ({ data: skills, isLoading: false }),
   useSetAgentSkills: () => ({ mutate }),
 }));
 
-vi.mock("../../../../../../../lib/hooks/skills", () => ({
+vi.mock("@/lib/hooks/skills", () => ({
   useSkills: () => ({ data: availableSkills, isLoading: false }),
 }));
 
@@ -118,10 +120,11 @@ describe("SkillsTab", () => {
   it("disables dragging while a filter is active", () => {
     skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, true)];
     renderTab();
-    expect(screen.getAllByLabelText("Drag to reorder")[0]).toHaveAttribute("role", "button");
+    expect(screen.getByLabelText("Drag to reorder Secrets")).toHaveAttribute("role", "button");
     fireEvent.change(screen.getByPlaceholderText("Filter skills…"), { target: { value: "sec" } });
-    // dnd-kit's attributes (role="button") are only spread on draggable rows
-    expect(screen.getByLabelText("Drag to reorder")).not.toHaveAttribute("role");
+    // dnd-kit's attributes (role="button") are only spread on draggable rows;
+    // an inert handle is hidden from assistive tech instead of mislabelled.
+    expect(screen.queryByLabelText("Drag to reorder Secrets")).not.toBeInTheDocument();
   });
   it("clears the filter when Escape is pressed in the filter input", () => {
     skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, true)];
@@ -134,7 +137,7 @@ describe("SkillsTab", () => {
     expect(screen.getByText("Naming")).toBeInTheDocument();
     expect(screen.getByText("Secrets")).toBeInTheDocument();
     // dragging is re-enabled once the filter is cleared
-    expect(screen.getAllByLabelText("Drag to reorder")[0]).toHaveAttribute("role", "button");
+    expect(screen.getByLabelText("Drag to reorder Secrets")).toHaveAttribute("role", "button");
   });
 
   it("lets Escape bubble when the filter is already empty", () => {
@@ -188,5 +191,19 @@ describe("SkillsTab", () => {
     ];
     renderTab();
     expect(screen.getByText("Disabled globally — won’t be injected until enabled")).toBeInTheDocument();
+  });
+
+  it("gives each row's checkbox and the filter an accessible name", () => {
+    skills = [mk("s1", "Secrets", 0, true)];
+    renderTab();
+    expect(screen.getByRole("checkbox", { name: "Enable Secrets for this agent" })).toBeChecked();
+    expect(screen.getByRole("textbox", { name: "Filter linked skills" })).toBeInTheDocument();
+  });
+
+  it("registers a keyboard sensor so reordering is not mouse-only", async () => {
+    skills = [mk("s1", "A", 0, true), mk("s2", "B", 1, true)];
+    renderTab();
+    const { KeyboardSensor } = await import("@dnd-kit/core");
+    expect(sensors?.map((d) => d.sensor)).toContain(KeyboardSensor);
   });
 });

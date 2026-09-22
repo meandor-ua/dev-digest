@@ -85,6 +85,9 @@ export function useDeleteAgent() {
     onSuccess: (_d, id) => {
       qc.invalidateQueries({ queryKey: ["agents"] });
       qc.removeQueries({ queryKey: ["agent", id] });
+      // Deleting an agent cascades its skill links → skill cards' agent counts change.
+      qc.invalidateQueries({ queryKey: ["skills"] });
+      qc.invalidateQueries({ queryKey: ["skill-stats"] });
     },
   });
 }
@@ -135,11 +138,21 @@ export interface SetAgentSkillsItem {
 /**
  * Replace an agent's linked-skill set (order + enabled) in one call. Optimistic:
  * the Skills tab writes the new order/enabled immediately and rolls back on error.
+ *
+ * Autosaves can overlap (toggle, then drag before the first request returns).
+ * Each save is a full-set replace built from the cache, so only the LAST
+ * in-flight save may write the server response or roll back — an older one
+ * settling first would otherwise clobber the newer optimistic state, and the
+ * next save built from that cache would silently undo the newer edit.
  */
 export function useSetAgentSkills(id: string) {
   const qc = useQueryClient();
   const key = ["agent-skills", id];
+  const mutationKey = ["set-agent-skills", id];
+  // Callbacks run while this mutation is still pending, so 1 means "only me".
+  const isLastInFlight = () => qc.isMutating({ mutationKey }) === 1;
   return useMutation({
+    mutationKey,
     mutationFn: (skills: SetAgentSkillsItem[]) =>
       api.post<AgentSkillItem[]>(`/agents/${id}/skills`, { skills }),
     onMutate: async (skills) => {
@@ -178,18 +191,23 @@ export function useSetAgentSkills(id: string) {
       return { prev };
     },
     onError: (_e, _v, context) => {
+      if (!isLastInFlight()) return; // a newer save owns the cache now
       if (context?.prev) qc.setQueryData(key, context.prev);
+      qc.invalidateQueries({ queryKey: key });
     },
     onSuccess: (data) => {
-      // Replace cache with server response (ensures consistency)
-      qc.setQueryData(key, data);
+      // The server response IS the full linked set, so no refetch is needed.
+      if (isLastInFlight()) qc.setQueryData(key, data);
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: key });
       // The card's "N skills" counts ENABLED links, so a toggle changes it.
       qc.invalidateQueries({ queryKey: ["agent-card-stats"] });
       // The Stats tab's most-used-skills list is built from enabled links too.
       qc.invalidateQueries({ queryKey: ["agent-stats"] });
+      // Skill cards (agent_count, pull/accept %) and a skill's Stats tab
+      // (linked agents) are derived from these links as well.
+      qc.invalidateQueries({ queryKey: ["skills"] });
+      qc.invalidateQueries({ queryKey: ["skill-stats"] });
     },
   });
 }
