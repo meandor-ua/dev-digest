@@ -6,8 +6,9 @@ import messages from "../../../../../messages/en/skills.json";
 import { ToastProvider } from "@/lib/toast";
 import { ExtractError } from "./file-extractor";
 
-const { createMutate, previewMutate, push, extractMarkdownFiles } = vi.hoisted(() => ({
+const { createMutate, updateMutate, previewMutate, push, extractMarkdownFiles } = vi.hoisted(() => ({
   createMutate: vi.fn(),
+  updateMutate: vi.fn(),
   previewMutate: vi.fn(),
   push: vi.fn(),
   extractMarkdownFiles: vi.fn(),
@@ -16,6 +17,7 @@ const { createMutate, previewMutate, push, extractMarkdownFiles } = vi.hoisted((
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: vi.fn() }) }));
 vi.mock("@/lib/hooks/skills", () => ({
   useCreateSkill: () => ({ mutate: createMutate, isPending: false }),
+  useUpdateSkill: () => ({ mutate: updateMutate, isPending: false }),
   usePreviewSkillUrl: () => ({ mutate: previewMutate, isPending: false }),
 }));
 vi.mock("./file-extractor", async (importOriginal) => ({
@@ -84,12 +86,16 @@ describe("CreateSkillModal", () => {
       expect.objectContaining({ name: "Rule A", body: "# Rule A\nbody", source: "imported_url", enabled: false }),
       expect.anything(),
     );
+    // No frontmatter to cut — a single version is enough, no second save.
+    expect(updateMutate).not.toHaveBeenCalled();
   });
 
-  it("preselects an archive's SKILL.md and fills name/description from its frontmatter", async () => {
+  it("preselects an archive's SKILL.md, saves the raw upload as v1, and cuts the frontmatter into v2", async () => {
+    createMutate.mockImplementation((_input, opts) => opts.onSuccess({ id: "sk9", name: "api-contract" }));
+    const rawContent = "---\nname: api-contract\ndescription: Flag breaking routes.\n---\n# Rules\nbody";
     extractMarkdownFiles.mockResolvedValue([
       { filename: "pkg/README.md", content: "# Readme" },
-      { filename: "pkg/SKILL.md", content: "---\nname: api-contract\ndescription: Flag breaking routes.\n---\n# Rules\nbody" },
+      { filename: "pkg/SKILL.md", content: rawContent },
     ]);
     renderModal("import");
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -97,15 +103,24 @@ describe("CreateSkillModal", () => {
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("api-contract"));
     fireEvent.click(screen.getByRole("button", { name: /Import Skill/ }));
 
+    // v1: the raw upload, header included, verbatim.
     expect(createMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ description: "Flag breaking routes.", body: "# Rules\nbody", enabled: false }),
+      expect.objectContaining({ description: "Flag breaking routes.", body: rawContent, enabled: false }),
+      expect.anything(),
+    );
+    // v2: the same content with the YAML header cut and no stray whitespace left behind.
+    expect(updateMutate).toHaveBeenCalledWith(
+      { id: "sk9", patch: { body: "# Rules\nbody", message: "Removed imported YAML frontmatter" } },
       expect.anything(),
     );
   });
 
-  it("fetches a URL preview, prefills the form, and only creates on confirm", () => {
+  it("fetches a URL preview, shows the stripped body, and creates v1 raw / v2 stripped on confirm", () => {
+    createMutate.mockImplementation((_input, opts) => opts.onSuccess({ id: "sk9", name: "Fetched Rule" }));
+    const rawBody =
+      "---\nname: Fetched Rule\ndescription: Flag breaking routes.\nexternal_skill_imported_from: https://example.com/rule.md\n---\n# Fetched Rule\nbody";
     previewMutate.mockImplementation((_url, opts) =>
-      opts.onSuccess({ name: "Fetched Rule", body: "# Fetched Rule\nbody" }),
+      opts.onSuccess({ name: "Fetched Rule", description: "Flag breaking routes.", body: rawBody }),
     );
     renderModal("scratch");
     fireEvent.click(screen.getByRole("button", { name: "From URL" }));
@@ -118,12 +133,40 @@ describe("CreateSkillModal", () => {
     // No skill is created merely by fetching — only the preview form is filled.
     expect(createMutate).not.toHaveBeenCalled();
     expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("Fetched Rule");
+    expect(screen.getByRole("textbox", { name: "Directive Description" })).toHaveValue("Flag breaking routes.");
+    // The working body shown/edited by the user is already frontmatter-free.
     expect(screen.getByRole("textbox", { name: "Skill Body (Markdown)" })).toHaveValue("# Fetched Rule\nbody");
 
     fireEvent.click(screen.getByRole("button", { name: /Import Skill/ }));
+    // v1: the raw fetch, header (incl. our provenance stamp) included.
     expect(createMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Fetched Rule", source: "imported_url", enabled: false }),
+      expect.objectContaining({
+        name: "Fetched Rule",
+        description: "Flag breaking routes.",
+        source: "imported_url",
+        body: rawBody,
+        enabled: false,
+      }),
       expect.anything(),
+    );
+    // v2: the header cut, no stray whitespace left behind.
+    expect(updateMutate).toHaveBeenCalledWith(
+      { id: "sk9", patch: { body: "# Fetched Rule\nbody", message: "Removed imported YAML frontmatter" } },
+      expect.anything(),
+    );
+  });
+
+  it("fills a translated description when the fetched URL has no frontmatter one", () => {
+    previewMutate.mockImplementation((_url, opts) =>
+      opts.onSuccess({ name: "Fetched Rule", description: "", body: "# Fetched Rule\nbody" }),
+    );
+    renderModal("scratch");
+    fireEvent.click(screen.getByRole("button", { name: "From URL" }));
+    type("Skill URL", "https://example.com/rule.md");
+    fireEvent.click(screen.getByRole("button", { name: /Fetch/ }));
+
+    expect(screen.getByRole("textbox", { name: "Directive Description" })).toHaveValue(
+      "Imported from https://example.com/rule.md",
     );
   });
 
@@ -186,6 +229,53 @@ describe("CreateSkillModal", () => {
       expect(screen.getByRole("textbox", { name: "Directive Description" })).toHaveValue(
         "Imported from pkg/rule.md",
       ),
+    );
+  });
+
+  it("fills empty Name/Description from a pasted YAML header on the scratch tab, without stripping it from the visible body", () => {
+    renderModal("scratch");
+    type(
+      "Skill Body (Markdown)",
+      "---\nname: Pasted Rule\ndescription: Flag pasted headers.\n---\n# Rules\nbody",
+    );
+
+    expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("Pasted Rule");
+    expect(screen.getByRole("textbox", { name: "Directive Description" })).toHaveValue("Flag pasted headers.");
+    // The header stays visible — cutting happens only on submit, never live.
+    expect(screen.getByRole("textbox", { name: "Skill Body (Markdown)" })).toHaveValue(
+      "---\nname: Pasted Rule\ndescription: Flag pasted headers.\n---\n# Rules\nbody",
+    );
+  });
+
+  it("does not overwrite an already-filled Name/Description with a pasted header's values", () => {
+    renderModal("scratch");
+    type("Skill Name", "My Own Name");
+    type("Directive Description", "My own description");
+    type("Skill Body (Markdown)", "---\nname: Pasted Rule\ndescription: Pasted desc.\n---\nbody");
+
+    expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("My Own Name");
+    expect(screen.getByRole("textbox", { name: "Directive Description" })).toHaveValue("My own description");
+  });
+
+  it("creates a scratch skill with a pasted header as v1, then cuts the header into v2 only after Create Skill is pressed", () => {
+    createMutate.mockImplementation((_input, opts) => opts.onSuccess({ id: "sk9", name: "Pasted Rule" }));
+    const rawContent = "---\nname: Pasted Rule\ndescription: Flag pasted headers.\n---\n# Rules\nbody";
+    renderModal("scratch");
+    type("Skill Body (Markdown)", rawContent);
+
+    // Still raw right before submit — the header is never cut ahead of time.
+    expect(screen.getByRole("textbox", { name: "Skill Body (Markdown)" })).toHaveValue(rawContent);
+    fireEvent.click(screen.getByRole("button", { name: /Create Skill/ }));
+
+    // v1: the raw, header-included body — manual/enabled provenance, unaffected by the split.
+    expect(createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ body: rawContent, source: "manual", enabled: true }),
+      expect.anything(),
+    );
+    // v2: the header cut, no stray whitespace left behind.
+    expect(updateMutate).toHaveBeenCalledWith(
+      { id: "sk9", patch: { body: "# Rules\nbody", message: "Removed YAML frontmatter" } },
+      expect.anything(),
     );
   });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSkillMarkdown, preferredEntryIndex } from "./skill-markdown";
+import { parseSkillMarkdown, preferredEntryIndex, stripFrontmatter } from "./skill-markdown";
 
 describe("parseSkillMarkdown", () => {
   it("takes name/description from frontmatter and strips it from the body", () => {
@@ -28,6 +28,17 @@ describe("parseSkillMarkdown", () => {
   it("keeps a body that merely contains a --- rule", () => {
     const md = "# Title\n\n---\n\ntext";
     expect(parseSkillMarkdown(md, "a.md").body).toBe(md);
+  });
+});
+
+describe("stripFrontmatter", () => {
+  it("cuts a leading frontmatter block and trims the remainder", () => {
+    const md = "---\nname: x\ndescription: y\n---\n\n# Rules\nbody\n";
+    expect(stripFrontmatter(md)).toBe("# Rules\nbody");
+  });
+
+  it("returns the trimmed content unchanged when there is no frontmatter", () => {
+    expect(stripFrontmatter("  # Rules\nbody  \n")).toBe("# Rules\nbody");
   });
 });
 

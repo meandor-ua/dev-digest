@@ -160,6 +160,7 @@ export type SkillContext = z.infer<typeof SkillContext>;
 // ---- Skill URL import preview (fetch → preview → confirm) ----
 export const SkillImportPreview = z.object({
   name: z.string(),
+  description: z.string(),
   body: z.string(),
 });
 export type SkillImportPreview = z.infer<typeof SkillImportPreview>;

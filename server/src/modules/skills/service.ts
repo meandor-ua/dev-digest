@@ -9,7 +9,7 @@ import type {
   SkillSource,
 } from '@devdigest/shared';
 import type { InsertSkill, UpdateSkill, SkillsServiceDeps } from './ports.js';
-import { deriveSkillName } from './helpers.js';
+import { buildImportedMarkdown, stripFrontmatter } from './helpers.js';
 import { SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX } from './constants.js';
 import { NotFoundError, ValidationError } from '../../platform/errors.js';
 
@@ -121,35 +121,52 @@ export class SkillsService {
     name?: string,
     type?: SkillType,
   ): Promise<Skill> {
-    const { text: body, finalUrl } = await this.deps.remoteText.fetchText(url);
+    const { text: raw, finalUrl } = await this.deps.remoteText.fetchText(url);
+    const parsed = buildImportedMarkdown(raw, finalUrl);
 
-    const derivedName = name ?? deriveSkillName(body, finalUrl);
-
-    if (body.length > SKILL_BODY_MAX) {
+    if (parsed.body.length > SKILL_BODY_MAX) {
       throw new ValidationError(`Skill body exceeds ${SKILL_BODY_MAX} characters`);
     }
     // Same limits POST /skills enforces — a heading or URL can be arbitrarily long.
-    return this.create(workspaceId, {
-      name: derivedName.slice(0, SKILL_NAME_MAX),
-      description: `Imported from ${finalUrl}`.slice(0, SKILL_DESCRIPTION_MAX),
+    const created = await this.create(workspaceId, {
+      name: (name ?? parsed.name).slice(0, SKILL_NAME_MAX),
+      description: (parsed.description || `Imported from ${finalUrl}`).slice(0, SKILL_DESCRIPTION_MAX),
       type: type ?? 'custom',
       source: 'imported_url',
-      body,
+      body: parsed.body,
       enabled: false, // imported skills require vetting before enabling
     });
+
+    // v1 keeps the raw fetch (with its frontmatter + provenance stamp) so the
+    // source URL stays recoverable even after v2 strips the whole header.
+    const stripped = stripFrontmatter(parsed.body);
+    if (stripped !== parsed.body) {
+      const updated = await this.update(workspaceId, created.id, {
+        body: stripped,
+        message: 'Removed imported YAML frontmatter',
+      });
+      return updated ?? created;
+    }
+    return created;
   }
 
   /**
-   * Fetch + derive name/body WITHOUT inserting — backs the URL import tab's
-   * fetch → preview → confirm flow (confirm goes through `create`, same as
-   * file import, so the user can edit the prefilled form before saving).
+   * Fetch + derive name/description/body WITHOUT inserting — backs the URL
+   * import tab's fetch → preview → confirm flow (confirm goes through
+   * `create`, same as file import, so the user can edit the prefilled form
+   * before saving).
    */
   async previewImportFromUrl(url: string): Promise<SkillImportPreview> {
-    const { text: body, finalUrl } = await this.deps.remoteText.fetchText(url);
-    if (body.length > SKILL_BODY_MAX) {
+    const { text: raw, finalUrl } = await this.deps.remoteText.fetchText(url);
+    const parsed = buildImportedMarkdown(raw, finalUrl);
+    if (parsed.body.length > SKILL_BODY_MAX) {
       throw new ValidationError(`Skill body exceeds ${SKILL_BODY_MAX} characters`);
     }
-    return { name: deriveSkillName(body, finalUrl).slice(0, SKILL_NAME_MAX), body };
+    return {
+      name: parsed.name.slice(0, SKILL_NAME_MAX),
+      description: parsed.description,
+      body: parsed.body,
+    };
   }
 
   // ---- Project context (Context tab) --------------------------------------

@@ -51,16 +51,6 @@ export function SkillCard({
           <Icon.Sparkles size={14} />
         </div>
         <span style={s.name}>{skill.name}</span>
-        {needsVetting && (
-          <span title={t("listItem.vettingTitle")}>
-            <Badge
-              color="var(--warn)"
-              style={{ fontSize: 11, cursor: "default" }}
-            >
-              {t("listItem.needsVetting")}
-            </Badge>
-          </span>
-        )}
         <div
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
@@ -84,6 +74,19 @@ export function SkillCard({
           </button>
         )}
       </div>
+
+      {needsVetting && (
+        <div style={s.vettingRow}>
+          <span title={t("listItem.vettingTitle")}>
+            <Badge
+              color="var(--warn)"
+              style={{ fontSize: 11, cursor: "default" }}
+            >
+              {t("listItem.needsVetting")}
+            </Badge>
+          </span>
+        </div>
+      )}
 
       {skill.description ? (
         <div style={s.description}>{skill.description}</div>

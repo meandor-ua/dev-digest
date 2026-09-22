@@ -67,6 +67,14 @@ vi.mock("@/lib/hooks/skills", () => ({
     isPending: false,
     variables: undefined,
   }),
+  useCreateSkill: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+  usePreviewSkillUrl: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }));
 
 vi.mock("@/lib/toast", () => ({
@@ -215,6 +223,13 @@ describe("SkillsColumn", () => {
     confirm.mockReturnValue(true);
     fireEvent.click(screen.getByText("Test Coverage"));
     expect(push).toHaveBeenCalledWith("/skills/sk2?tab=config");
+  });
+
+  it("opens the create modal on the URL tab from the Add Skill dropdown", () => {
+    renderWithProviders(<SkillsColumn activeId={undefined} tab="config" />);
+    fireEvent.click(screen.getByRole("button", { name: /Add Skill/ }));
+    fireEvent.click(screen.getByText("Import from URL"));
+    expect(screen.getByText("Skill URL")).toBeInTheDocument();
   });
 
   it("navigates without asking when nothing is unsaved", () => {

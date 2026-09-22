@@ -266,6 +266,31 @@ you, so the next agent/session doesn't relearn it.
   must apply the same rule. Evidence: `server/src/db/seed.ts:311`,
   `server/test/seed.it.test.ts` ("the imported one lands unvetted").
 
+- **2026-09-22** — `SkillsService.importFromUrl` (`POST /skills/import`) is
+  dead-ish code from the current UI's perspective: the "From URL" tab's
+  Import button never calls it — it only calls `previewImportFromUrl`
+  (`POST /skills/import/preview`) for the fetch step, then confirms through
+  the same generic `POST /skills` every other creation path uses. It was
+  still updated (create raw body as v1, `update()` with the
+  frontmatter-stripped body as v2) for API-contract parity with the real
+  (client-driven) flow, not because the UI exercises it. Check what a
+  service method's actual caller is before assuming route + service method
+  = the live code path. Evidence: `server/src/modules/skills/service.ts`
+  (`importFromUrl`), `client/src/lib/hooks/skills.ts` (`usePreviewSkillUrl`
+  is the only `/skills/import*` hook the client defines).
+- **2026-09-22** — There's no DB column for a skill's import source URL, and
+  none was added. `buildImportedMarkdown` (`server/src/modules/skills/helpers.ts`)
+  instead stamps `external_skill_imported_from: <url>` into the fetched
+  Markdown's own YAML frontmatter (creating the block if absent, updating
+  the key in place on re-fetch) before the augmented text is ever assigned
+  to `body`/`skills.body` — so provenance rides along in the one text field
+  that's already persisted, instead of needing a migration, and survives
+  even if the user later edits the description. `previewImportFromUrl` and
+  `importFromUrl` both go through this one function now (replacing the bare
+  `deriveSkillName` call), so preview and direct-import stay in sync.
+  Evidence: `server/src/modules/skills/helpers.ts` (`buildImportedMarkdown`),
+  `server/src/modules/skills/service.ts` (`importFromUrl`,
+  `previewImportFromUrl`).
 - **2026-09-22** — Don't compute a skill's next version as `existing.version + 1`
   outside a transaction and then insert the snapshot with `onConflictDoNothing()`:
   two concurrent PUTs both pick N+1, the second snapshot is silently swallowed,

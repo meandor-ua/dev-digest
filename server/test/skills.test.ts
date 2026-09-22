@@ -3,7 +3,7 @@ import { assemblePrompt } from '@devdigest/reviewer-core';
 import { SkillsService } from '../src/modules/skills/service.js';
 import type { Skill } from '@devdigest/shared';
 import type { SkillsServiceDeps, SkillsStore } from '../src/modules/skills/ports.js';
-import { toSkillVersionDto } from '../src/modules/skills/helpers.js';
+import { toSkillVersionDto, buildImportedMarkdown, stripFrontmatter } from '../src/modules/skills/helpers.js';
 import { ValidationError } from '../src/platform/errors.js';
 
 describe('assemblePrompt with Skills', () => {
@@ -112,6 +112,134 @@ describe('SkillsService unit tests', () => {
       ValidationError,
     );
     expect(store.update).not.toHaveBeenCalled();
+  });
+
+  function makeServiceWithFetch(text: string, finalUrl = 'https://example.com/rule.md') {
+    const store: Partial<SkillsStore> = {
+      insert: vi.fn().mockResolvedValue(skill),
+      update: vi.fn().mockResolvedValue(skill),
+    };
+    const deps: SkillsServiceDeps = {
+      skills: store as SkillsStore,
+      repos: { getById: vi.fn() },
+      projectDocs: { list: vi.fn(), read: vi.fn(), readMany: vi.fn() },
+      remoteText: { fetchText: vi.fn().mockResolvedValue({ text, finalUrl }) },
+    };
+    return { service: new SkillsService(deps), store };
+  }
+
+  it('previewImportFromUrl prefers the frontmatter description over the fallback', async () => {
+    const { service } = makeServiceWithFetch(
+      '---\nname: API Contract\ndescription: Flag breaking routes.\n---\n# Rules\nbody',
+    );
+    const preview = await service.previewImportFromUrl('https://example.com/rule.md');
+    expect(preview).toEqual({
+      name: 'API Contract',
+      description: 'Flag breaking routes.',
+      body: '---\nname: API Contract\ndescription: Flag breaking routes.\nexternal_skill_imported_from: https://example.com/rule.md\n---\n# Rules\nbody',
+    });
+  });
+
+  it('previewImportFromUrl returns an empty description when the source has none', async () => {
+    const { service } = makeServiceWithFetch('# Rules\nbody');
+    const preview = await service.previewImportFromUrl('https://example.com/rule.md');
+    expect(preview.description).toBe('');
+    expect(preview.name).toBe('Rules');
+  });
+
+  it('importFromUrl falls back to "Imported from <url>" only when the source has no frontmatter description', async () => {
+    const { service, store } = makeServiceWithFetch('# Rules\nbody');
+    await service.importFromUrl('ws-1', 'https://example.com/rule.md');
+    expect(store.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ description: 'Imported from https://example.com/rule.md' }),
+    );
+  });
+
+  it('importFromUrl uses the real frontmatter description when present', async () => {
+    const { service, store } = makeServiceWithFetch(
+      '---\ndescription: Flag breaking routes.\n---\n# Rules\nbody',
+    );
+    await service.importFromUrl('ws-1', 'https://example.com/rule.md');
+    expect(store.insert).toHaveBeenCalledWith(expect.objectContaining({ description: 'Flag breaking routes.' }));
+  });
+
+  it('importFromUrl saves the raw fetch (with frontmatter + provenance stamp) as v1, then cuts the header into v2', async () => {
+    const { service, store } = makeServiceWithFetch('---\nname: API Contract\n---\n# Rules\nbody');
+    await service.importFromUrl('ws-1', 'https://example.com/rule.md');
+
+    expect(store.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: '---\nname: API Contract\nexternal_skill_imported_from: https://example.com/rule.md\n---\n# Rules\nbody',
+      }),
+    );
+    expect(store.update).toHaveBeenCalledWith(
+      'ws-1',
+      skill.id,
+      expect.objectContaining({ body: '# Rules\nbody', message: 'Removed imported YAML frontmatter' }),
+    );
+  });
+
+  it('importFromUrl still creates v2 when the source had no frontmatter of its own, since the provenance stamp always adds one', async () => {
+    const { service, store } = makeServiceWithFetch('# Rules\nbody');
+    await service.importFromUrl('ws-1', 'https://example.com/rule.md');
+    expect(store.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: '---\nexternal_skill_imported_from: https://example.com/rule.md\n---\n# Rules\nbody',
+      }),
+    );
+    expect(store.update).toHaveBeenCalledWith(
+      'ws-1',
+      skill.id,
+      expect.objectContaining({ body: '# Rules\nbody' }),
+    );
+  });
+});
+
+describe('buildImportedMarkdown', () => {
+  const url = 'https://example.com/skills/api-contract/SKILL.md';
+
+  it('appends the provenance key as the last frontmatter field when frontmatter exists', () => {
+    const result = buildImportedMarkdown(
+      '---\nname: API Contract\ndescription: Flag breaking routes.\n---\n# Rules\nbody',
+      url,
+    );
+    expect(result).toEqual({
+      name: 'API Contract',
+      description: 'Flag breaking routes.',
+      body: `---\nname: API Contract\ndescription: Flag breaking routes.\nexternal_skill_imported_from: ${url}\n---\n# Rules\nbody`,
+    });
+  });
+
+  it('creates a new frontmatter block when the source has none', () => {
+    const result = buildImportedMarkdown('# Rules\nbody', url);
+    expect(result).toEqual({
+      name: 'Rules',
+      description: '',
+      body: `---\nexternal_skill_imported_from: ${url}\n---\n# Rules\nbody`,
+    });
+  });
+
+  it('updates an existing provenance key in place on re-fetch, instead of duplicating it', () => {
+    const result = buildImportedMarkdown(
+      `---\nname: API Contract\nexternal_skill_imported_from: https://old.example.com/x.md\n---\n# Rules\nbody`,
+      url,
+    );
+    expect(result.body).toBe(`---\nname: API Contract\nexternal_skill_imported_from: ${url}\n---\n# Rules\nbody`);
+  });
+
+  it('falls back to the URL basename when there is no frontmatter name or heading', () => {
+    const result = buildImportedMarkdown('just body text, no heading', 'https://example.com/my-rule.md');
+    expect(result.name).toBe('my-rule');
+  });
+});
+
+describe('stripFrontmatter', () => {
+  it('cuts a leading frontmatter block and trims the remainder — no stray whitespace left', () => {
+    expect(stripFrontmatter('---\nname: x\n---\n\n# Rules\nbody\n')).toBe('# Rules\nbody');
+  });
+
+  it('returns the trimmed content unchanged when there is no frontmatter', () => {
+    expect(stripFrontmatter('  # Rules\nbody  \n')).toBe('# Rules\nbody');
   });
 });
 

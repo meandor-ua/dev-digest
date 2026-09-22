@@ -140,6 +140,7 @@
     "add": "Add Skill",
     "addScratch": "Create from scratch",
     "addImport": "Import from file (.md/.zip)",
+    "addUrl": "Import from URL",
     "search": "Search skills…",
     "emptyTitle": "No matching skills",
     "emptyBody": "Try another search term",

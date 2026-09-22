@@ -46,10 +46,17 @@ function parseFrontmatter(block: string): Record<string, string> {
 
 const baseName = (filename: string) => filename.split("/").pop() ?? filename;
 
+/** Cuts a leading YAML frontmatter block, if any, and trims the result — no
+ *  leading/trailing blank lines left behind from the cut. */
+export function stripFrontmatter(content: string): string {
+  const fm = content.match(FRONTMATTER);
+  return (fm ? content.slice(fm[0].length) : content).trim();
+}
+
 export function parseSkillMarkdown(content: string, filename: string): ParsedSkillMarkdown {
   const fm = content.match(FRONTMATTER);
   const meta = fm ? parseFrontmatter(fm[1]!) : {};
-  const body = (fm ? content.slice(fm[0].length) : content).trim();
+  const body = stripFrontmatter(content);
   const heading = body.match(/^#+\s+(.+)$/m)?.[1]?.trim();
   const name = meta.name || heading || baseName(filename).replace(/\.md$/i, "");
   // Empty when there's no frontmatter description — the modal fills in the

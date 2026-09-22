@@ -22,6 +22,51 @@ the package's `insights/INSIGHTS.md`.
   blocks, not full YAML, so nothing in an imported file can expand or execute.
   The URL import path (server `deriveSkillName`) does not parse frontmatter
   yet. Evidence: `client/src/app/skills/_components/CreateSkillModal/skill-markdown.ts:47`.
+- **2026-09-22** — Supersedes the entry above about the URL import path not
+  parsing frontmatter: it now does, server-side, via
+  `buildImportedMarkdown` (`server/src/modules/skills/helpers.ts`), which
+  `previewImportFromUrl`/`importFromUrl` both call. `SkillImportPreview`
+  gained a `description` field (both vendored `knowledge.ts` copies) so the
+  client can prefer it the same way file import already prefers
+  `parseSkillMarkdown`'s parsed description — fallback text only when the
+  frontmatter has none. Unlike file import, the URL path does NOT strip
+  frontmatter out of the body; it's kept inline (with a stamped
+  `external_skill_imported_from: <url>` key) so the source URL survives in
+  `skills.body` from the first save even after the description is edited.
+  The "Add Skill" dropdown (`SkillsColumn.tsx`) can now reach this tab —
+  before, it only offered scratch/file even though the URL tab already
+  existed in `CreateSkillModal`. Evidence:
+  `client/src/app/skills/_components/CreateSkillModal/CreateSkillModal.tsx:150`,
+  `server/src/modules/skills/helpers.ts` (`buildImportedMarkdown`).
+- **2026-09-22** — Both import paths (file and URL) now save the raw import
+  as version 1, then immediately chain a second save with the YAML
+  frontmatter cut, as version 2 — done entirely client-side in
+  `CreateSkillModal.tsx`'s `handleSubmit` (`createMutation` with the raw
+  body, then `updateMutation` with `stripFrontmatter(rawBody)` in its
+  `onSuccess`), reusing `useUpdateSkill` the same way `SkillsColumn.tsx`
+  does. A `rawBody` state, set once at import time and never touched by
+  further edits to the working `body`, is what makes v1 an untouched
+  archival copy even if the user edits the form before confirming. The
+  second save is skipped (`needsStrip` false) only when stripping would be a
+  no-op — true for a header-less file, but for URL import
+  `buildImportedMarkdown` (server) always injects a provenance frontmatter
+  block, so a URL import always produces v2. Evidence:
+  `client/src/app/skills/_components/CreateSkillModal/CreateSkillModal.tsx`
+  (`handleSubmit`, `needsStrip`), `stripFrontmatter` exported from
+  `skill-markdown.ts`.
+- **2026-09-22** — The raw-v1/stripped-v2 frontmatter strategy also applies
+  to "Create from scratch": pasting/typing a body with a YAML header there
+  auto-fills empty Name/Description live (guarded by `!name.trim()` /
+  `!description.trim()`, so an already-filled field is never overwritten),
+  but — unlike file/URL import — the header is never cut from the visible
+  Body textarea; the cut happens only at Create Skill submit time. This
+  means `handleSubmit`'s v1/v2 split has two independent triggers: `origin
+  === "imported"` (compares the frozen `rawBody` against the edited working
+  `body`) vs. the scratch case (runs `stripFrontmatter` on `body` itself at
+  submit time) — same v1-raw/v2-stripped outcome, different origin and
+  different point at which the header actually gets cut. Evidence:
+  `client/src/app/skills/_components/CreateSkillModal/CreateSkillModal.tsx`
+  (`handleBodyChange`, `handleSubmit`'s `v1Body`/`v2Body`).
 - **2026-09-22** — The skill draft (unsaved form state + rebase) lives in
   `useSkillDraft`, called by `SkillEditor`, not inside ConfigTab. That way
   Preview renders the unsaved body and its Restore button drops the edits. A

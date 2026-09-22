@@ -35,6 +35,9 @@ export const s = {
     overflow: "hidden",
     textOverflow: "ellipsis",
   } satisfies CSSProperties,
+  vettingRow: {
+    marginTop: 6,
+  } satisfies CSSProperties,
   deleteBtn: (pending: boolean): CSSProperties => ({
     background: "none",
     border: "none",

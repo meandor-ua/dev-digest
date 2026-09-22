@@ -6,11 +6,11 @@ import { useTranslations } from "next-intl";
 import { Modal, Button, TextInput, Icon } from "@devdigest/ui";
 import type { SkillType } from "@devdigest/shared";
 import { SKILL_TYPES } from "@/lib/skill-type";
-import { useCreateSkill, usePreviewSkillUrl } from "@/lib/hooks/skills";
+import { useCreateSkill, useUpdateSkill, usePreviewSkillUrl } from "@/lib/hooks/skills";
 import { useToast } from "@/lib/toast";
 import { estimateTokens } from "@/lib/tokens";
 import { extractMarkdownFiles, ExtractError, type ExtractedMarkdown } from "./file-extractor";
-import { parseSkillMarkdown, preferredEntryIndex } from "./skill-markdown";
+import { parseSkillMarkdown, preferredEntryIndex, stripFrontmatter } from "./skill-markdown";
 import { s } from "./styles";
 
 export function CreateSkillModal({
@@ -24,6 +24,7 @@ export function CreateSkillModal({
   const t = useTranslations("skills");
   const toast = useToast();
   const createMutation = useCreateSkill();
+  const updateMutation = useUpdateSkill();
   const previewMutation = usePreviewSkillUrl();
 
   const [tab, setTabState] = React.useState<"scratch" | "import" | "url">(initialTab);
@@ -37,6 +38,10 @@ export function CreateSkillModal({
   const [description, setDescription] = React.useState("");
   const [type, setType] = React.useState<SkillType>("rubric");
   const [body, setBody] = React.useState("");
+  // The untouched import (frontmatter included), frozen at import time — kept
+  // separate from `body` so version 1 preserves the original upload even as
+  // the user edits the (frontmatter-stripped) working body before saving.
+  const [rawBody, setRawBody] = React.useState("");
 
   // Import state
   const [isDragOver, setIsDragOver] = React.useState(false);
@@ -57,6 +62,7 @@ export function CreateSkillModal({
     setName("");
     setDescription("");
     setBody("");
+    setRawBody("");
     setExtractedFiles([]);
     setOrigin("manual");
   };
@@ -73,6 +79,7 @@ export function CreateSkillModal({
     setName(parsed.name);
     setDescription(parsed.description || t("create.file.importedDescription", { filename: item.filename }));
     setBody(parsed.body);
+    setRawBody(item.content);
     setOrigin("imported");
   };
 
@@ -103,6 +110,26 @@ export function CreateSkillModal({
 
   const handleSelectExtracted = (idx: number) => applyExtracted(extractedFiles, idx);
 
+  // Create-from-scratch: the body is edited directly, so a pasted/typed YAML
+  // header is never stripped from what's shown — only used, live, as a
+  // fallback for Name/Description while those fields are still empty. The
+  // header itself is cut only at submit time (see handleSubmit).
+  const handleBodyChange = (value: string) => {
+    setBody(value);
+    if (tab !== "scratch" || origin !== "manual") return;
+    const parsed = parseSkillMarkdown(value, "");
+    if (!name.trim() && parsed.name) setName(parsed.name);
+    if (!description.trim() && parsed.description) setDescription(parsed.description);
+  };
+
+  const finish = (created: { id: string; name: string }) => {
+    const key =
+      tab === "scratch" ? "create.scratch.success" : tab === "import" ? "create.file.createSuccess" : "create.url.success";
+    toast.success(t(key, { name: created.name }));
+    onClose();
+    router.push(`/skills/${created.id}`);
+  };
+
   const handleSubmit = () => {
     if (!name.trim()) {
       toast.error(t("create.scratch.errors.nameRequired"));
@@ -113,22 +140,53 @@ export function CreateSkillModal({
       return;
     }
 
+    const trimmedBody = body.trim();
+    // v1/v2 split: v1 always preserves whatever header the body arrived (or
+    // was typed) with, verbatim; v2 is the clean body the skill actually
+    // starts on. Two ways to get here:
+    // - Imported content whose raw upload still differs from the (already
+    //   frontmatter-stripped) working body the user may have edited further.
+    // - Manual "create from scratch" content that still carries a pasted/typed
+    //   YAML header — cut only now, never while the user was still editing.
+    let v1Body = trimmedBody;
+    let v2Body: string | null = null;
+    let stripMessage = "Removed YAML frontmatter";
+    if (origin === "imported") {
+      if (rawBody.trim() !== trimmedBody) {
+        v1Body = rawBody.trim();
+        v2Body = trimmedBody;
+        stripMessage = "Removed imported YAML frontmatter";
+      }
+    } else {
+      const stripped = stripFrontmatter(trimmedBody);
+      if (stripped !== trimmedBody) v2Body = stripped;
+    }
+    const needsStrip = v2Body !== null;
+
     createMutation.mutate(
       {
         name: name.trim(),
         description: description.trim(),
         type,
         source: origin === "imported" ? "imported_url" : "manual",
-        body: body.trim(),
+        body: v1Body,
         enabled: origin === "manual", // Imported content starts disabled until vetted
       },
       {
         onSuccess: (created) => {
-          const key =
-            tab === "scratch" ? "create.scratch.success" : tab === "import" ? "create.file.createSuccess" : "create.url.success";
-          toast.success(t(key, { name: created.name }));
-          onClose();
-          router.push(`/skills/${created.id}`);
+          if (!needsStrip) {
+            finish(created);
+            return;
+          }
+          updateMutation.mutate(
+            { id: created.id, patch: { body: v2Body!, message: stripMessage } },
+            {
+              onSuccess: () => finish(created),
+              onError: (err) => {
+                toast.error((err as Error).message || t("create.scratch.errors.createFailed"));
+              },
+            },
+          );
         },
         onError: (err) => {
           toast.error((err as Error).message || t("create.scratch.errors.createFailed"));
@@ -147,8 +205,9 @@ export function CreateSkillModal({
     previewMutation.mutate(importUrl.trim(), {
       onSuccess: (preview) => {
         setName(preview.name);
-        setDescription(t("create.url.importedDescription", { url: importUrl.trim() }));
-        setBody(preview.body);
+        setDescription(preview.description || t("create.url.importedDescription", { url: importUrl.trim() }));
+        setBody(stripFrontmatter(preview.body));
+        setRawBody(preview.body);
         setOrigin("imported");
         setUrlFetched(true);
       },
@@ -311,7 +370,7 @@ export function CreateSkillModal({
               <textarea
                 style={s.textarea}
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
+                onChange={(e) => handleBodyChange(e.target.value)}
                 placeholder={t("create.scratch.bodyPlaceholder")}
                 aria-label={t("create.scratch.body")}
               />
@@ -340,9 +399,9 @@ export function CreateSkillModal({
               size="md"
               icon="Sparkles"
               onClick={handleSubmit}
-              disabled={createMutation.isPending || !name.trim() || !body.trim()}
+              disabled={createMutation.isPending || updateMutation.isPending || !name.trim() || !body.trim()}
             >
-              {createMutation.isPending
+              {createMutation.isPending || updateMutation.isPending
                 ? t("create.scratch.creating")
                 : tab === "scratch"
                   ? t("create.scratch.create")

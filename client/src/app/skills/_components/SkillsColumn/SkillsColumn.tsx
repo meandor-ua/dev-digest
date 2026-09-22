@@ -41,7 +41,7 @@ export function SkillsColumn({
     });
   };
 
-  const [modalState, setModalState] = React.useState<"scratch" | "import" | null>(null);
+  const [modalState, setModalState] = React.useState<"scratch" | "import" | "url" | null>(null);
   const [search, setSearch] = React.useState("");
 
   const q = search.trim().toLowerCase();
@@ -84,6 +84,11 @@ export function SkillsColumn({
                 label: t("column.addImport"),
                 icon: "Upload",
                 onClick: () => setModalState("import"),
+              },
+              {
+                label: t("column.addUrl"),
+                icon: "Link",
+                onClick: () => setModalState("url"),
               },
             ]}
           />
