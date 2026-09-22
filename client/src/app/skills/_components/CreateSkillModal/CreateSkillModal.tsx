@@ -10,6 +10,7 @@ import { useCreateSkill, usePreviewSkillUrl } from "@/lib/hooks/skills";
 import { useToast } from "@/lib/toast";
 import { estimateTokens } from "@/lib/tokens";
 import { extractMarkdownFiles, type ExtractedMarkdown } from "./file-extractor";
+import { parseSkillMarkdown, preferredEntryIndex } from "./skill-markdown";
 import { s } from "./styles";
 
 export function CreateSkillModal({
@@ -50,26 +51,24 @@ export function CreateSkillModal({
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Prefill the shared fields from one extracted file's skill core
+  // (frontmatter name/description + the Markdown body).
+  const applyExtracted = (files: ExtractedMarkdown[], idx: number) => {
+    setSelectedFileIdx(idx);
+    const item = files[idx];
+    if (!item) return;
+    const parsed = parseSkillMarkdown(item.content, item.filename);
+    setName(parsed.name);
+    setDescription(parsed.description);
+    setBody(parsed.body);
+  };
+
   const handleFile = async (file: File) => {
     setImportingFile(true);
     try {
       const extracted = await extractMarkdownFiles(file);
       setExtractedFiles(extracted);
-      setSelectedFileIdx(0);
-
-      const first = extracted[0];
-      if (first) {
-        setBody(first.content);
-
-        // Derive name from first markdown heading or clean filename
-        const headingMatch = first.content.match(/^#+\s+(.+)$/m);
-        if (headingMatch && headingMatch[1]) {
-          setName(headingMatch[1].trim());
-        } else {
-          setName(first.filename.replace(/\.md$/i, ""));
-        }
-        setDescription(`Imported from ${first.filename}`);
-      }
+      applyExtracted(extracted, preferredEntryIndex(extracted));
       toast.success(t("create.file.success", { count: extracted.length }));
     } catch (err) {
       toast.error((err as Error).message || t("create.file.extractFailed"));
@@ -85,20 +84,7 @@ export function CreateSkillModal({
     if (file) handleFile(file);
   };
 
-  const handleSelectExtracted = (idx: number) => {
-    setSelectedFileIdx(idx);
-    const item = extractedFiles[idx];
-    if (item) {
-      setBody(item.content);
-      const headingMatch = item.content.match(/^#+\s+(.+)$/m);
-      if (headingMatch && headingMatch[1]) {
-        setName(headingMatch[1].trim());
-      } else {
-        setName(item.filename.replace(/\.md$/i, ""));
-      }
-      setDescription(`Imported from ${item.filename}`);
-    }
-  };
+  const handleSelectExtracted = (idx: number) => applyExtracted(extractedFiles, idx);
 
   const handleSubmit = () => {
     if (!name.trim()) {

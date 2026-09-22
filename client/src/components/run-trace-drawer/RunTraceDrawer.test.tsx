@@ -53,6 +53,14 @@ describe("A5 Run Trace drawer (smoke)", () => {
     expect(screen.getByText("$0.0037")).toBeInTheDocument();
   });
 
+  it("shows the skills block with its estimated token count in the prompt assembly", () => {
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    fireEvent.click(screen.getByText("Prompt assembly"));
+    const skillsRow = screen.getByText("Skills (dynamic)").parentElement!;
+    // "### skill" is 9 chars → ~3 tokens at ~4 chars/token
+    expect(skillsRow).toHaveTextContent("~3 tok");
+  });
+
   it("switches to the live log tab", () => {
     renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
     fireEvent.click(screen.getByText("log"));

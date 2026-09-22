@@ -112,6 +112,7 @@ export function SkillsTab({ agentId }: { agentId: string }) {
             <Dropdown
               width={260}
               align="right"
+              portal
               trigger={
                 <Button kind="secondary" size="sm" icon="Plus" iconRight="ChevronDown">
                   {t("skills.attach")}

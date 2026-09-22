@@ -93,6 +93,11 @@ you, so the next agent/session doesn't relearn it.
 
 ## Codebase Patterns
 
+- **2026-09-22** — `pnpm db:seed` upserts demo skills and agents by name and
+  inserts links with `onConflictDoNothing`. Re-running it after testing the
+  Skills delete button on the live DB restores the deleted demo skills and
+  links. Rows that still exist are left untouched: no re-enable, no body
+  overwrite. Evidence: `server/src/db/seed.ts:315`.
 - **2026-09-22** — An Infrastructure adapter is allowed to depend on ANOTHER
   adapter, injected via its own constructor — not just `Db`. `GitProjectDocsAdapter`
   (walks a repo clone for markdown project docs) takes a `GitClient` in its
@@ -137,6 +142,13 @@ you, so the next agent/session doesn't relearn it.
 
 ## What Doesn't Work
 
+- **2026-09-22** — Don't wrap imported (non-`manual`) skills with
+  `wrapUntrusted` in the prompt. `INJECTION_GUARD` tells the model to ignore
+  every instruction inside `<untrusted>`, so this silently disables every
+  imported skill. Label them instead (`skillBlock` → `### Skill: <name> (imported url)`).
+  The safeguard for imported skills is vetting: they are saved disabled until
+  someone reads and enables them. Evidence: `server/src/modules/reviews/helpers.ts:102`,
+  `reviewer-core/src/prompt.ts:16`.
 - **2026-09-21** — Seeding extra `reviews` rows with the default
   `created_at = now()` silently hijacks PR #482: "latest review" is chosen by
   `created_at DESC` (`src/modules/pulls/routes.ts:128`,

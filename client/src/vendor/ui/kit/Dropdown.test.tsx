@@ -77,6 +77,25 @@ describe("Dropdown — a portaled menu closes instead of detaching from its trig
     fireEvent(window, new Event("resize"));
     expect(screen.queryByText("Run all")).not.toBeInTheDocument();
   });
+
+  it("stays open while the user scrolls INSIDE the menu (a long list)", () => {
+    open(true);
+    fireEvent.scroll(screen.getByTestId("dropdown-menu"));
+    expect(screen.getByText("Run all")).toBeInTheDocument();
+  });
+
+  it("an in-place (non-portaled) menu stays open on an ancestor scroll — it moves with its trigger", () => {
+    open(false);
+    fireEvent.scroll(document);
+    expect(screen.getByText("Run all")).toBeInTheDocument();
+  });
+
+  it("caps the menu height so a long list scrolls inside it", () => {
+    open(true);
+    const menu = screen.getByTestId("dropdown-menu");
+    expect(menu.style.maxHeight).toBe("320px");
+    expect(menu.style.overflowY).toBe("auto");
+  });
 });
 
 describe("Dropdown — click-outside checks BOTH refs", () => {

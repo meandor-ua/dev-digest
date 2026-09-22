@@ -78,6 +78,21 @@ d('seed: demo PR #482 is reviewable (Testcontainers pg)', () => {
     expect(links.find((l) => l.source === 'imported_url')?.name).toBe('Test Coverage Nudge');
   });
 
+  it('seeds API Contract Reviewer with its two contract skills, in order', async () => {
+    const { db } = pg.handle;
+    const [agent] = await db.select().from(t.agents).where(eq(t.agents.name, 'API Contract Reviewer'));
+    const links = await db
+      .select({ name: t.skills.name, order: t.agentSkills.order, enabled: t.agentSkills.enabled })
+      .from(t.agentSkills)
+      .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
+      .where(eq(t.agentSkills.agentId, agent!.id));
+    expect(links.sort((a, b) => a.order - b.order).map((l) => l.name)).toEqual([
+      'API Breaking Change Rubric',
+      'REST Contract Versioning Convention',
+    ]);
+    expect(links.every((l) => l.enabled)).toBe(true);
+  });
+
   it('re-seeding does not duplicate agent_runs (idempotent)', async () => {
     const { db } = pg.handle;
     const before = (await db.select().from(t.agentRuns)).length;

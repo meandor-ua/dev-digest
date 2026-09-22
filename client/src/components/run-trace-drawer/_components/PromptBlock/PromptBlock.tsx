@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Button, Icon, Modal } from "@devdigest/ui";
 import { s } from "../../styles";
 import { PromptModalBody } from "../PromptModalBody";
+import { estimateTokens } from "@/lib/tokens";
 
 const miniBtnStyle: React.CSSProperties = {
   display: "inline-flex",
@@ -36,6 +37,9 @@ export function PromptBlock({ label, text, color }: { label: string; text: strin
         <span style={s.promptDot(color)} />
         <span style={s.promptLabel}>{label}</span>
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            {t("trace.prompt.tokens", { count: estimateTokens(text || "") })}
+          </span>
           <button
             type="button"
             title={t("trace.prompt.copy")}

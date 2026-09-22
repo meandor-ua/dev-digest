@@ -15,6 +15,13 @@ the package's `insights/INSIGHTS.md`.
   Parse via EOCD + central directory, and cap the inflated size while streaming
   (the declared size can lie — zip bomb). Evidence: same file `:72`
   (`extractFromZip`), `:127` (`inflateCapped`).
+- **2026-09-22** — File import pulls out the skill's core with
+  `parseSkillMarkdown`: frontmatter `name`/`description` fill the form, and
+  the frontmatter block is removed from the body. In a zip, `SKILL.md` is
+  preselected. The parser reads only flat `key: value` pairs and `>`/`|`
+  blocks, not full YAML, so nothing in an imported file can expand or execute.
+  The URL import path (server `deriveSkillName`) does not parse frontmatter
+  yet. Evidence: `client/src/app/skills/_components/CreateSkillModal/skill-markdown.ts:47`.
 
 ## What Doesn't Work
 

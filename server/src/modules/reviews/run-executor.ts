@@ -7,7 +7,7 @@ import type { AgentRow } from '../../db/rows.js';
 import type { LinkedSkillRow } from '../agents/repository.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
-import { taskLine } from './helpers.js';
+import { skillBlock, skillLogLines, taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
@@ -199,11 +199,19 @@ export class ReviewRunExecutor {
       // Fetch linked, enabled skills for this agent
       const linkedSkills = await this.agents.linkedSkills(agent.id);
       const activeLinks = linkedSkills.filter((s) => s.enabled && s.skill.enabled);
-      const skillBodies = activeLinks.map((s) => s.skill.body);
-
-      if (skillBodies.length > 0) {
-        runLog.info(`Skills: ${skillBodies.length} skill(s) attached to prompt`);
-      }
+      const skillBodies = activeLinks.map((s) => skillBlock(s.skill));
+      const skippedSkills = linkedSkills
+        .filter((s) => !(s.enabled && s.skill.enabled))
+        .map((s) => s.skill.name);
+      const skillLog = skillLogLines(
+        activeLinks.map((s, i) => ({
+          name: s.skill.name,
+          type: s.skill.type,
+          tokens: this.container.tokenizer.count(skillBodies[i]!),
+        })),
+        skippedSkills,
+      );
+      for (const line of skillLog) runLog.info(line);
 
       // Project-context docs attached to those same active skills (Context tab)
       // — re-read from the PR's repo clone so they always reflect HEAD; a skill

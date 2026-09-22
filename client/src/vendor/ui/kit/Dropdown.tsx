@@ -66,6 +66,7 @@ export function Dropdown({
   align = "left",
   width = 230,
   portal = false,
+  maxHeight = 320,
 }: {
   trigger: React.ReactNode;
   items: DropdownItemDef[];
@@ -77,6 +78,9 @@ export function Dropdown({
    *  Theme-safe: the CSS variables live on `<html>`, which a body portal
    *  still inherits. */
   portal?: boolean;
+  /** Cap on the menu's height; a longer item list scrolls inside the menu
+   *  instead of growing the page (which would force a scroll to reach it). */
+  maxHeight?: number;
 }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
@@ -104,16 +108,23 @@ export function Dropdown({
   // list renders one of these per row). Closing is the honest minimum: cheaper
   // and less jumpy than live repositioning, and `mousedown` alone never sees a
   // scroll. Capture phase so scrolling in ANY ancestor counts, not just window.
+  // Only portaled menus: an in-place menu scrolls along with its trigger. And
+  // never on a scroll INSIDE the menu itself — that's the user reaching a
+  // lower item of a long list.
   React.useEffect(() => {
-    if (!open) return;
-    const close = () => setOpen(false);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => {
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
+    if (!open || !portal) return;
+    const onScroll = (e: Event) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
     };
-  }, [open]);
+    const onResize = () => setOpen(false);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [open, portal]);
 
   // A portaled menu is positioned from the trigger's viewport rect, since it no
   // longer has the trigger as its offset parent. `next` is computed outside the
@@ -149,6 +160,8 @@ export function Dropdown({
               borderRadius: 9,
               boxShadow: "var(--shadow-modal)",
               padding: 6,
+              maxHeight,
+              overflowY: "auto",
               zIndex: 40,
               animation: "ddpop .12s ease",
             }
@@ -162,6 +175,8 @@ export function Dropdown({
               borderRadius: 9,
               boxShadow: "var(--shadow-modal)",
               padding: 6,
+              maxHeight,
+              overflowY: "auto",
               zIndex: 40,
               animation: "ddpop .12s ease",
             }

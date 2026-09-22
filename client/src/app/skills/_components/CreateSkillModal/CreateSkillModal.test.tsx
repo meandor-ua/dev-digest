@@ -82,6 +82,23 @@ describe("CreateSkillModal", () => {
     );
   });
 
+  it("preselects an archive's SKILL.md and fills name/description from its frontmatter", async () => {
+    extractMarkdownFiles.mockResolvedValue([
+      { filename: "pkg/README.md", content: "# Readme" },
+      { filename: "pkg/SKILL.md", content: "---\nname: api-contract\ndescription: Flag breaking routes.\n---\n# Rules\nbody" },
+    ]);
+    renderModal("import");
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "pkg.zip")] } });
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("api-contract"));
+    fireEvent.click(screen.getByRole("button", { name: /Import Skill/ }));
+
+    expect(createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ description: "Flag breaking routes.", body: "# Rules\nbody", enabled: false }),
+      expect.anything(),
+    );
+  });
+
   it("fetches a URL preview, prefills the form, and only creates on confirm", () => {
     previewMutate.mockImplementation((_url, opts) =>
       opts.onSuccess({ name: "Fetched Rule", body: "# Fetched Rule\nbody" }),

@@ -7,6 +7,7 @@ import {
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
   TEST_QUALITY_REVIEWER_PROMPT,
+  API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
 import { PR_482_PATCHES, patchStats } from './seed-patches.js';
 
@@ -20,8 +21,9 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  *
  * Seeds: default workspace + system user + membership, default settings,
  * demo repo (acme/payments-api), PR #482 with files/commits, a sample review
- * with a few findings, and the three built-in agents (General + Security +
- * Performance), all on the default openrouter/deepseek-v4-flash provider+model.
+ * with a few findings, and the built-in agents (General + Security +
+ * Performance + Test Quality + API Contract), all on the default
+ * openrouter/deepseek-v4-flash provider+model, with their demo skills linked.
  *
  * Course lessons populate the other tables (skills, conventions, memory, eval,
  * …) once their features are built — they start empty here.
@@ -232,6 +234,17 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       version: 1,
       createdBy: userId,
     },
+    {
+      workspaceId,
+      name: 'API Contract Reviewer',
+      description: 'Catches breaking changes in route signatures, request schemas and response shapes.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: API_CONTRACT_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
   ];
   for (const a of seedAgents) {
     const [existing] = await db
@@ -292,6 +305,12 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       description: 'Flag breaking changes in route signatures, response payloads, or query parameters.',
       body: 'Any modification to existing public API route parameters, status codes, request schemas, or response schemas must be backwards-compatible or explicitly versioned. Flag removed fields or newly required parameters as CRITICAL.',
     },
+    {
+      name: 'REST Contract Versioning Convention',
+      type: 'convention',
+      description: 'Require a versioned route or a deprecation path for any incompatible contract change.',
+      body: 'Treat every existing route, its zod request schema and its response shape as a published contract. An incompatible change must ship as a new route or version, or keep the old field working alongside the new one with a deprecation note. Additive changes (new optional input, new response field) are allowed. Status codes of existing routes never change silently.',
+    },
   ];
   for (const sk of seedSkills) {
     const [existing] = await db
@@ -344,6 +363,8 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     { agent: 'Test Quality Reviewer', skill: 'Overmocking & Fragile Test Guard', order: 1, enabled: true },
     { agent: 'Test Quality Reviewer', skill: 'Async & Flakiness Convention', order: 2, enabled: true },
     { agent: 'Test Quality Reviewer', skill: 'Test Coverage Nudge', order: 3, enabled: true },
+    { agent: 'API Contract Reviewer', skill: 'API Breaking Change Rubric', order: 0, enabled: true },
+    { agent: 'API Contract Reviewer', skill: 'REST Contract Versioning Convention', order: 1, enabled: true },
   ];
   for (const l of skillLinks) {
     await db

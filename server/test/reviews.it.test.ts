@@ -699,6 +699,10 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
       .join('\n');
     expect(prompt).toContain('## Project context');
     expect(prompt).toContain('PROJECT-DOC-CONTENT');
+    // The enabled skill lands as its own named block
+    expect(prompt).toContain('### Skill: With docs\\nRULE');
+    const log = (await app.inject({ method: 'GET', url: `/runs/${runs[0]!.id}/trace` })).json().log as Array<{ msg: string }>;
+    expect(log.some((l) => l.msg.includes('• With docs (rubric'))).toBe(true);
 
     await app.close();
   });
@@ -790,6 +794,10 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
       .join('\n');
     expect(prompt).not.toContain('## Project context');
     expect(prompt).not.toContain('SHOULD-NOT-APPEAR');
+    // A disabled skill is named as skipped in the run log, never attached
+    const log = (await app.inject({ method: 'GET', url: `/runs/${runs[0]!.id}/trace` })).json().log as Array<{ msg: string }>;
+    expect(log.some((l) => l.msg.includes('skipped (disabled): Disabled link'))).toBe(true);
+    expect(log.some((l) => l.msg.includes('• Disabled link'))).toBe(false);
 
     await app.close();
   });

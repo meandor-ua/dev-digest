@@ -81,6 +81,15 @@ Preview/Stats tabs, skill import).
 
 ## What Doesn't Work
 
+- **2026-09-22** — A capture-phase `scroll` listener on `window` that closes
+  a Dropdown fires for every scroll, including a scroll inside the menu and
+  for in-place menus. Inside an `overflow: auto` container (the agent Skills
+  tab), a long "Attach skill" list grows the scroll area, so reaching the
+  lower items closed the menu. Fix: close only when `portal` is set, ignore
+  scrolls whose target is inside `menuRef`, and cap the menu with `maxHeight`
+  + `overflowY: auto`. Use `portal` inside scrolling panes. Evidence:
+  `client/src/vendor/ui/kit/Dropdown.tsx:115`,
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/SkillsTab/SkillsTab.tsx:115`.
 - **2026-09-22** — Never import a runtime VALUE from `@devdigest/shared` in
   client code (e.g. `import { SkillType } … SkillType.options`) — only
   `import type`. The vendored `src/vendor/shared/index.ts` re-exports with
