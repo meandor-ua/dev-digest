@@ -1,5 +1,5 @@
 import type { Container } from '../../platform/container.js';
-import type { Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
+import type { Provider, RepoRef, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
 import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
@@ -418,7 +418,7 @@ export class ReviewRunExecutor {
    */
   private async buildContextDocs(
     activeLinks: ActiveSkillLink[],
-    repo: typeof schema.repos.$inferSelect,
+    repo: RepoRef,
     runLog: RunLogger,
   ): Promise<string[] | undefined> {
     if (activeLinks.length === 0) return undefined;
@@ -436,7 +436,7 @@ export class ReviewRunExecutor {
     }
     if (paths.length === 0) return undefined;
 
-    const docs = await this.container.projectDocs.readMany({ owner: repo.owner, name: repo.name }, paths);
+    const docs = await this.container.projectDocs.readMany(repo, paths);
     const contents = docs.map((d) => `### ${d.path}\n${d.text}`);
     const read = new Set(docs.map((d) => d.path));
     const skipped = paths.filter((p) => !read.has(p));
