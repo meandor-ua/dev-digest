@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { tint } from "@/lib/color";
 
 export const s = {
   card: (active: boolean, enabled: boolean): CSSProperties => ({
@@ -16,16 +17,16 @@ export const s = {
     alignItems: "center",
     gap: 10,
   } satisfies CSSProperties,
-  iconBox: {
+  iconBox: (color: string): CSSProperties => ({
     width: 26,
     height: 26,
     borderRadius: 7,
-    background: "var(--accent-bg)",
-    color: "var(--accent)",
+    background: tint(color),
+    color,
     display: "grid",
     placeItems: "center",
     flexShrink: 0,
-  } satisfies CSSProperties,
+  }),
   name: {
     fontSize: 14,
     fontWeight: 600,
@@ -52,12 +53,15 @@ export const s = {
     fontSize: 11,
     fontWeight: 600,
     color,
-    background: color + "1a",
+    background: tint(color),
     padding: "2px 8px",
     borderRadius: 4,
     textTransform: "capitalize",
   }),
   sourceBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
     fontSize: 11,
     color: "var(--text-muted)",
     background: "var(--bg-surface)",
@@ -65,14 +69,16 @@ export const s = {
     padding: "2px 6px",
     borderRadius: 4,
   } satisfies CSSProperties,
+  accept: { color: "var(--ok)" } satisfies CSSProperties,
   statsRow: {
     display: "flex",
     alignItems: "center",
-    gap: 8,
-    marginTop: 10,
+    gap: 14,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTop: "1px solid var(--border)",
     fontSize: 12,
     fontWeight: 500,
     color: "var(--text-secondary)",
   } satisfies CSSProperties,
-  dot: { color: "var(--text-muted)" } satisfies CSSProperties,
 } as const;

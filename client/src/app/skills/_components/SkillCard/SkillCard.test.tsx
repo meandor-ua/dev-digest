@@ -125,6 +125,25 @@ describe("SkillCard", () => {
     expect(screen.queryByText("needs vetting")).not.toBeInTheDocument();
   });
 
+  it("shows an em dash instead of a fabricated 100% when accept_rate_pct is absent", () => {
+    const onClick = vi.fn();
+    const onToggle = vi.fn();
+    const { accept_rate_pct: _drop, ...noAcceptRate } = SKILL;
+    renderWithIntl(
+      <SkillCard skill={noAcceptRate} active={false} onClick={onClick} onToggle={onToggle} />,
+    );
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText(/accept/)).not.toBeInTheDocument();
+  });
+
+  it("shows an em dash when the server reports no accept rate (null)", () => {
+    renderWithIntl(
+      <SkillCard skill={{ ...SKILL, accept_rate_pct: null }} active={false} onClick={vi.fn()} onToggle={vi.fn()} />,
+    );
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText(/accept/)).not.toBeInTheDocument();
+  });
+
   it("renders singular 'agent' when agent_count is 1", () => {
     const onClick = vi.fn();
     const onToggle = vi.fn();

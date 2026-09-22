@@ -49,6 +49,32 @@ the shared `Avatar` primitive and a `useWorkspace()` hook. Single-local-user
 app (no per-request auth), so this is a simple singleton, not per-PR
 authorship.
 
+## Skills Context tab: doc paths, not doc content
+
+A skill's attached project-context docs (`skill_context_docs`) store the
+repo-relative **path** of each `specs/`/`docs/`/`INSIGHTS.md` file, never a
+copy of its text. Two reasons this is deliberate, not an oversight:
+
+1. **Freshness.** The doc is re-read from the repo's local clone at review
+   time (`server/src/modules/reviews/run-executor.ts`, via the
+   `ProjectDocsAdapter` port). A skill configured months ago against a doc
+   that has since been edited (or renamed, or deleted) automatically picks up
+   the latest version — or is silently skipped if it's gone — instead of
+   quietly injecting stale text into every future review.
+2. **No duplicated storage / no drift.** The repo clone is already the
+   source of truth (it's what gets diffed for the review itself); storing a
+   second copy of doc content in Postgres would mean two places that could
+   disagree, with no mechanism to reconcile them.
+
+The cost of this choice: a doc that isn't in the repo clone (never cloned,
+or since renamed/deleted) can't be previewed or injected. The review-time
+reader skips it without failing the run; the Context tab keeps the row as
+"not in this repo" so it can be unchecked; the eye preview
+(`GET /skills/context/doc`) answers 422 for a path the clone doesn't list. See
+`server/specs/README.md`'s "Project context" section for the adapter and
+injection contract, and `client/specs/README.md`'s "Skills editor — tabs"
+for the Context tab UI.
+
 ## Agents editor: five tabs + repo-scoped stats
 
 The Agents editor (`client/src/app/agents/[id]/`) grew from a single Config

@@ -8,6 +8,8 @@ import type {
   SkillWithStats,
   SkillStats,
   SkillVersion,
+  SkillContext,
+  SkillImportPreview,
   SkillType,
   SkillSource,
 } from "@devdigest/shared";
@@ -45,20 +47,6 @@ export function useCreateSkill() {
   });
 }
 
-export interface ImportSkillInput {
-  url: string;
-  name?: string;
-  type?: SkillType;
-}
-
-export function useImportSkill() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: ImportSkillInput) => api.post<Skill>("/skills/import", input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
-  });
-}
-
 export interface UpdateSkillInput {
   id: string;
   patch: Partial<
@@ -72,7 +60,7 @@ export interface UpdateSkillInput {
       | "enabled"
       | "evidence_files"
     >
-  >;
+  > & { message?: string };
 }
 
 export function useUpdateSkill() {
@@ -126,13 +114,14 @@ export function useSkillVersions(id: string | null | undefined) {
 export interface RestoreSkillInput {
   id: string;
   version: number;
+  message?: string;
 }
 
 export function useRestoreSkill() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, version }: RestoreSkillInput) =>
-      api.post<Skill>(`/skills/${id}/restore`, { version }),
+    mutationFn: ({ id, version, message }: RestoreSkillInput) =>
+      api.post<Skill>(`/skills/${id}/restore`, { version, message }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["skills"] });
       qc.setQueryData(["skill", data.id], data);
@@ -141,5 +130,54 @@ export function useRestoreSkill() {
       qc.invalidateQueries({ queryKey: ["agent-skills"] });
       qc.invalidateQueries({ queryKey: ["agent-stats"] });
     },
+  });
+}
+
+/** Fetch → preview a URL import WITHOUT saving (fetch → preview → confirm flow). */
+export function usePreviewSkillUrl() {
+  return useMutation({
+    mutationFn: (url: string) => api.post<SkillImportPreview>("/skills/import/preview", { url }),
+  });
+}
+
+/** Available project docs for a repo + this skill's currently attached paths. */
+export function useSkillContext(skillId: string | null | undefined, repoId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["skill-context", skillId, repoId],
+    queryFn: () =>
+      api.get<SkillContext>(`/skills/${skillId}/context?repo_id=${encodeURIComponent(repoId!)}`),
+    enabled: !!skillId && !!repoId,
+  });
+}
+
+/** Replaces the attached set; autosaves optimistically (rollback on error). */
+export function useSetSkillContext(skillId: string, repoId: string | null | undefined) {
+  const qc = useQueryClient();
+  const key = ["skill-context", skillId, repoId];
+  return useMutation({
+    mutationFn: (paths: string[]) =>
+      api.put<{ attached: string[] }>(`/skills/${skillId}/context`, { paths }),
+    onMutate: async (paths) => {
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<SkillContext>(key);
+      if (prev) qc.setQueryData<SkillContext>(key, { ...prev, attached: paths });
+      return { prev };
+    },
+    onError: (_e, _v, context) => {
+      if (context?.prev) qc.setQueryData(key, context.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["skill-context", skillId] }),
+  });
+}
+
+/** One project doc's rendered text (the Context tab's eye preview). */
+export function useContextDoc(repoId: string | null | undefined, path: string | null) {
+  return useQuery({
+    queryKey: ["skill-context-doc", repoId, path],
+    queryFn: () =>
+      api.get<{ text: string }>(
+        `/skills/context/doc?repo_id=${encodeURIComponent(repoId!)}&path=${encodeURIComponent(path!)}`,
+      ),
+    enabled: !!repoId && !!path,
   });
 }

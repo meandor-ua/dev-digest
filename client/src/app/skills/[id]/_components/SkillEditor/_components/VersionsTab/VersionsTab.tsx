@@ -4,10 +4,15 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, Badge, Skeleton, EmptyState } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
-import { useSkillVersions, useRestoreSkill } from "../../../../../../../lib/hooks/skills";
-import { useToast } from "../../../../../../../lib/toast";
+import { useSkillVersions, useRestoreSkill } from "@/lib/hooks/skills";
+import { useToast } from "@/lib/toast";
 import { diffLines } from "./diff";
 import { s } from "./styles";
+
+/** YYYY-MM-DD (UTC — deterministic regardless of the viewer's timezone). */
+function formatDate(iso: string): string {
+  return new Date(iso).toISOString().slice(0, 10);
+}
 
 export function VersionsTab({ skill }: { skill: Skill }) {
   const t = useTranslations("skills");
@@ -15,7 +20,7 @@ export function VersionsTab({ skill }: { skill: Skill }) {
   const { data: versions, isLoading, isError } = useSkillVersions(skill.id);
   const restoreMutation = useRestoreSkill();
 
-  const [expandedVersions, setExpandedVersions] = React.useState<Set<number>>(new Set([skill.version]));
+  const [expandedVersions, setExpandedVersions] = React.useState<Set<number>>(new Set());
 
   const toggleExpand = (ver: number) => {
     setExpandedVersions((prev) => {
@@ -66,62 +71,60 @@ export function VersionsTab({ skill }: { skill: Skill }) {
     <div style={s.wrap}>
       <div style={s.header}>
         <h2 style={s.h2}>{t("versions.title")}</h2>
-        <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-          {t("versions.recorded", { count: versions.length })}
-        </span>
+        <Badge color="var(--text-secondary)" mono>
+          {t("versions.count", { count: versions.length })}
+        </Badge>
       </div>
+      <p style={s.subtitle}>{t("versions.subtitle")}</p>
 
       <div style={s.list}>
         {versions.map((ver) => {
           const isCurrent = ver.version === skill.version;
           const isExpanded = expandedVersions.has(ver.version);
-          const dateStr = new Date(ver.created_at).toLocaleString();
 
           return (
             <div key={ver.version} style={s.versionCard(isCurrent)}>
               <div style={s.cardHeader}>
                 <div style={s.leftMeta}>
                   <span style={s.versionBadge}>v{ver.version}</span>
-                  {isCurrent && (
-                    <Badge color="var(--accent)" mono>
-                      {t("versions.currentBadge")}
-                    </Badge>
-                  )}
-                  <span style={s.dateText}>{dateStr}</span>
+                  <div style={s.messageCol}>
+                    <span style={s.messageText}>{ver.message || t("versions.savedBodyFallback")}</span>
+                    <span style={s.dateText}>{formatDate(ver.created_at)}</span>
+                  </div>
                 </div>
 
                 <div style={s.actionsRow}>
-                  <Button
-                    kind="ghost"
-                    size="sm"
-                    icon={isExpanded ? "ChevronDown" : "ChevronRight"}
-                    onClick={() => toggleExpand(ver.version)}
-                  >
-                    {isExpanded ? t("versions.hideBody") : t("versions.viewBody")}
-                  </Button>
-                  {!isCurrent && (
-                    <Button
-                      kind="secondary"
-                      size="sm"
-                      icon="RefreshCw"
-                      onClick={() => handleRestore(ver.version)}
-                      disabled={restoreMutation.isPending}
-                    >
-                      {t("versions.restore")}
-                    </Button>
+                  {isCurrent ? (
+                    <Badge color="var(--ok)" bg="var(--ok-bg)" dot>
+                      {t("versions.currentBadge")}
+                    </Badge>
+                  ) : (
+                    <>
+                      <Button
+                        kind="ghost"
+                        size="sm"
+                        icon="Eye"
+                        onClick={() => toggleExpand(ver.version)}
+                      >
+                        {t("versions.diff")}
+                      </Button>
+                      <Button
+                        kind="secondary"
+                        size="sm"
+                        icon="History"
+                        onClick={() => handleRestore(ver.version)}
+                        disabled={restoreMutation.isPending}
+                      >
+                        {t("versions.restore")}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
 
-              {isExpanded && (
+              {isExpanded && !isCurrent && (
                 <div style={s.diffContainer}>
-                  {isCurrent ? (
-                    // For current version, just show the body as-is
-                    <div style={s.bodyPreview}>{ver.body}</div>
-                  ) : (
-                    // For past versions, show the diff
-                    <VersionDiff from={ver.body} to={skill.body} />
-                  )}
+                  <VersionDiff from={ver.body} to={skill.body} />
                 </div>
               )}
             </div>

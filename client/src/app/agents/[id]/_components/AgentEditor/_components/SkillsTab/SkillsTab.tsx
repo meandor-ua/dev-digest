@@ -23,10 +23,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Icon, TextInput, Checkbox, EmptyState, Skeleton, Button, Dropdown } from "@devdigest/ui";
 import type { AgentSkillItem } from "@devdigest/shared";
-import { useAgentSkills, useSetAgentSkills } from "../../../../../../../lib/hooks/agents";
-import { useSkills } from "../../../../../../../lib/hooks/skills";
-import { useToast } from "../../../../../../../lib/toast";
-import { SKILL_TYPE_COLOR } from "./constants";
+import { useAgentSkills, useSetAgentSkills } from "@/lib/hooks/agents";
+import { useSkills } from "@/lib/hooks/skills";
+import { useToast } from "@/lib/toast";
+import { SKILL_TYPE_COLOR } from "@/lib/skill-type";
 import { s } from "./styles";
 
 export function SkillsTab({ agentId }: { agentId: string }) {

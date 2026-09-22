@@ -13,6 +13,11 @@ export const s = {
     alignItems: "center",
     justifyContent: "space-between",
   } satisfies CSSProperties,
+  titleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  } satisfies CSSProperties,
   h2: {
     fontSize: 16,
     fontWeight: 700,
@@ -25,11 +30,6 @@ export const s = {
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
-  } satisfies CSSProperties,
-  row: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 16,
   } satisfies CSSProperties,
   editorContainer: {
     borderRadius: 8,
@@ -57,14 +57,14 @@ export const s = {
   } satisfies CSSProperties,
   tokenBadge: {
     fontSize: 11,
-    fontFamily: "var(--font-mono, monospace)",
+    fontFamily: "var(--font-mono)",
     color: "var(--text-muted)",
   } satisfies CSSProperties,
   editorBody: {
     display: "flex",
     minHeight: 320,
     background: "var(--bg-base)",
-    fontFamily: "var(--font-mono, monospace)",
+    fontFamily: "var(--font-mono)",
     fontSize: 13,
     lineHeight: "20px",
   } satisfies CSSProperties,
@@ -88,7 +88,7 @@ export const s = {
     outline: "none",
     background: "transparent",
     color: "var(--text-primary)",
-    fontFamily: "var(--font-mono, monospace)",
+    fontFamily: "var(--font-mono)",
     fontSize: 13,
     lineHeight: "20px",
     resize: "none",
@@ -104,7 +104,7 @@ export const s = {
   } satisfies CSSProperties,
   savedNote: {
     fontSize: 13,
-    color: "var(--success, #10b981)",
+    color: "var(--ok)",
     fontWeight: 500,
   } satisfies CSSProperties,
   untrustedNotice: {
@@ -115,5 +115,26 @@ export const s = {
     color: "var(--text-primary)",
     fontSize: 13,
     lineHeight: 1.5,
+  } satisfies CSSProperties,
+  dangerZone: {
+    marginTop: 12,
+    padding: "14px 18px",
+    borderRadius: 8,
+    border: "1px solid var(--crit)",
+    background: "var(--crit-bg, rgba(239, 68, 68, 0.06))",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+  } satisfies CSSProperties,
+  dangerTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "var(--text-primary)",
+  } satisfies CSSProperties,
+  dangerBody: {
+    fontSize: 12.5,
+    color: "var(--text-secondary)",
+    marginTop: 2,
   } satisfies CSSProperties,
 } as const;

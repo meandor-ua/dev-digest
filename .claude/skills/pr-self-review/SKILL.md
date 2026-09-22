@@ -1,5 +1,6 @@
 ---
 name: pr-self-review
+disable-model-invocation: true
 description: Local pre-PR gatekeeper for this repo. Resolves the branch diff against main (plus any uncommitted work), runs the affected packages' own typecheck/lint/test commands, then routes each changed file to the matching review skills: client to frontend-architecture, react-best-practices, next-best-practices and react-testing-library; server to onion-architecture, fastify-best-practices, drizzle-orm-patterns and postgresql-table-design; shared code to typescript-expert, zod and security. Merges their findings into one verdict. A blocker is a correctness, security or stated-rule violation evidenced at file:line inside the changed lines; everything else is advisory. Use before opening a pull request, or on "review my changes", "self review", "am I ready to push", or /pr-self-review. Reports only: it never edits code, commits, pushes or opens the PR.
 ---
 
@@ -114,6 +115,12 @@ parallel. Give each subagent:
 
 This fan-out is the subagent use this skill authorizes (see above). Nothing
 else in this workflow needs a subagent — Steps 0, 1, 2, 4 and 5 run directly.
+
+**Inline mode.** If the user has asked for no subagents (token budget), run
+this step in the main session instead: one bucket at a time, load each
+bucket's skills **once** (never also run a skill directly that a bucket
+already loaded), and apply the same rubric. Deterministic gates and checks
+(Steps 1–2) are unchanged.
 
 ## Step 4 — merge
 

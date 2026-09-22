@@ -11,8 +11,8 @@ export function EvalsTab() {
     <div style={{ padding: 32, display: "flex", justifyContent: "center" }}>
       <EmptyState
         icon="FlaskConical"
-        title={t("evals.pipeline")}
-        body={t("evals.pipelineBody")}
+        title={t("evals.empty")}
+        body={t("evals.emptyBody")}
       />
     </div>
   );

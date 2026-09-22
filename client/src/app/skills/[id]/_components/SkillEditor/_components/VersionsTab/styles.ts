@@ -18,6 +18,15 @@ export const s = {
     fontWeight: 700,
     margin: 0,
   } satisfies CSSProperties,
+  subtitle: {
+    fontSize: 13,
+    color: "var(--text-secondary)",
+    margin: "-8px 0 0",
+  } satisfies CSSProperties,
+  messageText: {
+    fontSize: 13,
+    color: "var(--text-primary)",
+  } satisfies CSSProperties,
   list: {
     display: "flex",
     flexDirection: "column",
@@ -41,8 +50,9 @@ export const s = {
   leftMeta: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    gap: 14,
   } satisfies CSSProperties,
+  messageCol: { display: "flex", flexDirection: "column", gap: 2 } satisfies CSSProperties,
   versionBadge: {
     fontWeight: 700,
     fontSize: 13,
@@ -56,26 +66,13 @@ export const s = {
     alignItems: "center",
     gap: 10,
   } satisfies CSSProperties,
-  bodyPreview: {
-    borderRadius: 6,
-    border: "1px solid var(--border)",
-    background: "var(--bg-base)",
-    padding: 12,
-    fontSize: 12.5,
-    fontFamily: "var(--font-mono, monospace)",
-    color: "var(--text-secondary)",
-    whiteSpace: "pre-wrap",
-    lineHeight: 1.5,
-    maxHeight: 220,
-    overflow: "auto",
-  } satisfies CSSProperties,
   diffContainer: {
     borderRadius: 6,
     border: "1px solid var(--border)",
     background: "var(--bg-base)",
     padding: 12,
     fontSize: 12.5,
-    fontFamily: "var(--font-mono, monospace)",
+    fontFamily: "var(--font-mono)",
     maxHeight: 400,
     overflow: "auto",
   } satisfies CSSProperties,
@@ -92,13 +89,13 @@ export const s = {
       return {
         ...baseStyle,
         background: "var(--ok-bg, rgba(34, 197, 94, 0.1))",
-        color: "var(--ok, #22c55e)",
+        color: "var(--ok)",
       };
     } else if (kind === "del") {
       return {
         ...baseStyle,
         background: "var(--crit-bg, rgba(239, 68, 68, 0.1))",
-        color: "var(--crit, #ef4444)",
+        color: "var(--crit)",
       };
     } else {
       return {

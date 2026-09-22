@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Modal, Button, TextInput, Icon } from "@devdigest/ui";
 import type { SkillType } from "@devdigest/shared";
-import { useCreateSkill, useImportSkill } from "../../../../lib/hooks/skills";
-import { useToast } from "../../../../lib/toast";
+import { SKILL_TYPES } from "@/lib/skill-type";
+import { useCreateSkill, usePreviewSkillUrl } from "@/lib/hooks/skills";
+import { useToast } from "@/lib/toast";
+import { estimateTokens } from "@/lib/tokens";
 import { extractMarkdownFiles, type ExtractedMarkdown } from "./file-extractor";
 import { s } from "./styles";
 
@@ -21,9 +23,13 @@ export function CreateSkillModal({
   const t = useTranslations("skills");
   const toast = useToast();
   const createMutation = useCreateSkill();
-  const importMutation = useImportSkill();
+  const previewMutation = usePreviewSkillUrl();
 
-  const [tab, setTab] = React.useState<"scratch" | "import" | "url">(initialTab);
+  const [tab, setTabState] = React.useState<"scratch" | "import" | "url">(initialTab);
+  const setTab = (next: "scratch" | "import" | "url") => {
+    setTabState(next);
+    setUrlFetched(false);
+  };
 
   // Form states
   const [name, setName] = React.useState("");
@@ -37,10 +43,10 @@ export function CreateSkillModal({
   const [extractedFiles, setExtractedFiles] = React.useState<ExtractedMarkdown[]>([]);
   const [selectedFileIdx, setSelectedFileIdx] = React.useState(0);
 
-  // URL import state
+  // URL import state — fetch → preview → confirm (the shared name/description/
+  // type/body fields below get prefilled from the preview once fetched).
   const [importUrl, setImportUrl] = React.useState("");
-  const [importUrlName, setImportUrlName] = React.useState("");
-  const [importUrlType, setImportUrlType] = React.useState<SkillType>("rubric");
+  const [urlFetched, setUrlFetched] = React.useState(false);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -109,17 +115,15 @@ export function CreateSkillModal({
         name: name.trim(),
         description: description.trim(),
         type,
-        source: tab === "import" ? "imported_url" : "manual",
+        source: tab === "import" || tab === "url" ? "imported_url" : "manual",
         body: body.trim(),
         enabled: tab === "scratch", // Only manual skills start enabled
       },
       {
         onSuccess: (created) => {
-          toast.success(
-            tab === "import"
-              ? t("file.success", { name: created.name })
-              : t("create.scratch.success", { name: created.name }),
-          );
+          const key =
+            tab === "scratch" ? "create.scratch.success" : tab === "import" ? "create.file.createSuccess" : "create.url.success";
+          toast.success(t(key, { name: created.name }));
           onClose();
           router.push(`/skills/${created.id}`);
         },
@@ -130,29 +134,24 @@ export function CreateSkillModal({
     );
   };
 
-  const handleImportUrl = () => {
+  /** Fetch a URL and prefill the shared form (fetch → preview → confirm; confirm goes through `handleSubmit`). */
+  const handleFetchUrl = () => {
     if (!importUrl.trim()) {
       toast.error(t("create.url.urlRequired"));
       return;
     }
 
-    importMutation.mutate(
-      {
-        url: importUrl.trim(),
-        name: importUrlName.trim() || undefined,
-        type: importUrlType,
+    previewMutation.mutate(importUrl.trim(), {
+      onSuccess: (preview) => {
+        setName(preview.name);
+        setDescription(t("create.url.importedDescription", { url: importUrl.trim() }));
+        setBody(preview.body);
+        setUrlFetched(true);
       },
-      {
-        onSuccess: (created) => {
-          toast.success(t("create.url.success", { name: created.name }));
-          onClose();
-          router.push(`/skills/${created.id}`);
-        },
-        onError: (err) => {
-          toast.error((err as Error).message || t("create.scratch.errors.importFailed"));
-        },
+      onError: (err) => {
+        toast.error((err as Error).message || t("create.scratch.errors.importFailed"));
       },
-    );
+    });
   };
 
   return (
@@ -237,7 +236,7 @@ export function CreateSkillModal({
           </div>
         )}
 
-        {tab === "url" && (
+        {tab === "url" && !urlFetched && (
           <div style={s.field}>
             <label style={s.label}>{t("create.url.label")}</label>
             <TextInput
@@ -246,36 +245,11 @@ export function CreateSkillModal({
               placeholder={t("create.url.placeholder")}
               aria-label={t("create.url.label")}
             />
-            <span style={s.hint}>{t("url.hint")}</span>
-
-            <label style={{ ...s.label, marginTop: 16 }}>
-              {t("create.url.nameOptional")}
-            </label>
-            <TextInput
-              value={importUrlName}
-              onChange={setImportUrlName}
-              placeholder={t("create.scratch.namePlaceholder")}
-              aria-label={t("create.url.nameOptional")}
-            />
-
-            <label style={{ ...s.label, marginTop: 16 }}>
-              {t("create.scratch.type")}
-            </label>
-            <select
-              style={s.select}
-              value={importUrlType}
-              aria-label={t("create.scratch.type")}
-              onChange={(e) => setImportUrlType(e.target.value as SkillType)}
-            >
-              <option value="rubric">{t("typeOptions.rubric")}</option>
-              <option value="convention">{t("typeOptions.convention")}</option>
-              <option value="security">{t("typeOptions.security")}</option>
-              <option value="custom">{t("typeOptions.custom")}</option>
-            </select>
+            <span style={s.hint}>{t("create.url.hint")}</span>
           </div>
         )}
 
-        {(tab === "scratch" || tab === "import") && (
+        {(tab === "scratch" || tab === "import" || (tab === "url" && urlFetched)) && (
           <>
             {/* Name */}
             <div style={s.field}>
@@ -308,10 +282,11 @@ export function CreateSkillModal({
                 onChange={(e) => setType(e.target.value as SkillType)}
                 aria-label={t("create.scratch.type")}
               >
-                <option value="rubric">{t("typeOptions.rubric")}</option>
-                <option value="convention">{t("typeOptions.convention")}</option>
-                <option value="security">{t("typeOptions.security")}</option>
-                <option value="custom">{t("typeOptions.custom")}</option>
+                {SKILL_TYPES.map((v) => (
+                  <option key={v} value={v}>
+                    {t(`typeOptions.${v}`)}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -319,7 +294,7 @@ export function CreateSkillModal({
             <div style={s.field}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <label style={s.label}>{t("create.scratch.body")}</label>
-                <span style={s.hint}>{t("create.scratch.tokens", { count: Math.ceil(body.length / 4) })}</span>
+                <span style={s.hint}>{t("create.scratch.tokens", { count: estimateTokens(body) })}</span>
               </div>
               <textarea
                 style={s.textarea}
@@ -337,15 +312,15 @@ export function CreateSkillModal({
           <Button kind="secondary" size="md" onClick={onClose}>
             {t("create.scratch.cancel")}
           </Button>
-          {tab === "url" ? (
+          {tab === "url" && !urlFetched ? (
             <Button
               kind="primary"
               size="md"
-              icon="Sparkles"
-              onClick={handleImportUrl}
-              disabled={importMutation.isPending || !importUrl.trim()}
+              icon="Link"
+              onClick={handleFetchUrl}
+              disabled={previewMutation.isPending || !importUrl.trim()}
             >
-              {importMutation.isPending ? t("create.url.fetching") : t("create.url.import")}
+              {previewMutation.isPending ? t("create.url.fetching") : t("create.url.fetch")}
             </Button>
           ) : (
             <Button
@@ -355,7 +330,11 @@ export function CreateSkillModal({
               onClick={handleSubmit}
               disabled={createMutation.isPending || !name.trim() || !body.trim()}
             >
-              {createMutation.isPending ? t("create.scratch.creating") : tab === "import" ? t("create.scratch.import") : t("create.scratch.create")}
+              {createMutation.isPending
+                ? t("create.scratch.creating")
+                : tab === "scratch"
+                  ? t("create.scratch.create")
+                  : t("create.scratch.import")}
             </Button>
           )}
         </div>

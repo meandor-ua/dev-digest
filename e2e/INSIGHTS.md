@@ -115,3 +115,14 @@ you, so the next agent/session doesn't relearn it.
   first/only seeded repo (`acme/payments-api`). That's why flow `12`'s Stats tab
   loads without a repo in the URL — it only works because the hermetic DB has
   exactly one repo. Evidence: `e2e/specs/12-agent-detail.flow.json`.
+
+## Open Questions
+
+- **2026-09-22** — Flow 09 fails deterministically at "it navigates to the
+  agents screen" (`agent-browser wait --url /agents` times out after picking
+  "Configure agents…"), and it fails identically on a clean `HEAD` of
+  `feature/L02-skills-and-CLAUDE-md-commands` (verified with all local changes
+  stashed), so it predates the Skills-editor work; flows 03 and 12 reach
+  `/agents` fine. Root cause not yet investigated — the menu item calls
+  `router.push("/agents")` (`client/src/components/run-review-dropdown/RunReviewDropdown.tsx:97`).
+  Evidence: `e2e/specs/09-pr-list-actions.flow.json:77-95`.

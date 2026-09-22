@@ -21,6 +21,83 @@ Specs / acceptance criteria for the `client` package.
 - Clicking a pill resets keyboard focus (`j`/`k`) to index 0, so `a`/`d`
   shortcuts never silently act on nothing after a filter shrinks the list.
 
+## Skills editor — tabs
+
+`app/skills/[id]/_components/SkillEditor/` — six text-only tabs (Config ·
+Context · Preview · Evals · Stats · Versions). Header
+(`app/skills/[id]/page.tsx`): type-tinted icon box, mono skill name, type
+badge, `GitCommit vN` badge, and a disabled "Run on evals" button (tooltip
+"Not available yet") — no Delete button; Delete lives in Config's danger zone
+instead.
+
+- **Config** — "Configuration" + `vN` badge, Enabled toggle top-right; stacked
+  Name* / Description (keeps the directive hint caption — teacher AC) / Type
+  (plain type names, from `SKILL_TYPES`) / Skill body* fields. The
+  editor header shows `<slugified-name>.md`, an "Unsaved" chip while dirty,
+  and `N tokens` (`estimateTokens`, `src/lib/tokens.ts`). An optional "Change
+  note" field appears only while the **body** differs from the server and is
+  sent as `message` on save — server-side, a message only takes effect when
+  `body` actually changed (a message-only patch is a no-op, matching `PUT`'s
+  "empty patch" contract in `server/specs/README.md`). A danger-zone row at
+  the bottom holds Delete (`useDeleteSkill` + `confirm()`).
+- **Context** — attach project docs (`specs/`, `docs/`, `INSIGHTS.md`) from
+  the active repo (`useActiveRepo()`; no repo → "Select a repo" state). Rows:
+  drag handle (`@dnd-kit`, same pattern as the Agent editor's Skills tab;
+  disabled while a filter is active), checkbox, filename + dir, a
+  specs/docs/insights category badge, and an eye button opening a modal with
+  the doc's text. An attached path the repo no longer lists keeps its row
+  (checked, so it can be unchecked) with a muted "not in this repo" label, no
+  category and no eye button — never a guessed category. Toggling a checkbox
+  or dragging a row autosaves optimistically via `useSetSkillContext`
+  (rollback + toast on error, same pattern as `useSetAgentSkills`). A
+  "Serializes as" block at the bottom groups the attached paths by category —
+  what actually gets injected under `## Project context` at review time, so
+  missing paths are left out. See `server/specs/README.md`'s "Project context"
+  section for why only paths (never content) are stored.
+- **Preview** — "Preview" + "Rendered as the reviewing agent receives it." +
+  one card of the skill body rendered as markdown. No token badge, info box,
+  or `## Skills / rules` section header — those belong to Config's editor
+  chrome, not this "what the model actually sees" preview.
+- **Evals** — `EmptyState`, "Eval cases aren't available yet" (no lesson
+  numbers — Evals stays a placeholder; Context does not).
+- **Stats** — KPI tiles `N agents` (ICU plural unit), `N%` pull frequency,
+  `N%` accept rate with a `CircularScore` gauge in the tile's top-right
+  (`MetricCard`'s additive `aside` slot), and findings (30d). Section titles
+  are uppercase with Cpu / Tag icons; each agent row ends in "Open" and links
+  to `/agents/:id?tab=skills`. The findings-by-category donut legend shows
+  each category's integer **percentage share, always summing to 100%**
+  (`categoryDonutSegments`, largest-remainder rounding) — never a `$` prefix,
+  which is `Donut`'s currency-shaped default and would be wrong here
+  (`StatsTab.test.tsx` asserts both: no `$` in the legend, and the shown
+  percentages sum to 100).
+- **Versions** — "Version history" + "N versions" chip + subtitle. Every row
+  starts collapsed. Each row: `vN` badge, then the version's `message`
+  (fallback: "Saved body") above a `YYYY-MM-DD` date (UTC, so it's
+  deterministic regardless of the viewer's timezone). The current version gets
+  a green "Current" pill and no actions; other rows get "Diff" (toggles the
+  existing line-diff view) and "Restore" (defaults the restore's own message
+  server-side to `"Restored from v{n}"` when none is given).
+
+Type colours come from one owner, `src/lib/skill-type.ts` (`SKILL_TYPE_COLOR`,
+also used by the Agent editor's Skills tab); translucent fills go through
+`tint()` (`src/lib/color.ts`, `color-mix`) because every colour here is a
+`var(--…)` token and a hex-alpha suffix (`color + "1a"`) is invalid CSS on
+one.
+
+`SkillCard` (skills list): type-tinted icon box, a
+source icon + i18n'd label (`listItem.source.*`, not a hardcoded map), and a
+stats line (below a divider) where `accept_rate_pct` shows **`—`** when the
+field is absent or `null` (no findings yet) — never a fabricated `100%`. The
+Stats tab's accept-rate tile does the same and drops its gauge.
+
+`CreateSkillModal`'s URL tab is fetch → preview → confirm: "Fetch" calls
+`POST /skills/import/preview` and prefills the SAME name/description/type/
+body fields the file-import tab uses (editable before saving); "Import
+skill" then saves through the normal `POST /skills` create path (`source:
+"imported_url"`, `enabled: false`) — it no longer calls `POST /skills/import`
+directly, closing the gap where a URL import skipped preview/confirm
+entirely.
+
 ## Read-only popover — `components/findings-by-severity/`
 
 - Three placements, one component: PR list row (counts = the PR's **latest

@@ -28,8 +28,28 @@ you, so the next agent/session doesn't relearn it.
   throws (empty `SET`) and surfaces as a 500 on `PUT` with `{}`; short-circuit an
   empty patch as a no-op returning the existing row. Evidence:
   `server/src/modules/skills/repository.ts:185`.
+- **2026-09-22** — Supersedes the 2026-09-17 esbuild entry's implication that
+  `drizzle-kit generate` always needs the hand-write workaround: on this
+  machine/session it ran clean (`0012_skill_context_and_version_message.sql`
+  generated normally, no arch mismatch). The mismatch is host-state-dependent
+  (Rosetta/arch of the installed `@esbuild/*` binary), not a permanent
+  property of this repo — always try `drizzle-kit generate` first and only
+  fall back to hand-authoring on the actual error.
+- **2026-09-22** — A patch object with an extra field that ISN'T a table
+  column (e.g. a version-snapshot `message` alongside a `skills` patch) needs
+  the "is this patch empty" check narrowed to only the real columns, or a
+  message-only call falls through to the same `.set({})` empty-SET crash as
+  above. Fix: destructure the non-column field out before the
+  `Object.values(...).every(v => v === undefined)` check. Evidence:
+  `server/src/modules/skills/repository.ts:183-186`.
 
 ## Tool & Library Notes
+
+- **2026-09-22** — A request that fails a route's Zod `schema` (body/params/
+  querystring, e.g. `.max(100)` on an array) answers **422**, not Fastify's
+  default 400 — the app's error handler remaps validation failures, same code
+  as a thrown `ValidationError`. Assert `422` in `*.it.test.ts`. Evidence:
+  `src/app.ts:115-119`, `src/platform/errors.ts:27`.
 
 - **2026-09-21** — `dependency-cruiser` (a `server/` devDep, `package.json:25`,
   also the engine behind `adapters/depgraph`) has two traps when writing
@@ -73,6 +93,16 @@ you, so the next agent/session doesn't relearn it.
 
 ## Codebase Patterns
 
+- **2026-09-22** — An Infrastructure adapter is allowed to depend on ANOTHER
+  adapter, injected via its own constructor — not just `Db`. `GitProjectDocsAdapter`
+  (walks a repo clone for markdown project docs) takes a `GitClient` in its
+  constructor rather than reaching for `container.git` itself; the composition
+  root wires `new GitProjectDocsAdapter(this.git)` in the container getter,
+  same as every other lazily-built adapter. This is the onion-architecture
+  skill's "R7 — every external system sits behind a port" applied one layer
+  deeper: the port's own implementation can compose a second port instead of
+  talking to fs/DB directly. Evidence: `server/src/adapters/project-docs/index.ts:29`,
+  `server/src/platform/container.ts` (`get projectDocs()`).
 - **2026-09-21** — Agent stats (`GET /agents/stats`, `GET /agents/:id/stats`)
   aggregate over the agent's `status='done'` runs whose PR is in the given repo,
   and `avg_score`/`avg_cost_usd` are **per-PR-then-mean** (mean within a PR

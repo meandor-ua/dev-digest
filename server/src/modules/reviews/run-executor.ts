@@ -4,6 +4,7 @@ import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
+import type { LinkedSkillRow } from '../agents/repository.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
@@ -197,13 +198,17 @@ export class ReviewRunExecutor {
 
       // Fetch linked, enabled skills for this agent
       const linkedSkills = await this.agents.linkedSkills(agent.id);
-      const skillBodies = linkedSkills
-        .filter((s) => s.enabled && s.skill.enabled)
-        .map((s) => s.skill.body);
+      const activeLinks = linkedSkills.filter((s) => s.enabled && s.skill.enabled);
+      const skillBodies = activeLinks.map((s) => s.skill.body);
 
       if (skillBodies.length > 0) {
         runLog.info(`Skills: ${skillBodies.length} skill(s) attached to prompt`);
       }
+
+      // Project-context docs attached to those same active skills (Context tab)
+      // — re-read from the PR's repo clone so they always reflect HEAD; a skill
+      // stores doc PATHS only, never content.
+      const specs = await this.buildContextDocs(activeLinks, repo, runLog);
 
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
@@ -219,6 +224,8 @@ export class ReviewRunExecutor {
         strategy: agent.strategy ?? REVIEW_STRATEGY,
         // Active, enabled skills linked to this agent
         ...(skillBodies.length > 0 ? { skills: skillBodies } : {}),
+        // Project-context docs attached to those skills (Context tab)
+        ...(specs && specs.length > 0 ? { specs } : {}),
         // T1.3 — pass the callers digest only when we built one. assemblePrompt
         // omits the section when this is empty/undefined.
         ...(callersDigest ? { callers: callersDigest } : {}),
@@ -384,6 +391,39 @@ export class ReviewRunExecutor {
     }
     runLog.info(`callers digest: ${rows.length} caller signature(s) attached`);
     return out.join('\n');
+  }
+
+  /**
+   * Collect the attached project-context doc paths across `activeLinks`
+   * (dedupe, skill order then doc order), then re-read each from the PR's
+   * repo clone. A doc missing from the clone (renamed/deleted since the skill
+   * was configured) is silently skipped rather than failing the run.
+   */
+  private async buildContextDocs(
+    activeLinks: LinkedSkillRow[],
+    repo: typeof schema.repos.$inferSelect,
+    runLog: RunLogger,
+  ): Promise<string[] | undefined> {
+    if (activeLinks.length === 0) return undefined;
+
+    const seen = new Set<string>();
+    const paths: string[] = [];
+    for (const link of activeLinks) {
+      const skillPaths = await this.container.skillsRepo.listContextPaths(link.skill.id);
+      for (const p of skillPaths) {
+        if (!seen.has(p)) {
+          seen.add(p);
+          paths.push(p);
+        }
+      }
+    }
+    if (paths.length === 0) return undefined;
+
+    const docs = await this.container.projectDocs.readMany({ owner: repo.owner, name: repo.name }, paths);
+    const contents = docs.map((d) => `### ${d.path}\n${d.text}`);
+    if (contents.length === 0) return undefined;
+    runLog.info(`Context: ${contents.length} project doc(s) attached`);
+    return contents;
   }
 
   /**

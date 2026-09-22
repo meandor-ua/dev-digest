@@ -352,6 +352,33 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       .onConflictDoNothing();
   }
 
+  // ---- one demo skill's version history + attached context doc, so the
+  // Versions and Context tabs aren't empty on a fresh DB ----
+  const paymentsSkill = skillByName('Payments Domain Notes');
+  const paymentsVersions = await db
+    .select()
+    .from(t.skillVersions)
+    .where(eq(t.skillVersions.skillId, paymentsSkill.id));
+  if (paymentsVersions.length <= 1) {
+    const v2Body = `${paymentsSkill.body}\nRefunds must reference the original charge id.`;
+    await db.update(t.skills).set({ body: v2Body, version: 2 }).where(eq(t.skills.id, paymentsSkill.id));
+    await db
+      .insert(t.skillVersions)
+      .values({ skillId: paymentsSkill.id, version: 2, body: v2Body, message: 'Add refund reference rule' })
+      .onConflictDoNothing();
+
+    const v3Body = `${v2Body}\nSettlement currency must match the account's default currency.`;
+    await db.update(t.skills).set({ body: v3Body, version: 3 }).where(eq(t.skills.id, paymentsSkill.id));
+    await db
+      .insert(t.skillVersions)
+      .values({ skillId: paymentsSkill.id, version: 3, body: v3Body, message: 'Add settlement currency rule' })
+      .onConflictDoNothing();
+  }
+  await db
+    .insert(t.skillContextDocs)
+    .values({ skillId: paymentsSkill.id, path: 'docs/README.md', order: 0 })
+    .onConflictDoNothing();
+
   // ---- demo agent_runs (+reviews/findings) so the Stats tab & cards render ----
   // Only seed once (idempotent): skip if this workspace already has runs.
   const existingRuns = await db

@@ -25,12 +25,15 @@ import { PriceBook } from './price-book.js';
 import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
 import { SkillsRepository } from '../modules/skills/repository.js';
+import { RepoRepository } from '../modules/repos/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
 import { type Tokenizer, TiktokenTokenizer } from '../adapters/tokenizer/index.js';
 import { type RemoteTextFetcher, SafeHttpsTextFetcher } from '../adapters/remote-text/index.js';
+import type { ProjectDocsAdapter } from '../modules/skills/ports.js';
+import { GitProjectDocsAdapter } from '../adapters/project-docs/index.js';
 
 /**
  * DI container. One per app instance. Holds config, db, the JobRunner,
@@ -55,6 +58,8 @@ export interface ContainerOverrides {
   tokenizer?: Tokenizer;
   /** SSRF-safe remote text fetcher for skill imports. */
   remoteText?: RemoteTextFetcher;
+  /** Lists/reads a repo clone's markdown project docs (Skills Context tab). */
+  projectDocs?: ProjectDocsAdapter;
 }
 
 export class Container {
@@ -76,11 +81,13 @@ export class Container {
   // `container.agentsRepo` instead of reaching into another module's folder.
   private _agentsRepo?: AgentsRepository;
   private _skillsRepo?: SkillsRepository;
+  private _reposRepo?: RepoRepository;
   private _reviewRepo?: ReviewRepository;
   private _repoIntel?: RepoIntel;
   private _depgraph?: DepGraph;
   private _tokenizer?: Tokenizer;
   private _remoteText?: RemoteTextFetcher;
+  private _projectDocs?: ProjectDocsAdapter;
   private _priceBook?: PriceBook;
 
   constructor(config: AppConfig, db: Db, private overrides: ContainerOverrides = {}) {
@@ -104,6 +111,10 @@ export class Container {
 
   get skillsRepo(): SkillsRepository {
     return (this._skillsRepo ??= new SkillsRepository(this.db));
+  }
+
+  get reposRepo(): RepoRepository {
+    return (this._reposRepo ??= new RepoRepository(this.db));
   }
 
   get reviewRepo(): ReviewRepository {
@@ -146,6 +157,13 @@ export class Container {
     if (this.overrides.remoteText) return this.overrides.remoteText;
     this._remoteText ??= new SafeHttpsTextFetcher();
     return this._remoteText;
+  }
+
+  /** Lists/reads a repo clone's markdown project docs (Skills Context tab). */
+  get projectDocs(): ProjectDocsAdapter {
+    if (this.overrides.projectDocs) return this.overrides.projectDocs;
+    this._projectDocs ??= new GitProjectDocsAdapter(this.git);
+    return this._projectDocs;
   }
 
   /**

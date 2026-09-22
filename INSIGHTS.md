@@ -51,6 +51,19 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
 
 ## Codebase Patterns
 
+- **2026-09-22** — `reviewer-core`'s `skills`/`memory`/`specs`/`callers` prompt
+  slots (`reviewer-core/CLAUDE.md`: "exist for later course lessons and are
+  simply omitted by the starter") work end-to-end exactly as documented the
+  first time a caller actually populates one — no `reviewer-core` change was
+  needed to wire the Skills Context feature's doc text into `## Project
+  context`; the server just had to pass `specs: string[]` into
+  `reviewPullRequest(...)`, matching the pre-existing pattern for `skills`
+  (`run-executor.ts:198-221`). Confirms these slots are genuinely
+  build-ready, not just typed placeholders — worth checking before assuming a
+  new "inject X into the prompt" feature needs a `reviewer-core` change.
+  Evidence: `reviewer-core/src/prompt.ts:56-60,105-108,125`,
+  `server/src/modules/reviews/run-executor.ts` (`buildContextDocs`).
+
 - **2026-09-20** — Locally-authored skills in `.claude/skills/<name>/` use
   frontmatter of **exactly two keys** — `name` (kebab-case, identical to the
   directory) and `description` — with no `version`, `allowed-tools`, or
@@ -107,6 +120,16 @@ relearn it. Package-local findings go in `<package>/INSIGHTS.md` instead.
   written to this rule).
 
 ## What Doesn't Work
+
+- **2026-09-22** — Don't accept a plan implementation because its spec/README
+  update says it's done: the implementing session wrote `client/specs/README.md`
+  from the *plan* ("stacked Name / Description / Type" Config, Stats redesign)
+  while the code kept the old 2-column form and left the Stats tab untouched —
+  all gates were green because the old tests still matched the old UI. On
+  review, walk each plan bullet against the diff (`git diff --stat` shows an
+  untouched file instantly), not against the spec text. Evidence:
+  `client/src/app/skills/[id]/_components/SkillEditor/_components/StatsTab/StatsTab.tsx`
+  (absent from the implementation's diff).
 
 - **2026-09-17** — Don't trust `git log --all` authorship as "the teacher's
   reference solution" without checking the actual committer. This repo's

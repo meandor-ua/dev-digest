@@ -123,14 +123,62 @@ Violations of these limits return `422 Unprocessable Entity` (Zod validation).
 - `GET /skills` — list all skills in the workspace (with optional stats)
 - `POST /skills` — create a manual skill
 - `GET /skills/:id` — fetch one skill
-- `PUT /skills/:id` — update metadata or body (bumps version if body changes)
+- `PUT /skills/:id` — update metadata or body (bumps version if body changes);
+  accepts an optional `message` — the version snapshot's change note, only
+  used when `body` actually changes
 - `DELETE /skills/:id` — delete a skill and cascade skill-agent links
-- `GET /skills/:id/stats` — skill usage stats (agent count, pull frequency, accept rate)
-- `GET /skills/:id/versions` — version history (immutable snapshots)
-- `POST /skills/:id/restore` — restore a past version snapshot
+- `GET /skills/:id/stats` — skill usage stats (agent count, pull frequency, accept rate);
+  `accept_rate_pct` (here and on `GET /skills` items) is `null` when the
+  skill's linked agents have no findings yet — no signal, never a fabricated 100
+- `GET /skills/:id/versions` — version history (immutable snapshots), each
+  carrying a nullable `message`
+- `POST /skills/:id/restore` — restore a past version snapshot; accepts an
+  optional `message`, defaulting to `"Restored from v{n}"`
 - `POST /skills/import` — import from a remote HTTPS URL (with vetting)
+- `POST /skills/import/preview` — fetch + derive `{ name, body }` from a URL
+  **without inserting a skill**; same SSRF guards and rate limit as
+  `/skills/import`. Backs the Create-skill modal's URL tab: fetch → preview →
+  confirm (confirm goes through `POST /skills`, same as the file-import path),
+  closing the earlier gap where a URL import skipped straight to creation.
+- `GET /skills/:id/context?repo_id=` — a skill's attached project-context docs
+  (`{ available, attached }`); `available` is that repo's browsable doc list
+  (see below), `attached` is this skill's ordered path list
+- `PUT /skills/:id/context` `{ paths: string[] }` — replaces the attached set;
+  array order becomes the persisted `order`, duplicate paths collapse to their
+  first position. At most 100 paths of ≤500 chars each (`SKILL_CONTEXT_MAX_DOCS`
+  / `SKILL_CONTEXT_PATH_MAX` in `modules/skills/constants.ts`), else 422
+- `GET /skills/context/doc?repo_id=&path=` — one doc's raw text (the Context
+  tab's eye-preview); `path` must be one `list()` currently returns for that
+  repo, or `ValidationError` (422)
 
-Covered by `test/skills.it.test.ts` and `test/remote-text.test.ts`.
+Covered by `test/skills.it.test.ts`, `test/remote-text.test.ts`, and
+`test/project-docs.test.ts`.
+
+### Project context (Context tab) — paths, not content
+
+A skill's `skill_context_docs` rows (`skill_id, path, order`) store the
+**path only**, never the file's content. `server/src/adapters/project-docs`
+(`GitProjectDocsAdapter`, behind the module-owned `ProjectDocsAdapter` port in
+`src/modules/skills/ports.ts`) walks a repo's local clone for `*.md` files
+under `specs/`, `docs/`, `insights/`, plus any `INSIGHTS.md` at any depth
+(root or per-package), categorizing each as `specs` | `docs` | `insights`;
+`node_modules` and dotdirs (`.git`, …) are skipped, and the walk is capped
+(depth 10 / 300 docs) as a backstop; entries are name-sorted so the list
+order is stable across filesystems. `read()` re-validates the requested path
+against a fresh `list()` before reading — a path not currently listed is
+rejected, closing path traversal.
+
+At review time (`run-executor.ts`), for each of an agent's **linked and
+enabled** skills, `SkillsRepository.listContextPaths` is read (deduped, skill
+link order then doc order) and the whole set is read with ONE
+`readMany(repo, paths)` call — one clone walk per review, not one per doc;
+a path that no longer resolves (renamed/deleted since
+the skill attached it) is silently skipped rather than failing the run. The
+resulting doc text is passed as `specs` to `reviewer-core`'s existing
+`## Project context` prompt slot (`reviewer-core/src/prompt.ts`) — unchanged,
+since that slot already existed for a later course lesson and was simply
+unused by the starter. See root `docs/README.md` for the "paths not content"
+rationale.
 
 ## `POST /findings/:id/(accept|dismiss)`
 

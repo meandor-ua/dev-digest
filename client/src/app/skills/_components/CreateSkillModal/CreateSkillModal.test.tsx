@@ -5,9 +5,9 @@ import { NextIntlClientProvider } from "next-intl";
 import messages from "../../../../../messages/en/skills.json";
 import { ToastProvider } from "../../../../lib/toast";
 
-const { createMutate, importMutate, push, extractMarkdownFiles } = vi.hoisted(() => ({
+const { createMutate, previewMutate, push, extractMarkdownFiles } = vi.hoisted(() => ({
   createMutate: vi.fn(),
-  importMutate: vi.fn(),
+  previewMutate: vi.fn(),
   push: vi.fn(),
   extractMarkdownFiles: vi.fn(),
 }));
@@ -15,7 +15,7 @@ const { createMutate, importMutate, push, extractMarkdownFiles } = vi.hoisted(()
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: vi.fn() }) }));
 vi.mock("../../../../lib/hooks/skills", () => ({
   useCreateSkill: () => ({ mutate: createMutate, isPending: false }),
-  useImportSkill: () => ({ mutate: importMutate, isPending: false }),
+  usePreviewSkillUrl: () => ({ mutate: previewMutate, isPending: false }),
 }));
 vi.mock("./file-extractor", () => ({ extractMarkdownFiles }));
 
@@ -82,19 +82,27 @@ describe("CreateSkillModal", () => {
     );
   });
 
-  it("imports from a URL through the server-side importer", () => {
+  it("fetches a URL preview, prefills the form, and only creates on confirm", () => {
+    previewMutate.mockImplementation((_url, opts) =>
+      opts.onSuccess({ name: "Fetched Rule", body: "# Fetched Rule\nbody" }),
+    );
     renderModal("scratch");
     fireEvent.click(screen.getByRole("button", { name: "From URL" }));
-    const submit = screen.getByRole("button", { name: /Import from URL/ });
-    expect(submit).toBeDisabled();
+    const fetchBtn = screen.getByRole("button", { name: /Fetch/ });
+    expect(fetchBtn).toBeDisabled();
     type("Skill URL", " https://example.com/rule.md ");
-    fireEvent.change(screen.getByRole("combobox", { name: "Skill Type" }), { target: { value: "convention" } });
-    fireEvent.click(submit);
+    fireEvent.click(fetchBtn);
 
-    expect(importMutate).toHaveBeenCalledWith(
-      { url: "https://example.com/rule.md", name: undefined, type: "convention" },
+    expect(previewMutate).toHaveBeenCalledWith("https://example.com/rule.md", expect.anything());
+    // No skill is created merely by fetching — only the preview form is filled.
+    expect(createMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("Fetched Rule");
+    expect(screen.getByRole("textbox", { name: "Skill Body (Markdown)" })).toHaveValue("# Fetched Rule\nbody");
+
+    fireEvent.click(screen.getByRole("button", { name: /Import Skill/ }));
+    expect(createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Fetched Rule", source: "imported_url", enabled: false }),
       expect.anything(),
     );
-    expect(createMutate).not.toHaveBeenCalled();
   });
 });

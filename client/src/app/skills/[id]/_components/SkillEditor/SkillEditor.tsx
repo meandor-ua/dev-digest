@@ -23,7 +23,7 @@ export function SkillEditor({
   onTab: (t: string) => void;
 }) {
   const t = useTranslations("skills");
-  const tabs = SKILL_TABS.map((tb) => ({ key: tb.key, label: t(`editor.tabs.${tb.key}`), icon: tb.icon }));
+  const tabs = SKILL_TABS.map((tb) => ({ key: tb.key, label: t(`editor.tabs.${tb.key}`) }));
 
   return (
     <div style={s.wrap}>
@@ -37,7 +37,7 @@ export function SkillEditor({
           <ConfigTab skill={skill} />
         </div>
 
-        {tab === "context" && <ContextTab />}
+        {tab === "context" && <ContextTab skill={skill} />}
         {tab === "preview" && <PreviewTab skill={skill} />}
         {tab === "evals" && <EvalsTab />}
         {tab === "stats" && <StatsTab skillId={skill.id} />}

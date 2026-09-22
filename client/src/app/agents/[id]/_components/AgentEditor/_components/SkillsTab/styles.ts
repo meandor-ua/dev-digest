@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { tint } from "@/lib/color";
 
 export const s = {
   wrap: { padding: 24, display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "auto" } satisfies CSSProperties,
@@ -36,7 +37,7 @@ export const s = {
     fontSize: 11,
     fontWeight: 600,
     color,
-    background: color + "1a",
+    background: tint(color),
     padding: "2px 8px",
     borderRadius: 4,
     textTransform: "capitalize",

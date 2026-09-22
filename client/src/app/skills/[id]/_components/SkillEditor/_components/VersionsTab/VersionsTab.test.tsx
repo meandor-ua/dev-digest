@@ -24,12 +24,14 @@ const VERSIONS: SkillVersion[] = [
     skill_id: "sk1",
     version: 1,
     body: "# Security Rubric v1\nOriginal rules...",
+    message: null,
     created_at: "2026-09-20T10:00:00Z",
   },
   {
     skill_id: "sk1",
     version: 2,
     body: "# Security Rubric v2\nUpdated rules...",
+    message: "Tighten the secrets rule",
     created_at: "2026-09-21T10:00:00Z",
   },
 ];
@@ -72,126 +74,64 @@ describe("VersionsTab", () => {
     restoreMutate.mockClear();
   });
 
-  it("renders the version history title", () => {
+  it("renders the version history title and count chip", () => {
     renderWithProviders(<VersionsTab skill={SKILL} />);
-    expect(screen.getByText("Version History")).toBeInTheDocument();
+    expect(screen.getByText("Version history")).toBeInTheDocument();
+    expect(screen.getByText("2 versions")).toBeInTheDocument();
   });
 
-  it("renders the number of recorded versions", () => {
-    renderWithProviders(<VersionsTab skill={SKILL} />);
-    expect(screen.getByText(/2 versions recorded/)).toBeInTheDocument();
-  });
-
-  it("renders all versions with version badges", () => {
+  it("renders all versions with version badges, messages, and YYYY-MM-DD dates", () => {
     renderWithProviders(<VersionsTab skill={SKILL} />);
     expect(screen.getByText("v1")).toBeInTheDocument();
     expect(screen.getByText("v2")).toBeInTheDocument();
+    expect(screen.getByText("Tighten the secrets rule")).toBeInTheDocument();
+    expect(screen.getByText("Saved body")).toBeInTheDocument(); // v1's fallback (no message)
+    expect(screen.getByText("2026-09-20")).toBeInTheDocument();
+    expect(screen.getByText("2026-09-21")).toBeInTheDocument();
   });
 
-  it("marks the current version with a current badge", () => {
+  it("marks the current version with a green Current pill and no actions", () => {
     renderWithProviders(<VersionsTab skill={SKILL} />);
-    const currentBadges = screen.getAllByText(/● Current/);
-    expect(currentBadges.length).toBeGreaterThan(0);
+    expect(screen.getByText(messages.versions.currentBadge)).toBeInTheDocument();
+    // Only v1 (the non-current row) gets Diff/Restore buttons.
+    expect(screen.getAllByRole("button", { name: "Diff" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Restore" })).toHaveLength(1);
   });
 
-  it("starts with only the current version expanded", () => {
+  it("starts with every row collapsed — no body or diff shown until Diff is clicked", () => {
     renderWithProviders(<VersionsTab skill={SKILL} />);
-    expect(screen.getAllByRole("button", { name: /Hide body/ })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: /View body/ })).toHaveLength(1);
+    expect(screen.queryByText(/Updated rules/)).not.toBeInTheDocument();
+    expect(screen.queryByText("+")).not.toBeInTheDocument();
+    expect(screen.queryByText("-")).not.toBeInTheDocument();
   });
 
-  it("expands a version when view body button is clicked", async () => {
+  it("expands an older version's diff when Diff is clicked, and collapses on a second click", async () => {
     renderWithProviders(<VersionsTab skill={SKILL} />);
-    const viewButtons = screen.getAllByRole("button", { name: /View body/ });
-    fireEvent.click(viewButtons[0]!);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Original rules/)).toBeInTheDocument();
-    });
-  });
-
-  it("collapses a version when hide body button is clicked", async () => {
-    renderWithProviders(<VersionsTab skill={SKILL} />);
-    const viewButtons = screen.getAllByRole("button", { name: /View body/ });
-    fireEvent.click(viewButtons[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Diff" }));
 
     await waitFor(() => {
       expect(screen.getByText(/Original rules/)).toBeInTheDocument();
     });
 
-    const hideButtons = screen.getAllByRole("button", { name: /Hide body/ });
-    fireEvent.click(hideButtons[0]!);
-
+    fireEvent.click(screen.getByRole("button", { name: "Diff" }));
     await waitFor(() => {
       expect(screen.queryByText(/Original rules/)).not.toBeInTheDocument();
     });
   });
 
-  it("shows restore button for older versions", async () => {
-    renderWithProviders(<VersionsTab skill={SKILL} />);
-    const viewButtons = screen.getAllByRole("button", { name: /View body/ });
-    fireEvent.click(viewButtons[0]!);
-
-    await waitFor(() => {
-      const restoreButtons = screen.getAllByRole("button", { name: /Restore/ });
-      expect(restoreButtons.length).toBeGreaterThan(0);
-    });
-  });
-
-  it("does not show restore button for current version", async () => {
-    renderWithProviders(<VersionsTab skill={SKILL} />);
-    const viewButtons = screen.getAllByRole("button", { name: /View body/ });
-    // Click on v2 (current version) which is typically the last one
-    fireEvent.click(viewButtons[viewButtons.length - 1]!);
-
-    await waitFor(() => {
-      // The current version should not have a restore button, but older versions will
-      const versionCards = screen.getAllByText(/v\d/);
-      expect(versionCards.length).toBeGreaterThanOrEqual(2);
-    });
-  });
-
-  it("calls restore mutation when restore button is clicked", async () => {
+  it("calls restore mutation with the older version's number", async () => {
     restoreMutate.mockImplementation((input, options) => {
       options.onSuccess({ ...SKILL, version: 3 });
     });
 
     renderWithProviders(<VersionsTab skill={SKILL} />);
-    const viewButtons = screen.getAllByRole("button", { name: /View body/ });
-    fireEvent.click(viewButtons[0]!); // Open v1
-
-    await waitFor(() => {
-      const restoreButtons = screen.getAllByRole("button", { name: /Restore/ });
-      fireEvent.click(restoreButtons[0]!);
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
 
     await waitFor(() => {
       expect(restoreMutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: "sk1",
-          version: 1,
-        }),
+        expect.objectContaining({ id: "sk1", version: 1 }),
         expect.any(Object),
       );
     });
-  });
-
-  it("shows diff lines for older versions with added lines", async () => {
-    renderWithProviders(<VersionsTab skill={SKILL} />);
-    const viewButtons = screen.getAllByRole("button", { name: /View body/ });
-    fireEvent.click(viewButtons[0]!); // Open v1
-
-    await waitFor(() => {
-      // The diff should show lines from v1 vs current v2
-      // Since v1 has "Original rules" and v2 has "Updated rules", there should be differences
-      expect(screen.getByText(/Original rules/)).toBeInTheDocument();
-    });
-  });
-
-  it("renders the current version's body as-is, without diff markers", () => {
-    renderWithProviders(<VersionsTab skill={SKILL} />);
-    expect(screen.getByText(/Updated rules/)).toBeInTheDocument();
-    expect(screen.queryByText("+")).not.toBeInTheDocument();
-    expect(screen.queryByText("-")).not.toBeInTheDocument();
   });
 });

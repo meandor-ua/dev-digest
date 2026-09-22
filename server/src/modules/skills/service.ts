@@ -1,9 +1,18 @@
 import type { Container } from '../../platform/container.js';
-import type { Skill, SkillStats, SkillVersion, SkillWithStats, SkillType, SkillSource } from '@devdigest/shared';
+import type {
+  Skill,
+  SkillContext,
+  SkillImportPreview,
+  SkillStats,
+  SkillVersion,
+  SkillWithStats,
+  SkillType,
+  SkillSource,
+} from '@devdigest/shared';
 import type { InsertSkill, UpdateSkill, SkillsRepository } from './repository.js';
-import { toSkillDto, toSkillVersionDto } from './helpers.js';
+import { toSkillDto, toSkillVersionDto, deriveSkillName } from './helpers.js';
 import { SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX } from './constants.js';
-import { ValidationError } from '../../platform/errors.js';
+import { NotFoundError, ValidationError } from '../../platform/errors.js';
 
 export interface CreateSkillDto {
   name: string;
@@ -23,6 +32,7 @@ export interface UpdateSkillDto {
   body?: string;
   enabled?: boolean;
   evidence_files?: string[] | null;
+  message?: string;
 }
 
 export class SkillsService {
@@ -73,6 +83,7 @@ export class SkillsService {
       body: patch.body,
       enabled: patch.enabled,
       evidenceFiles: patch.evidence_files,
+      message: patch.message,
     };
     const row = await this.repo.update(workspaceId, id, updateValues);
     return row ? toSkillDto(row) : undefined;
@@ -91,8 +102,9 @@ export class SkillsService {
     workspaceId: string,
     id: string,
     version: number,
+    message?: string,
   ): Promise<Skill | undefined> {
-    const row = await this.repo.restore(workspaceId, id, version);
+    const row = await this.repo.restore(workspaceId, id, version, message);
     return row ? toSkillDto(row) : undefined;
   }
 
@@ -108,17 +120,7 @@ export class SkillsService {
   ): Promise<Skill> {
     const { text: body, finalUrl } = await this.container.remoteText.fetchText(url);
 
-    // Derive name from first markdown heading or url basename if not provided
-    let derivedName = name;
-    if (!derivedName) {
-      const match = body.match(/^#+\s+(.+)$/m);
-      if (match && match[1]) {
-        derivedName = match[1].trim();
-      } else {
-        const urlParts = finalUrl.split('/');
-        derivedName = urlParts[urlParts.length - 1]?.replace(/\.md$/i, '') || 'imported-skill';
-      }
-    }
+    const derivedName = name ?? deriveSkillName(body, finalUrl);
 
     if (body.length > SKILL_BODY_MAX) {
       throw new ValidationError(`Skill body exceeds ${SKILL_BODY_MAX} characters`);
@@ -132,5 +134,53 @@ export class SkillsService {
       body,
       enabled: false, // imported skills require vetting before enabling
     });
+  }
+
+  /**
+   * Fetch + derive name/body WITHOUT inserting — backs the URL import tab's
+   * fetch → preview → confirm flow (confirm goes through `create`, same as
+   * file import, so the user can edit the prefilled form before saving).
+   */
+  async previewImportFromUrl(url: string): Promise<SkillImportPreview> {
+    const { text: body, finalUrl } = await this.container.remoteText.fetchText(url);
+    if (body.length > SKILL_BODY_MAX) {
+      throw new ValidationError(`Skill body exceeds ${SKILL_BODY_MAX} characters`);
+    }
+    return { name: deriveSkillName(body, finalUrl).slice(0, SKILL_NAME_MAX), body };
+  }
+
+  // ---- Project context (Context tab) --------------------------------------
+
+  async getContext(
+    workspaceId: string,
+    id: string,
+    repoId: string,
+  ): Promise<SkillContext | undefined> {
+    const skill = await this.repo.getById(workspaceId, id);
+    if (!skill) return undefined;
+    const repoRow = await this.container.reposRepo.getById(workspaceId, repoId);
+    if (!repoRow) throw new NotFoundError('Repo not found');
+
+    const [available, attached] = await Promise.all([
+      this.container.projectDocs.list({ owner: repoRow.owner, name: repoRow.name }),
+      this.repo.listContextPaths(id),
+    ]);
+    return { available, attached };
+  }
+
+  async setContext(
+    workspaceId: string,
+    id: string,
+    paths: string[],
+  ): Promise<string[] | undefined> {
+    const skill = await this.repo.getById(workspaceId, id);
+    if (!skill) return undefined;
+    return this.repo.setContextPaths(id, paths);
+  }
+
+  async readContextDoc(workspaceId: string, repoId: string, path: string): Promise<string> {
+    const repoRow = await this.container.reposRepo.getById(workspaceId, repoId);
+    if (!repoRow) throw new NotFoundError('Repo not found');
+    return this.container.projectDocs.read({ owner: repoRow.owner, name: repoRow.name }, path);
   }
 }

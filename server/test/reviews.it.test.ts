@@ -4,7 +4,13 @@ import { waitForPrRuns } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
-import { MockLLMProvider, MockEmbedder, MockGitClient, MockGitHubClient } from '../src/adapters/mocks.js';
+import {
+  MockLLMProvider,
+  MockEmbedder,
+  MockGitClient,
+  MockGitHubClient,
+  MockProjectDocsAdapter,
+} from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Review } from '@devdigest/shared';
@@ -648,6 +654,142 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(prompt.indexOf('RULE-FIRST')).toBeLessThan(prompt.indexOf('RULE-SECOND'));
     expect(prompt).not.toContain('RULE-LINK-OFF');
     expect(prompt).not.toContain('RULE-UNVETTED');
+
+    await app.close();
+  });
+
+  it("injects an enabled skill's attached context docs under ## Project context", async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: DIFF }),
+        llm: { openai: llm },
+        projectDocs: new MockProjectDocsAdapter({
+          docs: [{ path: 'docs/README.md', dir: 'docs', category: 'docs' }],
+          files: { 'docs/README.md': 'PROJECT-DOC-CONTENT' },
+        }),
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = await makeAgent(app, 'Sec-context');
+    const skill = (
+      await app.inject({ method: 'POST', url: '/skills', payload: { name: 'With docs', type: 'rubric', body: 'RULE' } })
+    ).json();
+    await app.inject({
+      method: 'PUT',
+      url: `/skills/${skill.id}/context`,
+      payload: { paths: ['docs/README.md'] },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${agent.id}/skills`,
+      payload: { skills: [{ skill_id: skill.id, enabled: true }] },
+    });
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+
+    const prompt = llm.calls
+      .filter((c) => c.method === 'completeStructured')
+      .map((c) => JSON.stringify((c.req as { messages: unknown }).messages))
+      .join('\n');
+    expect(prompt).toContain('## Project context');
+    expect(prompt).toContain('PROJECT-DOC-CONTENT');
+
+    await app.close();
+  });
+
+  it('skips an attached doc that is missing from the clone, without failing the run', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: DIFF }),
+        llm: { openai: llm },
+        // `docs` lists the path (so it's a "known" doc) but `files` has no entry
+        // for it — same shape as a doc renamed/deleted since the skill attached it.
+        projectDocs: new MockProjectDocsAdapter({
+          docs: [{ path: 'docs/gone.md', dir: 'docs', category: 'docs' }],
+          files: {},
+        }),
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = await makeAgent(app, 'Sec-context-missing');
+    const skill = (
+      await app.inject({ method: 'POST', url: '/skills', payload: { name: 'Missing doc', type: 'rubric', body: 'RULE' } })
+    ).json();
+    await app.inject({
+      method: 'PUT',
+      url: `/skills/${skill.id}/context`,
+      payload: { paths: ['docs/gone.md'] },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${agent.id}/skills`,
+      payload: { skills: [{ skill_id: skill.id, enabled: true }] },
+    });
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+
+    const prompt = llm.calls
+      .filter((c) => c.method === 'completeStructured')
+      .map((c) => JSON.stringify((c.req as { messages: unknown }).messages))
+      .join('\n');
+    expect(prompt).not.toContain('## Project context');
+
+    await app.close();
+  });
+
+  it('a disabled skill link contributes no context docs', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: DIFF }),
+        llm: { openai: llm },
+        projectDocs: new MockProjectDocsAdapter({
+          docs: [{ path: 'docs/README.md', dir: 'docs', category: 'docs' }],
+          files: { 'docs/README.md': 'SHOULD-NOT-APPEAR' },
+        }),
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = await makeAgent(app, 'Sec-context-disabled');
+    const skill = (
+      await app.inject({ method: 'POST', url: '/skills', payload: { name: 'Disabled link', type: 'rubric', body: 'RULE' } })
+    ).json();
+    await app.inject({
+      method: 'PUT',
+      url: `/skills/${skill.id}/context`,
+      payload: { paths: ['docs/README.md'] },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${agent.id}/skills`,
+      payload: { skills: [{ skill_id: skill.id, enabled: false }] },
+    });
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+
+    const prompt = llm.calls
+      .filter((c) => c.method === 'completeStructured')
+      .map((c) => JSON.stringify((c.req as { messages: unknown }).messages))
+      .join('\n');
+    expect(prompt).not.toContain('## Project context');
+    expect(prompt).not.toContain('SHOULD-NOT-APPEAR');
 
     await app.close();
   });

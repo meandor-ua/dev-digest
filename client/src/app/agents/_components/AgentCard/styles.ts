@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { tint } from "@/lib/color";
 
 /** Co-located styles for AgentCard (extracted from inline styles). */
 export const s = {
@@ -44,7 +45,7 @@ export const s = {
     fontSize: 12,
     fontWeight: 600,
     color,
-    background: color + "1a",
+    background: tint(color),
     padding: "1px 8px",
     borderRadius: 4,
   }),

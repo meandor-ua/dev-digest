@@ -21,7 +21,6 @@ export const s = {
     gap: 20,
     alignItems: "start",
   } satisfies CSSProperties,
-  gaugeValue: { display: "inline-flex", alignItems: "center", gap: 10 } satisfies CSSProperties,
   muted: { fontSize: 13, color: "var(--text-muted)" } satisfies CSSProperties,
   card: {
     background: "var(--bg-elevated)",
@@ -33,11 +32,17 @@ export const s = {
     gap: 14,
   } satisfies CSSProperties,
   cardTitle: {
-    fontSize: 14,
-    fontWeight: 700,
-    color: "var(--text-primary)",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 12,
+    fontWeight: 600,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: "var(--text-muted)",
     margin: 0,
   } satisfies CSSProperties,
+  open: { fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
   agentList: {
     display: "flex",
     flexDirection: "column",

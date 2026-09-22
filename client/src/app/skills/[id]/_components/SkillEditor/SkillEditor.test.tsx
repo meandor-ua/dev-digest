@@ -7,6 +7,7 @@ import messages from "../../../../../../messages/en/skills.json";
 
 // The tab bodies have their own tests; stub them to test only the switcher.
 vi.mock("./_components/ConfigTab", () => ({ ConfigTab: () => <div>config-body</div> }));
+vi.mock("./_components/ContextTab", () => ({ ContextTab: () => <div>context-body</div> }));
 vi.mock("./_components/PreviewTab", () => ({ PreviewTab: () => <div>preview-body</div> }));
 vi.mock("./_components/StatsTab", () => ({ StatsTab: () => <div>stats-body</div> }));
 vi.mock("./_components/VersionsTab", () => ({ VersionsTab: () => <div>versions-body</div> }));
@@ -57,11 +58,11 @@ describe("SkillEditor", () => {
     expect(screen.getByText("config-body")).not.toBeVisible();
   });
 
-  it("renders the placeholder Context and Evals tabs", () => {
+  it("renders the Context tab (stubbed) and the placeholder Evals tab", () => {
     renderEditor("context");
-    expect(screen.getByText(messages.context.integration)).toBeInTheDocument();
+    expect(screen.getByText("context-body")).toBeInTheDocument();
     cleanup();
     renderEditor("evals");
-    expect(screen.getByText(messages.evals.pipeline)).toBeInTheDocument();
+    expect(screen.getByText(messages.evals.empty)).toBeInTheDocument();
   });
 });

@@ -135,9 +135,34 @@ export const SkillVersion = z.object({
   skill_id: z.string(),
   version: z.number().int(),
   body: z.string(),
+  message: z.string().nullable(),
   created_at: z.string(),
 });
 export type SkillVersion = z.infer<typeof SkillVersion>;
+
+// ---- Skill project context (attached repo docs — Context tab) ----
+export const ProjectDocCategory = z.enum(['specs', 'docs', 'insights']);
+export type ProjectDocCategory = z.infer<typeof ProjectDocCategory>;
+
+export const ProjectDoc = z.object({
+  path: z.string(),
+  dir: z.string(),
+  category: ProjectDocCategory,
+});
+export type ProjectDoc = z.infer<typeof ProjectDoc>;
+
+export const SkillContext = z.object({
+  available: z.array(ProjectDoc),
+  attached: z.array(z.string()),
+});
+export type SkillContext = z.infer<typeof SkillContext>;
+
+// ---- Skill URL import preview (fetch → preview → confirm) ----
+export const SkillImportPreview = z.object({
+  name: z.string(),
+  body: z.string(),
+});
+export type SkillImportPreview = z.infer<typeof SkillImportPreview>;
 
 export const SkillAgentRef = z.object({
   id: z.string(),
@@ -149,7 +174,8 @@ export const SkillStats = z.object({
   agent_count: z.number().int(),
   agents: z.array(SkillAgentRef),
   pull_frequency_pct: z.number(),
-  accept_rate_pct: z.number(),
+  /** null when the linked agents have no findings yet — no signal, not 100%. */
+  accept_rate_pct: z.number().nullable(),
   findings_30d: z.number().int(),
   findings_by_category: z.record(z.string(), z.number().int()),
 });
@@ -158,7 +184,7 @@ export type SkillStats = z.infer<typeof SkillStats>;
 export const SkillWithStats = Skill.extend({
   agent_count: z.number().int().optional(),
   pull_frequency_pct: z.number().optional(),
-  accept_rate_pct: z.number().optional(),
+  accept_rate_pct: z.number().nullable().optional(),
 });
 export type SkillWithStats = z.infer<typeof SkillWithStats>;
 

@@ -6,7 +6,15 @@ import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { NotFoundError } from '../../platform/errors.js';
 import { SkillsService } from './service.js';
-import { SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX } from './constants.js';
+import {
+  SKILL_BODY_MAX,
+  SKILL_DESCRIPTION_MAX,
+  SKILL_NAME_MAX,
+  SKILL_MESSAGE_MAX,
+  SKILL_CONTEXT_MAX_DOCS,
+  SKILL_CONTEXT_PATH_MAX,
+  REMOTE_IMPORT_RATE_LIMIT,
+} from './constants.js';
 
 const CreateSkillBody = z.object({
   name: z.string().min(1).max(SKILL_NAME_MAX),
@@ -26,6 +34,7 @@ const UpdateSkillBody = z.object({
   body: z.string().max(SKILL_BODY_MAX).optional(),
   enabled: z.boolean().optional(),
   evidence_files: z.array(z.string()).optional(),
+  message: z.string().max(SKILL_MESSAGE_MAX).optional(),
 });
 
 const ImportSkillBody = z.object({
@@ -34,8 +43,26 @@ const ImportSkillBody = z.object({
   type: SkillType.optional(),
 });
 
+const ImportPreviewBody = z.object({
+  url: z.string().url(),
+});
+
 const RestoreSkillBody = z.object({
   version: z.coerce.number().int().positive(),
+  message: z.string().max(SKILL_MESSAGE_MAX).optional(),
+});
+
+const SetContextBody = z.object({
+  paths: z.array(z.string().min(1).max(SKILL_CONTEXT_PATH_MAX)).max(SKILL_CONTEXT_MAX_DOCS),
+});
+
+const RepoIdQuery = z.object({
+  repo_id: z.string(),
+});
+
+const ContextDocQuery = z.object({
+  repo_id: z.string(),
+  path: z.string().max(SKILL_CONTEXT_PATH_MAX),
 });
 
 export default async function skillsRoutes(appBase: FastifyInstance) {
@@ -66,7 +93,7 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
   // Statically registered before `/skills/:id` to avoid routing collisions
   app.post(
     '/skills/import',
-    { schema: { body: ImportSkillBody }, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    { schema: { body: ImportSkillBody }, config: { rateLimit: REMOTE_IMPORT_RATE_LIMIT } },
     async (req, reply) => {
       const { workspaceId } = await getContext(app.container, req);
       const skill = await service.importFromUrl(
@@ -79,6 +106,25 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
       return skill;
     },
   );
+
+  // Fetch + preview a URL import WITHOUT inserting — the URL tab's
+  // fetch → preview → confirm flow; confirm goes through POST /skills.
+  app.post(
+    '/skills/import/preview',
+    { schema: { body: ImportPreviewBody }, config: { rateLimit: REMOTE_IMPORT_RATE_LIMIT } },
+    async (req) => {
+      await getContext(app.container, req);
+      return service.previewImportFromUrl(req.body.url);
+    },
+  );
+
+  // Read one project doc's text (Context tab's eye preview) — repo-scoped, not
+  // skill-scoped, so registered as a static `/skills/context/...` segment.
+  app.get('/skills/context/doc', { schema: { querystring: ContextDocQuery } }, async (req) => {
+    const { workspaceId } = await getContext(app.container, req);
+    const text = await service.readContextDoc(workspaceId, req.query.repo_id, req.query.path);
+    return { text };
+  });
 
   app.get('/skills/:id', { schema: { params: IdParams } }, async (req) => {
     const { workspaceId } = await getContext(app.container, req);
@@ -124,9 +170,36 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
     { schema: { params: IdParams, body: RestoreSkillBody } },
     async (req) => {
       const { workspaceId } = await getContext(app.container, req);
-      const restored = await service.restore(workspaceId, req.params.id, req.body.version);
+      const restored = await service.restore(
+        workspaceId,
+        req.params.id,
+        req.body.version,
+        req.body.message,
+      );
       if (!restored) throw new NotFoundError('Skill or version not found');
       return restored;
+    },
+  );
+
+  app.get(
+    '/skills/:id/context',
+    { schema: { params: IdParams, querystring: RepoIdQuery } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const result = await service.getContext(workspaceId, req.params.id, req.query.repo_id);
+      if (!result) throw new NotFoundError('Skill not found');
+      return result;
+    },
+  );
+
+  app.put(
+    '/skills/:id/context',
+    { schema: { params: IdParams, body: SetContextBody } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const attached = await service.setContext(workspaceId, req.params.id, req.body.paths);
+      if (attached === undefined) throw new NotFoundError('Skill not found');
+      return { attached };
     },
   );
 }

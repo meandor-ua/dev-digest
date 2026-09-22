@@ -1,15 +1,9 @@
-import type { SkillType, SkillSource } from "@devdigest/shared";
+import type { SkillSource } from "@devdigest/shared";
+import type { IconName } from "@devdigest/ui";
 
-export const SKILL_TYPE_COLOR: Record<SkillType, string> = {
-  rubric: "var(--accent)",
-  convention: "var(--info)",
-  security: "var(--crit)",
-  custom: "var(--text-secondary)",
-};
-
-export const SKILL_SOURCE_LABEL: Record<SkillSource, string> = {
-  manual: "Manual",
-  imported_url: "Imported",
-  extracted: "Extracted",
-  community: "Community",
+export const SKILL_SOURCE_ICON: Record<SkillSource, IconName> = {
+  manual: "User",
+  imported_url: "Link",
+  extracted: "FileText",
+  community: "Globe",
 };

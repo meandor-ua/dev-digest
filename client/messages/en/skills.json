@@ -2,23 +2,10 @@
   "page": {
     "crumbLab": "Skills Lab",
     "crumbSkills": "Skills",
-    "heading": "Skills",
     "addSkill": "Add Skill",
-    "searchPlaceholder": "Search skills…",
-    "loadError": "Could not load skills.",
-    "menu": {
-      "fromFile": "Import from file",
-      "fromUrl": "Import from URL",
-      "community": "Search community skills…"
-    },
     "empty": {
       "title": "No skills found",
-      "body": "Create a skill from scratch or import markdown rules from an archive.",
-      "cta": "Import from file"
-    },
-    "selectPrompt": {
-      "title": "Select a skill",
-      "body": "Pick a skill on the left to preview its body."
+      "body": "Create a skill from scratch or import markdown rules from an archive."
     }
   },
   "detail": {
@@ -28,54 +15,12 @@
     "confirmDelete": "Delete skill \"{name}\"? This will unlink it from all agents.",
     "deleteSuccess": "Deleted skill \"{name}\"",
     "deleteError": "Failed to delete skill",
-    "crumbSkill": "Skill",
-    "back": "← All skills",
     "loadError": "Could not load this skill.",
+    "runOnEvals": "Run on evals",
+    "runOnEvalsTitle": "Not available yet",
     "notFound": {
-      "title": "Skill not found",
       "body": "It may have been deleted."
     }
-  },
-  "drawer": {
-    "title": "Add a skill",
-    "subtitle": "Import from a file, a URL, or search vetted community skills",
-    "tabs": {
-      "file": "From file",
-      "url": "From URL",
-      "community": "Community"
-    },
-    "importFailed": "Import failed"
-  },
-  "file": {
-    "nameLabel": "Skill name",
-    "nameHint": "Optional — derived from the first heading if blank.",
-    "namePlaceholder": "pr-quality-rubric",
-    "bodyLabel": "Skill body (Markdown)",
-    "bodyHint": "Imported skills are saved disabled until you review and enable them.",
-    "bodyPlaceholder": "# Rule\nDescribe the rule…",
-    "importing": "Importing…",
-    "import": "Import skill",
-    "success": "Imported \"{name}\" — disabled until you vet and enable it."
-  },
-  "url": {
-    "label": "Skill URL",
-    "hint": "Fetched server-side over https from public hosts only, and saved disabled until you vet and enable it.",
-    "placeholder": "https://example.com/skills/security.md",
-    "fetching": "Fetching…",
-    "import": "Import from URL",
-    "success": "Imported \"{name}\". Disabled until you vet + enable it."
-  },
-  "community": {
-    "searchPlaceholder": "Search community skills (e.g. security)…",
-    "allLanguages": "All languages",
-    "loadError": "Could not load community skills",
-    "retry": "Retry",
-    "noMatch": {
-      "title": "No matching skills",
-      "body": "Try a different search term."
-    },
-    "importing": "Importing…",
-    "import": "Import"
   },
   "listItem": {
     "needsVetting": "needs vetting",
@@ -91,23 +36,17 @@
       "extracted": "Extracted",
       "community": "Community",
       "imported_url": "Imported"
+    },
+    "stats": {
+      "agents": "{count, plural, one {# agent} other {# agents}}",
+      "pull": "{pct}% pull",
+      "accept": "{pct}% accept"
     }
   },
   "preview": {
-    "title": "Prompt Assembly Preview",
-    "tokens": "~{count} tokens",
-    "hint": "This preview renders how this skill rule is presented to reviewing LLMs within the <code>{section}</code> section of the review prompt.",
-    "section": "## Skills / rules",
-    "header": "SECTION: ## Skills / rules",
-    "untrustedBadge": "untrusted source",
-    "enabled": "Enabled",
-    "disabled": "Disabled",
-    "save": "Save",
-    "edit": "Edit",
-    "untrustedNotice": "This skill came from an external source. Read its body before enabling it — once enabled, it is injected into agent prompts as instructions.",
-    "bodyLabel": "Skill body (Markdown)",
-    "bodyHint": "Saving a changed body creates a new immutable version.",
-    "version": "v{version}"
+    "title": "Preview",
+    "subtitle": "Rendered as the reviewing agent receives it.",
+    "untrustedNotice": "This skill came from an external source. Read its body before enabling it — once enabled, it is injected into agent prompts as instructions."
   },
   "typeOptions": {
     "rubric": "Rubric (Scoring & edge cases)",
@@ -116,22 +55,26 @@
     "custom": "Custom (Domain-specific instructions)"
   },
   "config": {
-    "title": "Configuration",
-    "dirtyAlert": "You have unsaved changes.",
-    "nameLabel": "Skill Name",
-    "typeLabel": "Skill Type",
-    "descriptionLabel": "Directive Description",
+    "configTitle": "Configuration",
+    "nameLabel": "Name",
+    "typeLabel": "Type",
+    "descriptionLabel": "Description",
     "descriptionHint": "Summarize what this skill instructs the reviewing LLM to do",
-    "bodyLabel": "Skill Markdown Body",
-    "bodyHint": "Markdown instructions injected into review prompts under ## Skills / rules. Saving a modified body increments the version snapshot.",
+    "bodyLabel": "Skill body",
     "save": "Save",
     "saving": "Saving...",
     "cancel": "Cancel",
     "enabledLabel": "Enabled",
-    "configTitle": "Skill Configuration",
+    "unsaved": "Unsaved",
+    "changeNoteLabel": "Change note (optional)",
+    "changeNoteHint": "Shown on this save's row in Version history",
+    "changeNotePlaceholder": "What changed and why…",
     "saved": "Skill saved (v{version})",
     "saveFailed": "Failed to update skill",
-    "savedNote": "Saved (v{version})"
+    "savedNote": "Saved (v{version})",
+    "dangerZoneTitle": "Delete this skill",
+    "dangerZoneBody": "Unlinks it from every agent. This cannot be undone.",
+    "tokens": "{count, plural, one {# token} other {# tokens}}"
   },
   "stats": {
     "usedBy": "USED BY",
@@ -143,32 +86,49 @@
     "findingsByCategory": "Findings by Category",
     "noFindings": "No findings generated yet.",
     "loadError": "Could not load skill statistics",
-    "loadErrorBody": "Usage metrics could not be retrieved from the server."
+    "loadErrorBody": "Usage metrics could not be retrieved from the server.",
+    "agentsUnit": "{count, plural, one {agent} other {agents}}",
+    "open": "Open"
   },
   "versions": {
-    "title": "Version History",
-    "recorded": "{count, plural, one {# version} other {# versions}} recorded",
-    "currentBadge": "● Current",
-    "viewBody": "View body",
-    "hideBody": "Hide body",
+    "title": "Version history",
+    "subtitle": "Every save snapshots the body — restore any earlier version at any time.",
+    "currentBadge": "Current",
+    "diff": "Diff",
     "restore": "Restore",
+    "savedBodyFallback": "Saved body",
     "noHistory": "No version history",
     "noHistoryBody": "Modifying and saving the skill body will record version snapshots.",
-    "confirmRestore": "Restore body from v{version}?",
     "restoreSuccess": "Restored skill body from v{version} (now v{updated})",
-    "restoreError": "Failed to restore version"
+    "restoreError": "Failed to restore version",
+    "count": "{count, plural, one {# version} other {# versions}}"
   },
   "context": {
-    "title": "Context",
-    "description": "Integration points and context data",
-    "integration": "Project Context Integration",
-    "integrationBody": "Project Context integration for targeted skill injection arrives in Lesson 5."
+    "heading": "Project context to use",
+    "subtitle": "Any agent using this skill inherits these documents.",
+    "attachedCount": "{count, plural, one {# attached} other {# attached}}",
+    "filterPlaceholder": "Filter docs…",
+    "dragHandle": "Reorder",
+    "preview": "Preview document",
+    "noRepo": "Select a repo",
+    "noRepoBody": "Choose a repo to browse its project docs.",
+    "empty": "No project docs found",
+    "emptyBody": "This repo has no specs/, docs/, or INSIGHTS.md files yet.",
+    "noMatch": "No docs match \"{query}\"",
+    "category": {
+      "specs": "specs",
+      "docs": "docs",
+      "insights": "insights"
+    },
+    "serializesAs": "Serializes as",
+    "previewLoadError": "Could not load this document.",
+    "saveError": "Failed to update attached docs",
+    "loadError": "Could not load project context",
+    "missing": "not in this repo"
   },
   "evals": {
-    "title": "Evaluations",
-    "description": "Evaluation results and performance",
-    "pipeline": "Skill Evals Pipeline",
-    "pipelineBody": "Offline skill evaluation and regression testing cases arrive in Lesson 6."
+    "empty": "Eval cases aren't available yet",
+    "emptyBody": "Run eval cases against this skill's rubric to track precision and recall over time."
   },
   "column": {
     "heading": "Skills",
@@ -224,23 +184,18 @@
       "extracting": "Extracting...",
       "hint": "Extracts only markdown (.md) rule blocks. Discards all executable scripts safely.",
       "success": "Extracted {count} markdown file(s)",
-      "extractFailed": "Failed to extract markdown from file"
+      "extractFailed": "Failed to extract markdown from file",
+      "createSuccess": "Imported \"{name}\" — disabled until you vet and enable it."
     },
     "url": {
       "label": "Skill URL",
+      "hint": "Fetched server-side over https from public hosts only. Preview and edit before saving — saved disabled until you vet and enable it.",
       "placeholder": "https://example.com/skills/security.md",
-      "fetching": "Fetching...",
-      "import": "Import from URL",
-      "success": "Imported \"{name}\". Disabled until you vet + enable it.",
+      "fetch": "Fetch",
+      "fetching": "Fetching…",
       "urlRequired": "URL is required",
-      "nameOptional": "Skill name (optional)"
+      "importedDescription": "Imported from {url}",
+      "success": "Imported \"{name}\". Disabled until you vet + enable it."
     }
-  },
-  "delete": {
-    "confirm": "Delete skill \"{name}\"?",
-    "confirmBody": "This action cannot be undone.",
-    "delete": "Delete",
-    "deleting": "Deleting...",
-    "cancel": "Cancel"
   }
 }

@@ -35,7 +35,9 @@ GitHub or Postgres directly.
 ## Conventions (not obvious from code)
 
 - Types/contracts come from `@devdigest/shared` (Zod, vendored under
-  `src/vendor/shared`) — never hand-duplicate them.
+  `src/vendor/shared`) — never hand-duplicate them. **`import type` only**:
+  a runtime import breaks the Next build while tests stay green
+  (lint-enforced in `eslint.config.mjs`).
 - All API access goes through `src/lib/api.ts`; every data hook lives in
   `src/lib/hooks/*`.
 - A mutation must invalidate every query its change affects, including

@@ -135,6 +135,46 @@ you, so the next agent/session doesn't relearn it.
 
 ## What Doesn't Work
 
+- **2026-09-22** — Never import a runtime VALUE from `@devdigest/shared` in
+  client code (e.g. `import { SkillType } … SkillType.options`) — only
+  `import type`. The vendored `src/vendor/shared/index.ts` re-exports with
+  server-style `.js` paths (`./contracts/findings.js`); Next's bundler can't
+  resolve those to `.ts`, so the page 500s with `Module not found: Can't
+  resolve './contracts/findings.js'`. Vitest resolves them fine, so typecheck,
+  lint and every unit test stay green — only the running app (or `next build`)
+  shows it. Type-only imports are erased, which is why no other client file
+  hit this. Derive lists from a client-side exhaustive map instead
+  (`SKILL_TYPES = Object.keys(SKILL_TYPE_COLOR)`). After touching imports, load
+  the page in `pnpm dev`, not just `pnpm test`. Evidence:
+  `src/lib/skill-type.ts`, `src/vendor/shared/index.ts`.
+- **2026-09-22** — The entry above is now lint-enforced:
+  `@typescript-eslint/no-restricted-imports` with `allowTypeImports: true` on
+  `@devdigest/shared` (`eslint.config.mjs`, `src/**` minus `src/vendor/**`)
+  fails `pnpm lint` on any value import, including a mixed
+  `import { X, type Y }`. The PR-time backstop for every other bundler-only
+  error is CI's `next build` in `.github/workflows/e2e-web.yml`.
+
+- **2026-09-22** — Two colour gotchas that fail silently (no type/lint/test
+  error, the colour just doesn't render): (1) `var(--warning)` is not a token
+  — the palette is `--ok` / `--warn` / `--crit` / `--info` (+ `-bg`), see
+  `src/vendor/ui/styles.css`; (2) `color + "1a"` hex-alpha only works on a hex
+  literal, and every colour map here holds `var(--…)` strings, so it yields
+  `var(--accent)1a` (invalid CSS, no background). Use `tint(color, pct)` from
+  `src/lib/color.ts` (`color-mix`). Both had shipped in Skills/Agents cards.
+  Evidence: `src/lib/color.ts:6`, `src/app/skills/_components/SkillCard/styles.ts`.
+
+- **2026-09-22** — `vendor/ui/charts/Donut`'s legend defaults to a currency
+  string (`valuePrefix = "$"`, rendering `$52.00`) unless the caller passes
+  `formatValue`. A percentage-shares donut (or any non-money donut) that
+  forgets this prop silently shows a `$` value instead of erroring — this is
+  exactly the bug a Skills-Lab design mockup shipped with (`$52.00` where a
+  `%` share was intended). The fix is always at the call site
+  (`formatValue={(v) => \`${v}%\`}`), never in `Donut` itself. The Skill
+  Stats tab already passes it correctly:
+  `client/src/app/skills/[id]/_components/SkillEditor/_components/StatsTab/StatsTab.tsx`
+  (`formatValue={(v) => \`${v}%\`}`) + `client/src/lib/category-chart.ts`
+  (`categoryDonutSegments` — largest-remainder rounding so shares always sum
+  to 100). Evidence: `client/src/vendor/ui/charts/Donut.tsx:15,52`.
 - **2026-09-21** — `git mv`-ing a component directory does NOT rewrite the
   `vi.mock("../../…")` relative paths inside its co-located test. They silently
   stop matching the (now differently-nested) module, so the REAL hook runs

@@ -1,11 +1,11 @@
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { SkillRow, SkillVersionRow } from '../../db/rows.js';
+import type { SkillRow, SkillVersionRow, SkillContextDocRow } from '../../db/rows.js';
 import type { SkillStats, SkillWithStats, SkillType, SkillSource } from '@devdigest/shared';
 import { toSkillDto } from './helpers.js';
 
-export type { SkillRow, SkillVersionRow };
+export type { SkillRow, SkillVersionRow, SkillContextDocRow };
 
 export interface InsertSkill {
   workspaceId: string;
@@ -26,6 +26,8 @@ export interface UpdateSkill {
   body?: string;
   enabled?: boolean;
   evidenceFiles?: string[] | null;
+  /** Change note for the version snapshot — only used when `body` actually changes. */
+  message?: string | null;
 }
 
 interface AgentUsage {
@@ -38,7 +40,8 @@ interface AgentUsage {
 /**
  * A skill's usage, attributed through the agents that have it linked AND enabled:
  * pull frequency = their completed runs / all completed runs in the workspace;
- * accept rate = their non-dismissed findings / all their findings (100 when none).
+ * accept rate = their non-dismissed findings / all their findings (null when none —
+ * no findings means no signal, never a fabricated 100%).
  */
 function usageRates(usage: AgentUsage, enabledAgentIds: string[]) {
   let runs = 0;
@@ -52,7 +55,7 @@ function usageRates(usage: AgentUsage, enabledAgentIds: string[]) {
   }
   return {
     pullFrequencyPct: usage.totalRuns > 0 ? Math.min(100, Math.round((runs / usage.totalRuns) * 100)) : 0,
-    acceptRatePct: findings > 0 ? Math.round(((findings - dismissed) / findings) * 100) : 100,
+    acceptRatePct: findings > 0 ? Math.round(((findings - dismissed) / findings) * 100) : null,
   };
 }
 
@@ -180,21 +183,24 @@ export class SkillsRepository {
     const existing = await this.getById(workspaceId, id);
     if (!existing) return undefined;
 
-    const bodyChanged = patch.body !== undefined && patch.body !== existing.body;
+    // `message` targets skill_versions, not a `skills` column — kept out of the
+    // "is this patch empty" check below so a message-only patch (no other field)
+    // doesn't build an UPDATE with an empty SET (invalid SQL).
+    const { message, ...columnPatch } = patch;
+    const bodyChanged = columnPatch.body !== undefined && columnPatch.body !== existing.body;
     const nextVersion = bodyChanged ? existing.version + 1 : existing.version;
-    // An empty patch is a no-op, not an UPDATE with an empty SET (invalid SQL).
-    if (Object.values(patch).every((v) => v === undefined)) return existing;
+    if (Object.values(columnPatch).every((v) => v === undefined)) return existing;
 
     const [row] = await this.db
       .update(t.skills)
       .set({
-        ...(patch.name !== undefined ? { name: patch.name } : {}),
-        ...(patch.description !== undefined ? { description: patch.description } : {}),
-        ...(patch.type !== undefined ? { type: patch.type } : {}),
-        ...(patch.source !== undefined ? { source: patch.source } : {}),
-        ...(patch.body !== undefined ? { body: patch.body } : {}),
-        ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
-        ...(patch.evidenceFiles !== undefined ? { evidenceFiles: patch.evidenceFiles } : {}),
+        ...(columnPatch.name !== undefined ? { name: columnPatch.name } : {}),
+        ...(columnPatch.description !== undefined ? { description: columnPatch.description } : {}),
+        ...(columnPatch.type !== undefined ? { type: columnPatch.type } : {}),
+        ...(columnPatch.source !== undefined ? { source: columnPatch.source } : {}),
+        ...(columnPatch.body !== undefined ? { body: columnPatch.body } : {}),
+        ...(columnPatch.enabled !== undefined ? { enabled: columnPatch.enabled } : {}),
+        ...(columnPatch.evidenceFiles !== undefined ? { evidenceFiles: columnPatch.evidenceFiles } : {}),
         ...(bodyChanged ? { version: nextVersion } : {}),
       })
       .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
@@ -207,6 +213,7 @@ export class SkillsRepository {
           skillId: row.id,
           version: nextVersion,
           body: row.body,
+          message: message ?? null,
         })
         .onConflictDoNothing();
     }
@@ -237,6 +244,7 @@ export class SkillsRepository {
     workspaceId: string,
     id: string,
     version: number,
+    message?: string | null,
   ): Promise<SkillRow | undefined> {
     const skill = await this.getById(workspaceId, id);
     if (!skill) return undefined;
@@ -265,11 +273,38 @@ export class SkillsRepository {
           skillId: row.id,
           version: nextVersion,
           body: row.body,
+          message: message ?? `Restored from v${version}`,
         })
         .onConflictDoNothing();
     }
 
     return row;
+  }
+
+  // ---- Context docs (skill_context_docs) -----------------------------------
+
+  /** Attached doc paths for a skill, in `order` ascending. */
+  async listContextPaths(skillId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ path: t.skillContextDocs.path })
+      .from(t.skillContextDocs)
+      .where(eq(t.skillContextDocs.skillId, skillId))
+      .orderBy(asc(t.skillContextDocs.order));
+    return rows.map((r) => r.path);
+  }
+
+  /** Replace the attached set — array order becomes the persisted `order`. */
+  async setContextPaths(skillId: string, paths: string[]): Promise<string[]> {
+    const unique = [...new Set(paths)];
+    return this.db.transaction(async (tx) => {
+      await tx.delete(t.skillContextDocs).where(eq(t.skillContextDocs.skillId, skillId));
+      if (unique.length > 0) {
+        await tx
+          .insert(t.skillContextDocs)
+          .values(unique.map((path, order) => ({ skillId, path, order })));
+      }
+      return unique;
+    });
   }
 
   async stats(workspaceId: string, id: string): Promise<SkillStats | undefined> {

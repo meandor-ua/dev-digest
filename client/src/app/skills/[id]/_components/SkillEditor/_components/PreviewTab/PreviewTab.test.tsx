@@ -29,21 +29,17 @@ function renderTab(skill: Skill = SKILL) {
 afterEach(cleanup);
 
 describe("PreviewTab", () => {
-  it("renders the body as Markdown under the Skills / rules section", () => {
+  it("renders the body as Markdown, exactly as the reviewing agent receives it", () => {
     renderTab();
-    expect(screen.getByRole("heading", { name: "Skills / rules" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Flag untested branches" })).toBeInTheDocument();
     expect(screen.getByText("error paths").tagName).toBe("STRONG");
   });
 
-  it("renders the section name in the hint as code, not as literal tags", () => {
+  it("shows the title and subtitle, without a section header or token badge", () => {
     renderTab();
-    expect(screen.queryByText(/<code>/)).not.toBeInTheDocument();
-    expect(screen.getByText("## Skills / rules", { selector: "code" })).toBeInTheDocument();
-  });
-
-  it("estimates tokens as ceil(chars / 4)", () => {
-    renderTab({ ...SKILL, body: "x".repeat(10) });
-    expect(screen.getByText("~3 tokens")).toBeInTheDocument();
+    expect(screen.getByText(messages.preview.title)).toBeInTheDocument();
+    expect(screen.getByText(messages.preview.subtitle)).toBeInTheDocument();
+    expect(screen.queryByText("Skills / rules", { exact: false })).not.toBeInTheDocument();
+    expect(screen.queryByText(/tokens/)).not.toBeInTheDocument();
   });
 });

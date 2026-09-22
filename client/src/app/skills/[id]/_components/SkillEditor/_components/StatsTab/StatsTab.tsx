@@ -4,8 +4,8 @@ import React from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Icon, Skeleton, EmptyState, MetricCard, Donut, CircularScore } from "@devdigest/ui";
-import { useSkillStats } from "../../../../../../../lib/hooks/skills";
-import { categoryDonutSegments } from "../../../../../../../lib/category-chart";
+import { useSkillStats } from "@/lib/hooks/skills";
+import { categoryDonutSegments } from "@/lib/category-chart";
 import { s } from "./styles";
 
 export function StatsTab({ skillId }: { skillId: string }) {
@@ -47,23 +47,31 @@ export function StatsTab({ skillId }: { skillId: string }) {
   return (
     <div style={s.wrap}>
       <div style={s.kpiGrid}>
-        <MetricCard label={t("stats.usedBy")} value={stats.agent_count} />
-        <MetricCard label={t("stats.pullFrequency")} value={`${stats.pull_frequency_pct}%`} />
         <MetricCard
-          label={t("stats.acceptRate")}
-          value={
-            <span style={s.gaugeValue}>
-              <CircularScore score={stats.accept_rate_pct} size={40} stroke={4} />
-              <span>{stats.accept_rate_pct}%</span>
-            </span>
-          }
+          label={t("stats.usedBy")}
+          value={stats.agent_count}
+          suffix={` ${t("stats.agentsUnit", { count: stats.agent_count })}`}
         />
+        <MetricCard label={t("stats.pullFrequency")} value={stats.pull_frequency_pct} suffix="%" />
+        {stats.accept_rate_pct == null ? (
+          <MetricCard label={t("stats.acceptRate")} value="—" />
+        ) : (
+          <MetricCard
+            label={t("stats.acceptRate")}
+            value={stats.accept_rate_pct}
+            suffix="%"
+            aside={<CircularScore score={stats.accept_rate_pct} size={40} stroke={4} />}
+          />
+        )}
         <MetricCard label={t("stats.findings")} value={stats.findings_30d} />
       </div>
 
       <div style={s.grid2}>
         <div style={s.card}>
-          <h3 style={s.cardTitle}>{t("stats.agentsUsing")}</h3>
+          <h3 style={s.cardTitle}>
+            <Icon.Cpu size={14} />
+            {t("stats.agentsUsing")}
+          </h3>
           {stats.agents.length === 0 ? (
             <span style={s.muted}>{t("stats.noAgents")}</span>
           ) : (
@@ -74,7 +82,9 @@ export function StatsTab({ skillId }: { skillId: string }) {
                     <Icon.Cpu size={15} style={{ color: "var(--accent)" }} />
                     <span>{ag.name}</span>
                   </span>
-                  <Icon.ChevronRight size={14} style={{ color: "var(--text-muted)" }} />
+                  <span className="mono" style={s.open}>
+                    {t("stats.open")}
+                  </span>
                 </Link>
               ))}
             </div>
@@ -82,7 +92,10 @@ export function StatsTab({ skillId }: { skillId: string }) {
         </div>
 
         <div style={s.card}>
-          <h3 style={s.cardTitle}>{t("stats.findingsByCategory")}</h3>
+          <h3 style={s.cardTitle}>
+            <Icon.Tag size={14} />
+            {t("stats.findingsByCategory")}
+          </h3>
           {segments.length === 0 ? (
             <span style={s.muted}>{t("stats.noFindings")}</span>
           ) : (

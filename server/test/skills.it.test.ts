@@ -5,7 +5,7 @@ import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
 import * as t from '../src/db/schema.js';
-import { MockGitClient, MockGitHubClient } from '../src/adapters/mocks.js';
+import { MockGitClient, MockGitHubClient, MockProjectDocsAdapter } from '../src/adapters/mocks.js';
 import { SkillsService } from '../src/modules/skills/service.js';
 import { SkillsRepository } from '../src/modules/skills/repository.js';
 import type { Container } from '../src/platform/container.js';
@@ -157,7 +157,7 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
       agent_count: 0,
       agents: [],
       pull_frequency_pct: 0,
-      accept_rate_pct: 100,
+      accept_rate_pct: null,
       findings_30d: 0,
       findings_by_category: {},
     });
@@ -190,6 +190,199 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
     await app.close();
   });
 
+  it('message persists on update; restore defaults to "Restored from vN" unless overridden', async () => {
+    const app = await makeApp();
+    const skillId = (
+      await app.inject({ method: 'POST', url: '/skills', payload: createBody })
+    ).json().id as string;
+
+    await app.inject({
+      method: 'PUT',
+      url: `/skills/${skillId}`,
+      payload: { body: 'v2 body', message: 'Tighten the rule' },
+    });
+
+    let versions = (
+      await app.inject({ method: 'GET', url: `/skills/${skillId}/versions` })
+    ).json();
+    expect(versions[0].message).toBe('Tighten the rule');
+    expect(versions[1].message).toBeNull();
+
+    const restored = await app.inject({
+      method: 'POST',
+      url: `/skills/${skillId}/restore`,
+      payload: { version: 1 },
+    });
+    expect(restored.statusCode).toBe(200);
+    versions = (await app.inject({ method: 'GET', url: `/skills/${skillId}/versions` })).json();
+    expect(versions[0].message).toBe('Restored from v1');
+
+    await app.inject({
+      method: 'POST',
+      url: `/skills/${skillId}/restore`,
+      payload: { version: 2, message: 'Back to v2' },
+    });
+    versions = (await app.inject({ method: 'GET', url: `/skills/${skillId}/versions` })).json();
+    expect(versions[0].message).toBe('Back to v2');
+
+    await app.close();
+  });
+
+  it('a metadata-only PUT that also sets `message` stays a no-op (message never bumps a version alone)', async () => {
+    const app = await makeApp();
+    const skillId = (
+      await app.inject({ method: 'POST', url: '/skills', payload: createBody })
+    ).json().id as string;
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/skills/${skillId}`,
+      payload: { message: 'orphan note, no body change' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().version).toBe(1);
+
+    const versions = (
+      await app.inject({ method: 'GET', url: `/skills/${skillId}/versions` })
+    ).json();
+    expect(versions).toHaveLength(1);
+
+    await app.close();
+  });
+
+  describe('Project context (Context tab)', () => {
+    async function makeAppWithDocs() {
+      const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
+      const app = await buildApp({
+        config,
+        db: pg.handle.db,
+        overrides: {
+          git: new MockGitClient(),
+          github: new MockGitHubClient(),
+          projectDocs: new MockProjectDocsAdapter({
+            docs: [
+              { path: 'docs/a.md', dir: 'docs', category: 'docs' },
+              { path: 'specs/b.md', dir: 'specs', category: 'specs' },
+            ],
+          }),
+        },
+      });
+      const [defaultWs] = await pg.handle.db
+        .select({ id: t.workspaces.id })
+        .from(t.workspaces)
+        .where(eq(t.workspaces.name, 'default'));
+      const [repoRow] = await pg.handle.db
+        .insert(t.repos)
+        .values({ workspaceId: defaultWs!.id, owner: 'acme', name: `ctx-repo-${Date.now()}`, fullName: `acme/ctx-repo-${Date.now()}` })
+        .returning();
+      return { app, repoId: repoRow!.id };
+    }
+
+    it('replaces the attached set and persists array order', async () => {
+      const { app, repoId } = await makeAppWithDocs();
+      const skill = (
+        await app.inject({ method: 'POST', url: '/skills', payload: createBody })
+      ).json();
+
+      const set1 = await app.inject({
+        method: 'PUT',
+        url: `/skills/${skill.id}/context`,
+        payload: { paths: ['docs/a.md', 'specs/b.md'] },
+      });
+      expect(set1.statusCode).toBe(200);
+      expect(set1.json()).toEqual({ attached: ['docs/a.md', 'specs/b.md'] });
+
+      const get1 = await app.inject({
+        method: 'GET',
+        url: `/skills/${skill.id}/context?repo_id=${repoId}`,
+      });
+      expect(get1.json()).toMatchObject({ attached: ['docs/a.md', 'specs/b.md'] });
+      expect(get1.json().available).toHaveLength(2);
+
+      const set2 = await app.inject({
+        method: 'PUT',
+        url: `/skills/${skill.id}/context`,
+        payload: { paths: ['specs/b.md', 'docs/a.md'] },
+      });
+      expect(set2.json()).toEqual({ attached: ['specs/b.md', 'docs/a.md'] });
+      const get2 = await app.inject({
+        method: 'GET',
+        url: `/skills/${skill.id}/context?repo_id=${repoId}`,
+      });
+      expect(get2.json().attached).toEqual(['specs/b.md', 'docs/a.md']);
+
+      const dupes = await app.inject({
+        method: 'PUT',
+        url: `/skills/${skill.id}/context`,
+        payload: { paths: ['docs/a.md', 'docs/a.md'] },
+      });
+      expect(dupes.json()).toEqual({ attached: ['docs/a.md'] });
+
+      const tooMany = await app.inject({
+        method: 'PUT',
+        url: `/skills/${skill.id}/context`,
+        payload: { paths: Array.from({ length: 101 }, (_, i) => `docs/${i}.md`) },
+      });
+      expect(tooMany.statusCode).toBe(422);
+
+      await app.close();
+    });
+
+    it('GET /skills/context/doc returns a known doc\'s text', async () => {
+      const { app, repoId } = await makeAppWithDocs();
+      // Swap in a fetcher-backed adapter with file text for this one check.
+      await app.close();
+      const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
+      const app2 = await buildApp({
+        config,
+        db: pg.handle.db,
+        overrides: {
+          git: new MockGitClient(),
+          github: new MockGitHubClient(),
+          projectDocs: new MockProjectDocsAdapter({
+            docs: [{ path: 'docs/a.md', dir: 'docs', category: 'docs' }],
+            files: { 'docs/a.md': 'Hello from docs/a.md' },
+          }),
+        },
+      });
+      const res = await app2.inject({
+        method: 'GET',
+        url: `/skills/context/doc?repo_id=${repoId}&path=docs/a.md`,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ text: 'Hello from docs/a.md' });
+      await app2.close();
+    });
+  });
+
+  it('POST /skills/import/preview fetches and derives name/body WITHOUT inserting a skill', async () => {
+    const mockFetcher: RemoteTextFetcher = {
+      fetchText: vi.fn().mockResolvedValue({
+        text: '# Preview Rule\nBody text.',
+        finalUrl: 'https://example.com/preview.md',
+      }),
+    };
+    const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
+    const app = await buildApp({
+      config,
+      db: pg.handle.db,
+      overrides: { git: new MockGitClient(), github: new MockGitHubClient(), remoteText: mockFetcher },
+    });
+
+    const before = (await app.inject({ method: 'GET', url: '/skills' })).json().length;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/skills/import/preview',
+      payload: { url: 'https://example.com/preview.md' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ name: 'Preview Rule', body: '# Preview Rule\nBody text.' });
+    const after = (await app.inject({ method: 'GET', url: '/skills' })).json().length;
+    expect(after).toBe(before);
+
+    await app.close();
+  });
+
   it('skills are workspace-scoped: cross-tenant access is denied', async () => {
     const { db } = pg.handle;
     const [otherWs] = await db.insert(t.workspaces).values({ name: 'other-skills-ws' }).returning();
@@ -210,6 +403,8 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
     expect(await service.get(otherWs!.id, foreign.id)).toBeDefined();
     expect(await service.get(defaultWs!, foreign.id)).toBeUndefined();
     expect(await service.listVersions(defaultWs!, foreign.id)).toBeUndefined();
+    expect(await service.setContext(defaultWs!, foreign.id, ['docs/a.md'])).toBeUndefined();
+    expect(await service.getContext(defaultWs!, foreign.id, 'irrelevant-repo-id')).toBeUndefined();
   });
 
   // ---- Skill import tests ----

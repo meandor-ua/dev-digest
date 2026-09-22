@@ -59,6 +59,7 @@ describe('SkillsService unit tests', () => {
     skillId: 'skill-1',
     version: 1,
     body: 'Skill body content',
+    message: null,
     createdAt: new Date(),
   };
 
