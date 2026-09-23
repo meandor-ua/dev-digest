@@ -17,6 +17,10 @@ import { useActiveRepo } from "@/lib/repo-context";
 import { useToast } from "@/lib/toast";
 import { s } from "./styles";
 
+// Module-level (not component state) because navigating to /agents/[id] fully
+// remounts this column — component state doesn't survive, but this does.
+let savedScrollTop = 0;
+
 export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string }) {
   const t = useTranslations("agents");
   const router = useRouter();
@@ -27,6 +31,23 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
   const { repoId } = useActiveRepo();
   const { data: cardStats } = useAgentCardStats(repoId);
   const [creating, setCreating] = React.useState(false);
+  const listRef = React.useRef<HTMLDivElement>(null);
+
+  // Navigating to an agent remounts this column (it's a route-level `page.tsx`
+  // tree, not a persisted layout), which resets the list's scroll to the top
+  // and drops the browser focus the click had put on the tile. Restore the
+  // exact prior scroll offset (not scrollIntoView — the tile is already where
+  // the user left it, no extra scrolling should happen) before paint, and
+  // refocus the now-active card.
+  React.useLayoutEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = savedScrollTop;
+  }, []);
+
+  React.useEffect(() => {
+    if (!activeId) return;
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-testid="agent-card-${activeId}"]`);
+    el?.focus({ preventScroll: true });
+  }, [activeId]);
 
   const handleDelete = (ag: Agent) => {
     if (!window.confirm(t("card.confirmDelete", { name: ag.name }))) return;
@@ -74,7 +95,13 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
           />
         </div>
       </div>
-      <div style={s.list}>
+      <div
+        style={s.list}
+        ref={listRef}
+        onScroll={(e) => {
+          savedScrollTop = e.currentTarget.scrollTop;
+        }}
+      >
         {(agents ?? []).map((a) => (
           <AgentCard
             key={a.id}

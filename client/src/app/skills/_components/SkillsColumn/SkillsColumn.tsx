@@ -12,6 +12,10 @@ import { useToast } from "@/lib/toast";
 import { useConfirmDiscard } from "@/lib/unsaved-changes";
 import { s } from "./styles";
 
+// Module-level (not component state) because navigating to /skills/[id] fully
+// remounts this column — component state doesn't survive, but this does.
+let savedScrollTop = 0;
+
 export function SkillsColumn({
   activeId,
   tab,
@@ -43,6 +47,23 @@ export function SkillsColumn({
 
   const [modalState, setModalState] = React.useState<"scratch" | "import" | "url" | null>(null);
   const [search, setSearch] = React.useState("");
+  const listRef = React.useRef<HTMLDivElement>(null);
+
+  // Navigating to a skill remounts this column (it's a route-level `page.tsx`
+  // tree, not a persisted layout), which resets the list's scroll to the top
+  // and drops the browser focus the click had put on the tile. Restore the
+  // exact prior scroll offset (not scrollIntoView — the tile is already where
+  // the user left it, no extra scrolling should happen) before paint, and
+  // refocus the now-active card.
+  React.useLayoutEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = savedScrollTop;
+  }, []);
+
+  React.useEffect(() => {
+    if (!activeId) return;
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-testid="skill-card-${activeId}"]`);
+    el?.focus({ preventScroll: true });
+  }, [activeId]);
 
   const q = search.trim().toLowerCase();
   const filtered = (skills ?? []).filter((sk) => {
@@ -101,7 +122,13 @@ export function SkillsColumn({
         />
       </div>
 
-      <div style={s.list}>
+      <div
+        style={s.list}
+        ref={listRef}
+        onScroll={(e) => {
+          savedScrollTop = e.currentTarget.scrollTop;
+        }}
+      >
         {isLoading ? (
           <>
             <Skeleton height={90} />

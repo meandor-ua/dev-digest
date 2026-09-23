@@ -33,7 +33,19 @@ export function AgentCard({
   const color = modelColor(ag.model);
   const skillCount = stats?.skills_count;
   return (
-    <div onClick={onClick} style={s.card(!!active, ag.enabled)}>
+    <div
+      onClick={onClick}
+      style={s.card(!!active, ag.enabled)}
+      data-testid={`agent-card-${ag.id}`}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (onClick && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    >
       <div style={s.headerRow}>
         <div style={s.iconBox}>
           <Icon.Cpu size={15} />

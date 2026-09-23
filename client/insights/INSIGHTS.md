@@ -245,6 +245,35 @@ Preview/Stats tabs, skill import).
   `qc.isMutating({ mutationKey }) === 1`: TanStack runs these callbacks while
   the mutation still counts as pending, so 1 means "only me". Evidence:
   `client/src/lib/hooks/agents.ts:153`, test `client/src/lib/hooks/agents.test.tsx`.
+- **2026-09-24** — `/skills/[id]` and `/agents/[id]` are separate route
+  segments from `/skills` and `/agents`, so clicking a list tile navigates to
+  a **different `page.tsx` tree** — the whole `SkillsColumn`/`AgentsColumn`
+  remounts (fresh component instance), which silently resets the list `div`'s
+  scroll to the top and drops the browser focus the click had put on the
+  tile, even though the same list re-renders with the newly active row. Most
+  visible when the clicked tile is far down the list: it opens correctly in
+  the 3rd-column editor, but the rail jumps back to the top and focus is
+  lost. Fix: a `ref` on the scrollable list `div` plus a `useEffect` keyed on
+  `activeId` that finds the active card via `data-testid` and calls
+  `scrollIntoView({ block: "nearest" })` + `focus({ preventScroll: true })`
+  after the remount settles — restoring what the browser's default focus/
+  scroll-anchoring would have preserved on a same-tree re-render. Needed
+  `AgentCard` to gain `data-testid`/`role="button"`/`tabIndex={0}` to match
+  `SkillCard`, since it wasn't focusable before. jsdom has no
+  `scrollIntoView`, so tests need the call optional-chained
+  (`el?.scrollIntoView?.(...)`). Evidence:
+  `client/src/app/skills/_components/SkillsColumn/SkillsColumn.tsx:47-57`,
+  `client/src/app/agents/[id]/_components/AgentsColumn/AgentsColumn.tsx:31-41`.
+  **Corrected same day** — `scrollIntoView` still produces a visible jump
+  (the user's actual complaint), and is unnecessary: the clicked tile is
+  already exactly where the user left it, so there's nothing to scroll
+  *to*. Replaced with straight scroll-offset preservation: a module-level
+  `let savedScrollTop = 0` (survives the remount because it lives outside
+  the component closure, unlike `useState`/`useRef`), updated on the list's
+  `onScroll`, and written back to `listRef.current.scrollTop` in a
+  `useLayoutEffect(() => {...}, [])` so it applies before paint (no flash of
+  scroll-to-top). Focus restore is unaffected — `focus({ preventScroll:
+  true })` never scrolls.
 
 ## Session Notes
 
