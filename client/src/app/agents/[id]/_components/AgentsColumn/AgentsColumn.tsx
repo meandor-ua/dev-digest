@@ -9,9 +9,10 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { Agent } from "@devdigest/shared";
-import { Button, Dropdown } from "@devdigest/ui";
+import { Button, Dropdown, TextInput } from "@devdigest/ui";
 import { AgentCard } from "../../../_components/AgentCard";
 import { CreateAgentModal, TEMPLATES } from "../../../_components/CreateAgentModal";
+import { filterAgents } from "../../../_components/AgentsListView/helpers";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAgents, useUpdateAgent, useDeleteAgent, useAgentCardStats } from "@/lib/hooks/agents";
 import { useActiveRepo } from "@/lib/repo-context";
@@ -32,6 +33,7 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
   const { repoId } = useActiveRepo();
   const { data: cardStats } = useAgentCardStats(repoId);
   const [creating, setCreating] = React.useState(false);
+  const [search, setSearch] = React.useState("");
   const [pendingDelete, setPendingDelete] = React.useState<Agent | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
 
@@ -71,6 +73,7 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
     () => new Map((cardStats ?? []).map((cs) => [cs.agent_id, cs])),
     [cardStats],
   );
+  const list = filterAgents(agents ?? [], search);
 
   return (
     <div style={s.column}>
@@ -98,6 +101,12 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
             ]}
           />
         </div>
+        <TextInput
+          value={search}
+          onChange={setSearch}
+          placeholder={t("list.searchPlaceholder")}
+          aria-label={t("list.searchPlaceholder")}
+        />
       </div>
       <div
         style={s.list}
@@ -106,7 +115,7 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
           savedScrollTop = e.currentTarget.scrollTop;
         }}
       >
-        {(agents ?? []).map((a) => (
+        {list.map((a) => (
           <AgentCard
             key={a.id}
             ag={a}

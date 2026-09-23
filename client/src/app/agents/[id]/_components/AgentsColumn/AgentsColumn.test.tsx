@@ -70,6 +70,15 @@ describe("AgentsColumn", () => {
     expect(screen.getByText("Perf Reviewer")).toBeInTheDocument();
   });
 
+  it("filters agents with the same search behavior as the list page", () => {
+    renderColumn();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search agents…" }), {
+      target: { value: "security" },
+    });
+    expect(screen.getByText("Security Reviewer")).toBeInTheDocument();
+    expect(screen.queryByText("Perf Reviewer")).not.toBeInTheDocument();
+  });
+
   it("opens another agent on the same editor tab", () => {
     renderColumn();
     fireEvent.click(screen.getByText("Perf Reviewer"));
