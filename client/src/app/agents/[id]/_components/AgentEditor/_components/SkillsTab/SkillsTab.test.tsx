@@ -18,7 +18,11 @@ vi.mock("@dnd-kit/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@dnd-kit/core")>();
   return {
     ...actual,
-    DndContext: (props: { onDragEnd?: typeof onDragEnd; sensors?: typeof sensors; children?: React.ReactNode }) => {
+    DndContext: (props: {
+      onDragEnd?: typeof onDragEnd;
+      sensors?: typeof sensors;
+      children?: React.ReactNode;
+    }) => {
       onDragEnd = props.onDragEnd;
       sensors = props.sensors;
       return <>{props.children}</>;
@@ -43,8 +47,22 @@ afterEach(() => {
   onDragEnd = undefined;
 });
 
-function mk(id: string, name: string, order: number, enabled: boolean): AgentSkillItem {
-  return { agent_id: "ag1", skill_id: id, order, enabled, name, type: "rubric" };
+function mkLinked(id: string, name: string, order: number): AgentSkillItem {
+  return { agent_id: "ag1", skill_id: id, order, name, type: "rubric" };
+}
+
+function mkSkill(id: string, name: string, enabled = true): SkillWithStats {
+  return {
+    id,
+    name,
+    description: "",
+    type: "rubric",
+    source: "manual",
+    body: "",
+    enabled,
+    version: 1,
+    evidence_files: null,
+  };
 }
 
 function renderTab() {
@@ -58,36 +76,43 @@ function renderTab() {
 }
 
 describe("SkillsTab", () => {
-  it("shows an empty state when the agent has no linked skills", () => {
+  it("shows an empty state when the workspace has no skills at all", () => {
     skills = [];
+    availableSkills = [];
     renderTab();
-    expect(screen.getByText("No skills linked to this agent yet.")).toBeInTheDocument();
+    expect(screen.getByText("No skills in this workspace yet.")).toBeInTheDocument();
   });
 
-  it("renders linked skills with an enabled count", () => {
-    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, false)];
+  it("shows unlinked skills below linked ones, with a linked count", () => {
+    skills = [mkLinked("s1", "Secrets", 0)];
+    availableSkills = [mkSkill("s1", "Secrets"), mkSkill("s2", "Naming")];
     renderTab();
     expect(screen.getByText("Secrets")).toBeInTheDocument();
     expect(screen.getByText("Naming")).toBeInTheDocument();
-    expect(screen.getByText("1 of 2 enabled")).toBeInTheDocument();
+    expect(screen.getByText("1 of 2 linked")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Unlink Secrets from this agent" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Link Naming to this agent" })).not.toBeChecked();
   });
 
-  it("persists the full set when a skill is toggled", () => {
-    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, false)];
+  it("links an unlinked skill when its checkbox is checked, appending it to the linked set", () => {
+    skills = [mkLinked("s1", "Secrets", 0)];
+    availableSkills = [mkSkill("s1", "Secrets"), mkSkill("s2", "Naming")];
     renderTab();
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[1]!); // enable "Naming"
-    expect(mutate).toHaveBeenCalledWith(
-      [
-        { skill_id: "s1", enabled: true },
-        { skill_id: "s2", enabled: true },
-      ],
-      expect.anything(),
-    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Link Naming to this agent" }));
+    expect(mutate).toHaveBeenCalledWith(["s1", "s2"], expect.anything());
+  });
+
+  it("unlinks a linked skill when its checkbox is unchecked", () => {
+    skills = [mkLinked("s1", "Secrets", 0), mkLinked("s2", "Naming", 1)];
+    availableSkills = [mkSkill("s1", "Secrets"), mkSkill("s2", "Naming")];
+    renderTab();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Unlink Naming from this agent" }));
+    expect(mutate).toHaveBeenCalledWith(["s1"], expect.anything());
   });
 
   it("swaps the reorder hint for a filter hint while filtering", () => {
-    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, true)];
+    skills = [mkLinked("s1", "Secrets", 0), mkLinked("s2", "Naming", 1)];
+    availableSkills = [mkSkill("s1", "Secrets"), mkSkill("s2", "Naming")];
     renderTab();
     const filter = screen.getByPlaceholderText("Filter skills…");
     fireEvent.change(filter, { target: { value: "sec" } });
@@ -95,22 +120,18 @@ describe("SkillsTab", () => {
     expect(screen.getByText("Secrets")).toBeInTheDocument();
     expect(screen.queryByText("Naming")).not.toBeInTheDocument();
   });
-  it("persists the new order (keeping enabled flags) when a skill is dropped", () => {
-    skills = [mk("s1", "A", 0, true), mk("s2", "B", 1, false), mk("s3", "C", 2, true)];
+
+  it("persists the new order when a linked skill is dropped", () => {
+    skills = [mkLinked("s1", "A", 0), mkLinked("s2", "B", 1), mkLinked("s3", "C", 2)];
+    availableSkills = [mkSkill("s1", "A"), mkSkill("s2", "B"), mkSkill("s3", "C")];
     renderTab();
     onDragEnd!({ active: { id: "s3" }, over: { id: "s1" } }); // drag C above A
-    expect(mutate).toHaveBeenCalledWith(
-      [
-        { skill_id: "s3", enabled: true },
-        { skill_id: "s1", enabled: true },
-        { skill_id: "s2", enabled: false },
-      ],
-      expect.anything(),
-    );
+    expect(mutate).toHaveBeenCalledWith(["s3", "s1", "s2"], expect.anything());
   });
 
   it("does not save when dropped onto itself or outside the list", () => {
-    skills = [mk("s1", "A", 0, true), mk("s2", "B", 1, true)];
+    skills = [mkLinked("s1", "A", 0), mkLinked("s2", "B", 1)];
+    availableSkills = [mkSkill("s1", "A"), mkSkill("s2", "B")];
     renderTab();
     onDragEnd!({ active: { id: "s1" }, over: { id: "s1" } });
     onDragEnd!({ active: { id: "s1" }, over: null });
@@ -118,16 +139,25 @@ describe("SkillsTab", () => {
   });
 
   it("disables dragging while a filter is active", () => {
-    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, true)];
+    skills = [mkLinked("s1", "Secrets", 0), mkLinked("s2", "Naming", 1)];
+    availableSkills = [mkSkill("s1", "Secrets"), mkSkill("s2", "Naming")];
     renderTab();
-    expect(screen.getByLabelText("Drag to reorder Secrets")).toHaveAttribute("role", "button");
+    expect(screen.getByLabelText("Drag to reorder Secrets")).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText("Filter skills…"), { target: { value: "sec" } });
-    // dnd-kit's attributes (role="button") are only spread on draggable rows;
-    // an inert handle is hidden from assistive tech instead of mislabelled.
+    // an inert drag handle is aria-hidden instead of exposing a stale label
     expect(screen.queryByLabelText("Drag to reorder Secrets")).not.toBeInTheDocument();
   });
+
+  it("never allows dragging an unlinked skill", () => {
+    skills = [mkLinked("s1", "Secrets", 0)];
+    availableSkills = [mkSkill("s1", "Secrets"), mkSkill("s2", "Naming")];
+    renderTab();
+    expect(screen.queryByLabelText("Drag to reorder Naming")).not.toBeInTheDocument();
+  });
+
   it("clears the filter when Escape is pressed in the filter input", () => {
-    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, true)];
+    skills = [mkLinked("s1", "Secrets", 0), mkLinked("s2", "Naming", 1)];
+    availableSkills = [mkSkill("s1", "Secrets"), mkSkill("s2", "Naming")];
     renderTab();
     const filter = screen.getByPlaceholderText("Filter skills…");
     fireEvent.change(filter, { target: { value: "sec" } });
@@ -137,11 +167,12 @@ describe("SkillsTab", () => {
     expect(screen.getByText("Naming")).toBeInTheDocument();
     expect(screen.getByText("Secrets")).toBeInTheDocument();
     // dragging is re-enabled once the filter is cleared
-    expect(screen.getByLabelText("Drag to reorder Secrets")).toHaveAttribute("role", "button");
+    expect(screen.getByLabelText("Drag to reorder Secrets")).toBeInTheDocument();
   });
 
   it("lets Escape bubble when the filter is already empty", () => {
-    skills = [mk("s1", "Secrets", 0, true)];
+    skills = [mkLinked("s1", "Secrets", 0)];
+    availableSkills = [mkSkill("s1", "Secrets")];
     renderTab();
     const outer = vi.fn();
     document.addEventListener("keydown", outer);
@@ -150,58 +181,47 @@ describe("SkillsTab", () => {
     expect(outer).toHaveBeenCalled();
   });
 
-  it("attaches a skill via dropdown, appending with enabled=true", () => {
-    skills = [mk("s1", "Secrets", 0, true)];
+  it("shows the orange 'Disabled' label for a globally-disabled skill, linked or not", () => {
+    skills = [mkLinked("s1", "Secrets", 0), mkLinked("s2", "Naming", 1)];
     availableSkills = [
-      { id: "s1", name: "Secrets", description: "", type: "rubric", enabled: true, source: "manual", body: "", version: 1, evidence_files: null, agent_count: 1, pull_frequency_pct: 50, accept_rate_pct: 100 },
-      { id: "s2", name: "Naming", description: "", type: "convention", enabled: true, source: "manual", body: "", version: 1, evidence_files: null, agent_count: 0, pull_frequency_pct: 0, accept_rate_pct: 100 },
+      mkSkill("s1", "Secrets", true),
+      mkSkill("s2", "Naming", false), // globally disabled, still linked
+      mkSkill("s3", "Unlinked disabled", false), // globally disabled, not linked
     ];
     renderTab();
-    fireEvent.click(screen.getByRole("button", { name: /Attach skill/ }));
-    expect(screen.queryByRole("button", { name: /^Secrets/ })).not.toBeInTheDocument(); // already linked
-    fireEvent.click(screen.getByRole("button", { name: /Naming/ }));
-    expect(mutate).toHaveBeenCalledWith(
-      [
-        { skill_id: "s1", enabled: true },
-        { skill_id: "s2", enabled: true },
-      ],
-      expect.anything(),
-    );
+    const labels = screen.getAllByText("Disabled");
+    expect(labels).toHaveLength(2);
   });
 
-  it("detaches a skill via the X button", () => {
-    skills = [mk("s1", "Secrets", 0, true), mk("s2", "Naming", 1, true)];
+  it("cannot link an unlinked globally-disabled skill by clicking its checkbox", () => {
+    skills = [mkLinked("s1", "Secrets", 0)];
+    availableSkills = [mkSkill("s1", "Secrets"), mkSkill("s2", "Naming", false)];
     renderTab();
-    const removeButtons = screen.getAllByTitle("Remove from this agent");
-    fireEvent.click(removeButtons[1]!); // remove "Naming"
-    expect(mutate).toHaveBeenCalledWith(
-      [{ skill_id: "s1", enabled: true }],
-      expect.anything(),
-    );
+    const checkbox = screen.getByRole("checkbox", { name: "Link Naming to this agent" });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    expect(mutate).not.toHaveBeenCalled();
   });
 
-  it("shows 'Disabled globally' hint for unvetted attached skills", () => {
-    skills = [
-      mk("s1", "Secrets", 0, true),
-      mk("s2", "Naming", 1, true), // will be globally disabled
-    ];
-    availableSkills = [
-      { id: "s1", name: "Secrets", description: "", type: "rubric", enabled: true, source: "manual", body: "", version: 1, evidence_files: null, agent_count: 1, pull_frequency_pct: 50, accept_rate_pct: 100 },
-      { id: "s2", name: "Naming", description: "", type: "convention", enabled: false, source: "manual", body: "", version: 1, evidence_files: null, agent_count: 0, pull_frequency_pct: 0, accept_rate_pct: 100 }, // globally disabled
-    ];
+  it("still allows unlinking a linked skill even though it is globally disabled", () => {
+    skills = [mkLinked("s1", "Secrets", 0), mkLinked("s2", "Naming", 1)];
+    availableSkills = [mkSkill("s1", "Secrets"), mkSkill("s2", "Naming", false)];
     renderTab();
-    expect(screen.getByText("Disabled globally — won’t be injected until enabled")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Unlink Naming from this agent" }));
+    expect(mutate).toHaveBeenCalledWith(["s1"], expect.anything());
   });
 
   it("gives each row's checkbox and the filter an accessible name", () => {
-    skills = [mk("s1", "Secrets", 0, true)];
+    skills = [mkLinked("s1", "Secrets", 0)];
+    availableSkills = [mkSkill("s1", "Secrets")];
     renderTab();
-    expect(screen.getByRole("checkbox", { name: "Enable Secrets for this agent" })).toBeChecked();
-    expect(screen.getByRole("textbox", { name: "Filter linked skills" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Unlink Secrets from this agent" })).toBeChecked();
+    expect(screen.getByRole("textbox", { name: "Filter skills" })).toBeInTheDocument();
   });
 
   it("registers a keyboard sensor so reordering is not mouse-only", async () => {
-    skills = [mk("s1", "A", 0, true), mk("s2", "B", 1, true)];
+    skills = [mkLinked("s1", "A", 0), mkLinked("s2", "B", 1)];
+    availableSkills = [mkSkill("s1", "A"), mkSkill("s2", "B")];
     renderTab();
     const { KeyboardSensor } = await import("@dnd-kit/core");
     expect(sensors?.map((d) => d.sensor)).toContain(KeyboardSensor);

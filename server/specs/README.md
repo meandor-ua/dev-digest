@@ -39,28 +39,35 @@ Specs / acceptance criteria for the `server` package.
 - `GET /agents/stats` returns one `AgentCardStats` row per agent in the
   workspace (`skills_count`, `runs`, per-PR-then-mean `avg_score` /
   `avg_cost_usd`, the last two `null` when there are no scored/costed runs).
-  `skills_count` counts only **enabled** links, so it matches the Skills tab's
-  "N of M enabled" N; disabling a skill lowers the card's number.
+  `skills_count` counts only links whose **skill** is enabled (a skill's own
+  `enabled` flag, not a per-link one — see below), so disabling a skill
+  lowers every agent card's number it's linked to.
 - `GET /agents/:id/stats` returns the full `AgentRepoStats` (KPIs, `cost_trend`,
   6-week `score_trend` / `findings_by_severity`, `most_used_skills`,
   category donut, and the 5-row `run_history`).
 - Read-time only — no LLM call, ever. Covered by `test/agents-stats.test.ts`
   (pure helpers) and `test/agents-stats.it.test.ts` (endpoints + DB).
 
-## `GET` / `POST /agents/:id/skills` — enabled-aware skill links
+## `GET` / `POST /agents/:id/skills` — skill links (binary, order-only)
 
-- `agent_skills` gained an `enabled boolean NOT NULL DEFAULT true` column
-  (migration `0011_add_agent_skill_enabled.sql`). `GET` returns the linked
-  skills ordered by `order`, enriched with each skill's `name`/`type` and its
-  `enabled` flag (`AgentSkillItem[]`).
-- `POST` replaces the whole set in one call from `{ skills: [{ skill_id,
-  enabled }] }`, array order becoming the new `order`. Skills not in the
-  caller's workspace are rejected (ownership guard) so an agent can never link a
-  foreign workspace's skill.
-- A duplicate `skill_id` in `skills` (or in the legacy `skill_ids` form) is
-  rejected with **422** before anything is written. The delete + re-insert of
-  the set runs in **one transaction**, so a failed insert can never leave the
-  agent with its links already deleted.
+- Linking is binary — a row in `agent_skills` means "linked", full stop.
+  There is no per-link `enabled`: migration `0011_add_agent_skill_enabled.sql`
+  added one but it never shipped past this branch, and
+  `0013_drop_agent_skill_enabled.sql` drops it again before release. The only
+  "enabled" that matters is the **skill's own** `skills.enabled` (global vetted
+  state), which gates prompt assembly (`run-executor.ts`) and usage-stat
+  counting — a globally-disabled skill can still be linked, keeps its order,
+  and is shown as "Disabled" in the Skills tab, but contributes no context to
+  reviews and no usage stats.
+- `GET` returns the linked skills ordered by `order`, enriched with each
+  skill's `name`/`type` (`AgentSkillItem[]`).
+- `POST` replaces the whole linked set in one call from `{ skill_ids: [...] }`
+  (or `{ skill_id, order }` to link/reorder a single skill), array order
+  becoming the new `order`. Skills not in the caller's workspace are rejected
+  (ownership guard) so an agent can never link a foreign workspace's skill.
+- A duplicate id in `skill_ids` is rejected with **422** before anything is
+  written. The delete + re-insert of the set runs in **one transaction**, so a
+  failed insert can never leave the agent with its links already deleted.
 - Covered by `test/agents-stats.it.test.ts` and the seed assertions in
   `test/seed.it.test.ts`.
 

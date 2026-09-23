@@ -92,10 +92,17 @@ richer left rail. Two rationales worth keeping:
   `:repoId`) keeps "how good is this agent *here*" honest. The exact rules live
   once in `server/src/modules/agents/stats.ts` and are mirrored in
   `specs/README.md` "Agent stats".
-- **Why `agent_skills.enabled`.** The Skills tab needs to attach/detach a
-  skill without losing its position in the assembled-prompt order, so linking
-  and enabling are separate: a new `enabled` column (migration
-  `0011_add_agent_skill_enabled.sql`) carries the toggle while `order` carries
-  the drag position. `POST /agents/:id/skills` replaces the whole set in one
-  optimistic call and guards workspace ownership so an agent can't link another
-  workspace's skill.
+- **Why linking is binary, not `agent_skills.enabled`.** The Skills tab shows
+  every workspace skill — linked ones on top (drag-to-reorder), unlinked ones
+  below (checkbox-only, not draggable) — so there's no need to "detach without
+  losing position": a skill is either linked (a row exists) or it isn't, and
+  `order` alone carries the drag position. A short-lived `enabled` column on
+  `agent_skills` (migration `0011_add_agent_skill_enabled.sql`) explored a
+  separate per-link toggle but was dropped again
+  (`0013_drop_agent_skill_enabled.sql`) before shipping, since the **skill's
+  own** `skills.enabled` (global vetted state) already gates prompt assembly
+  and usage stats — a globally-disabled skill can stay linked (keeps its
+  order, is still draggable) and is flagged with an orange "Disabled" label in
+  the Skills tab. `POST /agents/:id/skills` replaces the whole linked set in
+  one optimistic call from an ordered `skill_ids` list, and guards workspace
+  ownership so an agent can't link another workspace's skill.

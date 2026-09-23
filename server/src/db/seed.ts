@@ -270,7 +270,7 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
   }> = [
     { name: 'Bug & Correctness Rubric', type: 'rubric', description: 'Score a diff for correctness, edge cases and error handling.', body: 'Rate correctness 0-5; flag unhandled errors, off-by-one, and race conditions.' },
     { name: 'Readability Rubric', type: 'rubric', description: 'Judge naming, cohesion and comment quality.', body: 'Prefer intention-revealing names; flag functions over ~40 lines.' },
-    { name: 'Repo Naming Conventions', type: 'convention', description: 'Kebab-case files, PascalCase components.', body: 'Enforce the naming rules from AGENTS.md across changed files.' },
+    { name: 'Repo Naming Conventions', type: 'convention', source: 'imported_url', description: 'Kebab-case files, PascalCase components.', body: 'Enforce the naming rules from AGENTS.md across changed files.' },
     { name: 'Error Handling Convention', type: 'convention', description: 'Errors go through the domain error taxonomy.', body: 'No bare throws in routes; use AppError subclasses.' },
     { name: 'Lethal Trifecta Guard', type: 'security', description: 'Secrets, injection, SSRF and the lethal trifecta.', body: 'Block hardcoded secrets and unsanitised sinks before merge.' },
     { name: 'Payments Domain Notes', type: 'custom', description: 'Domain rules specific to the payments service.', body: 'Money is integer minor units; never log full card numbers.' },
@@ -328,8 +328,10 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
           source: sk.source ?? 'manual',
           body: sk.body,
           // Same rule as SkillsService.create: a non-manual skill lands unvetted.
-          // The demo's "Test Coverage Nudge" stays linked, but the reviewer
-          // ignores it until someone reads and enables it on /skills.
+          // The demo's "Test Coverage Nudge" and "Repo Naming Conventions" stay
+          // linked, but the reviewer ignores them (and the Skills tab shows the
+          // orange "Disabled" label) until someone reads and enables them on
+          // /skills.
           enabled: (sk.source ?? 'manual') === 'manual',
         })
         .returning();
@@ -351,25 +353,25 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     .where(eq(t.skills.workspaceId, workspaceId));
   const skillByName = (n: string) => skillRows.find((s) => s.name === n)!;
 
-  // ---- link skills to agents (mixed enabled) ----
-  const skillLinks: Array<{ agent: string; skill: string; order: number; enabled: boolean }> = [
-    { agent: 'General Reviewer', skill: 'Bug & Correctness Rubric', order: 0, enabled: true },
-    { agent: 'General Reviewer', skill: 'Readability Rubric', order: 1, enabled: true },
-    { agent: 'General Reviewer', skill: 'Repo Naming Conventions', order: 2, enabled: false },
-    { agent: 'Security Reviewer', skill: 'Lethal Trifecta Guard', order: 0, enabled: true },
-    { agent: 'Security Reviewer', skill: 'Error Handling Convention', order: 1, enabled: false },
-    { agent: 'Performance Reviewer', skill: 'Payments Domain Notes', order: 0, enabled: true },
-    { agent: 'Test Quality Reviewer', skill: 'Test Completeness & Edge Cases Rubric', order: 0, enabled: true },
-    { agent: 'Test Quality Reviewer', skill: 'Overmocking & Fragile Test Guard', order: 1, enabled: true },
-    { agent: 'Test Quality Reviewer', skill: 'Async & Flakiness Convention', order: 2, enabled: true },
-    { agent: 'Test Quality Reviewer', skill: 'Test Coverage Nudge', order: 3, enabled: true },
-    { agent: 'API Contract Reviewer', skill: 'API Breaking Change Rubric', order: 0, enabled: true },
-    { agent: 'API Contract Reviewer', skill: 'REST Contract Versioning Convention', order: 1, enabled: true },
+  // ---- link skills to agents ----
+  const skillLinks: Array<{ agent: string; skill: string; order: number }> = [
+    { agent: 'General Reviewer', skill: 'Bug & Correctness Rubric', order: 0 },
+    { agent: 'General Reviewer', skill: 'Readability Rubric', order: 1 },
+    { agent: 'General Reviewer', skill: 'Repo Naming Conventions', order: 2 },
+    { agent: 'Security Reviewer', skill: 'Lethal Trifecta Guard', order: 0 },
+    { agent: 'Security Reviewer', skill: 'Error Handling Convention', order: 1 },
+    { agent: 'Performance Reviewer', skill: 'Payments Domain Notes', order: 0 },
+    { agent: 'Test Quality Reviewer', skill: 'Test Completeness & Edge Cases Rubric', order: 0 },
+    { agent: 'Test Quality Reviewer', skill: 'Overmocking & Fragile Test Guard', order: 1 },
+    { agent: 'Test Quality Reviewer', skill: 'Async & Flakiness Convention', order: 2 },
+    { agent: 'Test Quality Reviewer', skill: 'Test Coverage Nudge', order: 3 },
+    { agent: 'API Contract Reviewer', skill: 'API Breaking Change Rubric', order: 0 },
+    { agent: 'API Contract Reviewer', skill: 'REST Contract Versioning Convention', order: 1 },
   ];
   for (const l of skillLinks) {
     await db
       .insert(t.agentSkills)
-      .values({ agentId: agentByName(l.agent).id, skillId: skillByName(l.skill).id, order: l.order, enabled: l.enabled })
+      .values({ agentId: agentByName(l.agent).id, skillId: skillByName(l.skill).id, order: l.order })
       .onConflictDoNothing();
   }
 

@@ -100,20 +100,19 @@
   },
   "skills": {
     "title": "Skills",
-    "enabledCount": "{linked} of {total} enabled",
+    "linkedCount": "{linked} of {total} linked",
     "filterPlaceholder": "Filter skills…",
-    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Toggle to attach.",
+    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Check a skill below to link it to this agent.",
     "filterActiveHint": "Clear the filter to reorder skills.",
-    "empty": "No skills linked to this agent yet.",
+    "empty": "No skills in this workspace yet.",
     "noMatch": "No skills match your filter.",
     "saveError": "Couldn’t save skills. Reverted.",
-    "attach": "Attach skill",
-    "attachDisabledHint": "disabled",
+    "disabledLabel": "Disabled",
     "globallyDisabled": "Disabled globally — won’t be injected until enabled",
-    "detach": "Remove from this agent",
     "dragHandle": "Drag to reorder {name}",
-    "filterLabel": "Filter linked skills",
-    "toggleSkill": "Enable {name} for this agent"
+    "filterLabel": "Filter skills",
+    "link": "Link {name} to this agent",
+    "unlink": "Unlink {name} from this agent"
   },
   "empty": {
     "evalsTitle": "No evals yet",

@@ -611,7 +611,7 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
 
     await app.close();
   });
-  it('injects only enabled, vetted skills into the prompt, in link order', async () => {
+  it('injects only vetted (enabled) skills into the prompt, in link order', async () => {
     const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
     const app = await buildApp({
       config: config(),
@@ -624,20 +624,12 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
       (await app.inject({ method: 'POST', url: '/skills', payload: { name, type: 'rubric', body, source } })).json();
     const second = await mkSkill('Second', 'RULE-SECOND');
     const first = await mkSkill('First', 'RULE-FIRST');
-    const linkOff = await mkSkill('Link off', 'RULE-LINK-OFF');
     const unvetted = await mkSkill('Unvetted', 'RULE-UNVETTED', 'imported_url'); // stored disabled
     expect(unvetted.enabled).toBe(false);
     await app.inject({
       method: 'POST',
       url: `/agents/${agent.id}/skills`,
-      payload: {
-        skills: [
-          { skill_id: first.id, enabled: true },
-          { skill_id: linkOff.id, enabled: false },
-          { skill_id: unvetted.id, enabled: true },
-          { skill_id: second.id, enabled: true },
-        ],
-      },
+      payload: { skill_ids: [first.id, unvetted.id, second.id] },
     });
 
     await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
@@ -652,7 +644,6 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(prompt).toContain('RULE-FIRST');
     expect(prompt).toContain('RULE-SECOND');
     expect(prompt.indexOf('RULE-FIRST')).toBeLessThan(prompt.indexOf('RULE-SECOND'));
-    expect(prompt).not.toContain('RULE-LINK-OFF');
     expect(prompt).not.toContain('RULE-UNVETTED');
 
     await app.close();
@@ -686,7 +677,7 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     await app.inject({
       method: 'POST',
       url: `/agents/${agent.id}/skills`,
-      payload: { skills: [{ skill_id: skill.id, enabled: true }] },
+      payload: { skill_ids: [skill.id] },
     });
 
     await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
@@ -737,7 +728,7 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     await app.inject({
       method: 'POST',
       url: `/agents/${agent.id}/skills`,
-      payload: { skills: [{ skill_id: skill.id, enabled: true }] },
+      payload: { skill_ids: [skill.id] },
     });
 
     await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
@@ -761,7 +752,7 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     await app.close();
   });
 
-  it('a disabled skill link contributes no context docs', async () => {
+  it('a globally-disabled skill contributes no context docs', async () => {
     const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
     const app = await buildApp({
       config: config(),
@@ -778,9 +769,17 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     });
     const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
     const agent = await makeAgent(app, 'Sec-context-disabled');
+    // imported_url skills land unvetted (disabled) until someone enables them —
+    // that's what keeps a linked skill out of prompt assembly now that
+    // agent_skills no longer carries its own enabled flag.
     const skill = (
-      await app.inject({ method: 'POST', url: '/skills', payload: { name: 'Disabled link', type: 'rubric', body: 'RULE' } })
+      await app.inject({
+        method: 'POST',
+        url: '/skills',
+        payload: { name: 'Disabled skill', type: 'rubric', body: 'RULE', source: 'imported_url' },
+      })
     ).json();
+    expect(skill.enabled).toBe(false);
     await app.inject({
       method: 'PUT',
       url: `/skills/${skill.id}/context`,
@@ -789,7 +788,7 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     await app.inject({
       method: 'POST',
       url: `/agents/${agent.id}/skills`,
-      payload: { skills: [{ skill_id: skill.id, enabled: false }] },
+      payload: { skill_ids: [skill.id] },
     });
 
     await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
@@ -804,8 +803,8 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(prompt).not.toContain('SHOULD-NOT-APPEAR');
     // A disabled skill is named as skipped in the run log, never attached
     const log = (await app.inject({ method: 'GET', url: `/runs/${runs[0]!.id}/trace` })).json().log as Array<{ msg: string }>;
-    expect(log.some((l) => l.msg.includes('skipped (disabled): Disabled link'))).toBe(true);
-    expect(log.some((l) => l.msg.includes('• Disabled link'))).toBe(false);
+    expect(log.some((l) => l.msg.includes('skipped (disabled): Disabled skill'))).toBe(true);
+    expect(log.some((l) => l.msg.includes('• Disabled skill'))).toBe(false);
 
     await app.close();
   });

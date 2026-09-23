@@ -120,7 +120,7 @@ export function useAgentStats(id: string | null | undefined, repoId: string | nu
   });
 }
 
-/** Linked skills for an agent (ordered, with name/type/enabled) — the Skills tab. */
+/** Linked skills for an agent (ordered, with name/type) — the Skills tab. */
 export function useAgentSkills(id: string | null | undefined) {
   return useQuery({
     queryKey: ["agent-skills", id],
@@ -129,17 +129,12 @@ export function useAgentSkills(id: string | null | undefined) {
   });
 }
 
-/** One entry of the Skills-tab set: skill id + enabled, in the desired order. */
-export interface SetAgentSkillsItem {
-  skill_id: string;
-  enabled: boolean;
-}
-
 /**
- * Replace an agent's linked-skill set (order + enabled) in one call. Optimistic:
- * the Skills tab writes the new order/enabled immediately and rolls back on error.
+ * Replace an agent's linked-skill set (order + membership) in one call, from
+ * an ordered list of skill ids. Optimistic: the Skills tab writes the new
+ * order/links immediately and rolls back on error.
  *
- * Autosaves can overlap (toggle, then drag before the first request returns).
+ * Autosaves can overlap (link, then drag before the first request returns).
  * Each save is a full-set replace built from the cache, so only the LAST
  * in-flight save may write the server response or roll back — an older one
  * settling first would otherwise clobber the newer optimistic state, and the
@@ -153,41 +148,36 @@ export function useSetAgentSkills(id: string) {
   const isLastInFlight = () => qc.isMutating({ mutationKey }) === 1;
   return useMutation({
     mutationKey,
-    mutationFn: (skills: SetAgentSkillsItem[]) =>
-      api.post<AgentSkillItem[]>(`/agents/${id}/skills`, { skills }),
-    onMutate: async (skills) => {
+    mutationFn: (skillIds: string[]) =>
+      api.post<AgentSkillItem[]>(`/agents/${id}/skills`, { skill_ids: skillIds }),
+    onMutate: async (skillIds) => {
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<AgentSkillItem[]>(key);
 
-      // For newly attached skills not yet in cache, try to build them from the global skills cache
+      // For newly linked skills not yet in cache, build them from the global skills cache
       const skillsCache = qc.getQueryData<SkillWithStats[]>(["skills"]) ?? [];
       const skillsById = new Map(skillsCache.map((s) => [s.id, s]));
 
-      if (prev) {
-        const byId = new Map(prev.map((s) => [s.skill_id, s]));
-        const next = skills
-          .map((it, order) => {
-            const base = byId.get(it.skill_id);
-            if (base) {
-              return { ...base, enabled: it.enabled, order };
-            }
-            // Try to build from skills cache for newly attached skills
-            const globalSkill = skillsById.get(it.skill_id);
-            if (globalSkill) {
-              return {
-                agent_id: id,
-                skill_id: it.skill_id,
-                name: globalSkill.name,
-                type: globalSkill.type,
-                enabled: it.enabled,
-                order,
-              };
-            }
-            return undefined;
-          })
-          .filter((s): s is AgentSkillItem => s !== undefined);
-        qc.setQueryData<AgentSkillItem[]>(key, next);
-      }
+      const byId = new Map((prev ?? []).map((s) => [s.skill_id, s]));
+      const next = skillIds
+        .map((skillId, order) => {
+          const base = byId.get(skillId);
+          if (base) return { ...base, order };
+          // Try to build from skills cache for newly linked skills
+          const globalSkill = skillsById.get(skillId);
+          if (globalSkill) {
+            return {
+              agent_id: id,
+              skill_id: skillId,
+              name: globalSkill.name,
+              type: globalSkill.type,
+              order,
+            };
+          }
+          return undefined;
+        })
+        .filter((s): s is AgentSkillItem => s !== undefined);
+      qc.setQueryData<AgentSkillItem[]>(key, next);
       return { prev };
     },
     onError: (_e, _v, context) => {
@@ -200,9 +190,10 @@ export function useSetAgentSkills(id: string) {
       if (isLastInFlight()) qc.setQueryData(key, data);
     },
     onSettled: () => {
-      // The card's "N skills" counts ENABLED links, so a toggle changes it.
+      // The card's "N skills" counts links whose underlying skill is enabled,
+      // so linking/unlinking (and a skill's own enabled flag) changes it.
       qc.invalidateQueries({ queryKey: ["agent-card-stats"] });
-      // The Stats tab's most-used-skills list is built from enabled links too.
+      // The Stats tab's most-used-skills list is built from those same links.
       qc.invalidateQueries({ queryKey: ["agent-stats"] });
       // Skill cards (agent_count, pull/accept %) and a skill's Stats tab
       // (linked agents) are derived from these links as well.

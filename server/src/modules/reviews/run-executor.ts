@@ -14,7 +14,6 @@ import { loadDiff } from './diff-loader.js';
  * without this module importing the agents module's repository or row types.
  */
 interface ActiveSkillLink {
-  enabled: boolean;
   skill: { id: string; name: string; type: string; source: string; body: string; enabled: boolean };
 }
 
@@ -204,13 +203,12 @@ export class ReviewRunExecutor {
 
       const task = taskLine(pull) + rankNote;
 
-      // Fetch linked, enabled skills for this agent
+      // Fetch skills linked to this agent; only the underlying skill's own
+      // `enabled` flag gates prompt assembly now (linking itself is binary).
       const linkedSkills = await this.agents.linkedSkills(agent.id);
-      const activeLinks = linkedSkills.filter((s) => s.enabled && s.skill.enabled);
+      const activeLinks = linkedSkills.filter((s) => s.skill.enabled);
       const skillBodies = activeLinks.map((s) => skillBlock(s.skill));
-      const skippedSkills = linkedSkills
-        .filter((s) => !(s.enabled && s.skill.enabled))
-        .map((s) => s.skill.name);
+      const skippedSkills = linkedSkills.filter((s) => !s.skill.enabled).map((s) => s.skill.name);
       const skillLog = skillLogLines(
         activeLinks.map((s, i) => ({
           name: s.skill.name,

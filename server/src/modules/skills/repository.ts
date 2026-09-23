@@ -16,10 +16,11 @@ interface AgentUsage {
 }
 
 /**
- * A skill's usage, attributed through the agents that have it linked AND enabled:
- * pull frequency = their completed runs / all completed runs in the workspace;
- * accept rate = their non-dismissed findings / all their findings (null when none —
- * no findings means no signal, never a fabricated 100%).
+ * A skill's usage, attributed through the agents that have it linked, when the
+ * skill itself is enabled: pull frequency = their completed runs / all
+ * completed runs in the workspace; accept rate = their non-dismissed findings
+ * / all their findings (null when none — no findings means no signal, never a
+ * fabricated 100%).
  */
 function usageRates(usage: AgentUsage, enabledAgentIds: string[]) {
   let runs = 0;
@@ -55,24 +56,26 @@ export class SkillsRepository implements SkillsStore {
 
     const [links, usage] = await Promise.all([
       this.db
-        .select({ skillId: t.agentSkills.skillId, agentId: t.agentSkills.agentId, enabled: t.agentSkills.enabled })
+        .select({ skillId: t.agentSkills.skillId, agentId: t.agentSkills.agentId })
         .from(t.agentSkills)
         .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
         .where(eq(t.skills.workspaceId, workspaceId)),
       this.agentUsage(workspaceId),
     ]);
 
-    const bySkill = new Map<string, { agentCount: number; enabledAgentIds: string[] }>();
+    const bySkill = new Map<string, { agentCount: number; agentIds: string[] }>();
     for (const link of links) {
-      const entry = bySkill.get(link.skillId) ?? { agentCount: 0, enabledAgentIds: [] };
+      const entry = bySkill.get(link.skillId) ?? { agentCount: 0, agentIds: [] };
       entry.agentCount += 1;
-      if (link.enabled) entry.enabledAgentIds.push(link.agentId);
+      entry.agentIds.push(link.agentId);
       bySkill.set(link.skillId, entry);
     }
 
     return allSkills.map((sk) => {
       const entry = bySkill.get(sk.id);
-      const rates = usageRates(usage, entry?.enabledAgentIds ?? []);
+      // A globally-disabled skill contributes no usage, even though it stays
+      // linked/ordered on the agents it's attached to (Skills tab "Disabled" label).
+      const rates = usageRates(usage, sk.enabled ? (entry?.agentIds ?? []) : []);
       return {
         ...toSkillDto(sk),
         agent_count: entry?.agentCount ?? 0,
@@ -300,14 +303,14 @@ export class SkillsRepository implements SkillsStore {
       .select({
         id: t.agents.id,
         name: t.agents.name,
-        enabled: t.agentSkills.enabled,
       })
       .from(t.agentSkills)
       .innerJoin(t.agents, eq(t.agentSkills.agentId, t.agents.id))
       .where(eq(t.agentSkills.skillId, id));
 
     const agentRefs = linkedAgents.map((a) => ({ id: a.id, name: a.name }));
-    const enabledAgentIds = linkedAgents.filter((a) => a.enabled).map((a) => a.id);
+    // A globally-disabled skill contributes no usage on any of its links.
+    const enabledAgentIds = skill.enabled ? linkedAgents.map((a) => a.id) : [];
 
     // 2. Pull frequency % + accept rate % — same formulas as the list cards.
     const { pullFrequencyPct, acceptRatePct } = usageRates(await this.agentUsage(workspaceId), enabledAgentIds);

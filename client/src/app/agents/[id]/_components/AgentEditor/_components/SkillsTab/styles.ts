@@ -7,9 +7,9 @@ export const s = {
   h2: { fontSize: 16, fontWeight: 700, margin: 0 } satisfies CSSProperties,
   count: { fontSize: 12.5, fontWeight: 600, color: "var(--text-muted)" } satisfies CSSProperties,
   hint: { fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.5 } satisfies CSSProperties,
-  attach: { marginLeft: "auto" } satisfies CSSProperties,
   nameCol: { flex: 1, minWidth: 0 } satisfies CSSProperties,
-  disabledHint: { fontSize: 11.5, color: "var(--text-muted)", marginTop: 3 } satisfies CSSProperties,
+  disabledBadge: { flexShrink: 0 } satisfies CSSProperties,
+  disabledCheckbox: { opacity: 0.45, cursor: "not-allowed" } satisfies CSSProperties,
   list: { display: "flex", flexDirection: "column", gap: 6 } satisfies CSSProperties,
   row: (dragging: boolean): CSSProperties => ({
     display: "flex",

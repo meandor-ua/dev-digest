@@ -14,10 +14,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const item = (skill_id: string, enabled: boolean, order: number): AgentSkillItem => ({
+const item = (skill_id: string, order: number): AgentSkillItem => ({
   agent_id: "a1",
   skill_id,
-  enabled,
   order,
   name: skill_id,
   type: "rubric",
@@ -35,7 +34,7 @@ function deferred<T>() {
 
 function setup() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  qc.setQueryData(["agent-skills", "a1"], [item("x", true, 0), item("y", true, 1)]);
+  qc.setQueryData(["agent-skills", "a1"], [item("x", 0), item("y", 1)]);
   const spy = vi.spyOn(qc, "invalidateQueries");
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
@@ -52,32 +51,33 @@ describe("useSetAgentSkills", () => {
     post.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     const { hook, cached } = setup();
 
-    // A: disable x. B (while A is in flight): also disable y.
-    act(() => hook.result.current.mutate([{ skill_id: "x", enabled: false }, { skill_id: "y", enabled: true }]));
-    await waitFor(() => expect(cached()[0]!.enabled).toBe(false));
-    act(() => hook.result.current.mutate([{ skill_id: "x", enabled: false }, { skill_id: "y", enabled: false }]));
-    await waitFor(() => expect(cached()[1]!.enabled).toBe(false));
+    // A: reorder to [y, x]. B (while A is in flight): unlink x, leaving just [y].
+    act(() => hook.result.current.mutate(["y", "x"]));
+    await waitFor(() => expect(cached().map((s) => s.skill_id)).toEqual(["y", "x"]));
+    act(() => hook.result.current.mutate(["y"]));
+    await waitFor(() => expect(cached().map((s) => s.skill_id)).toEqual(["y"]));
 
-    // A returns first with ITS server state (y still enabled) — must not overwrite B's optimistic y=false.
-    await act(async () => first.resolve([item("x", false, 0), item("y", true, 1)]));
-    expect(cached()[1]!.enabled).toBe(false);
+    // A returns first with ITS server state (both still linked) — must not
+    // overwrite B's optimistic "x unlinked" state.
+    await act(async () => first.resolve([item("y", 0), item("x", 1)]));
+    expect(cached().map((s) => s.skill_id)).toEqual(["y"]);
 
-    await act(async () => second.resolve([item("x", false, 0), item("y", false, 1)]));
-    await waitFor(() => expect(cached().map((s) => s.enabled)).toEqual([false, false]));
+    await act(async () => second.resolve([item("y", 0)]));
+    await waitFor(() => expect(cached().map((s) => s.skill_id)).toEqual(["y"]));
   });
 
   it("rolls back on error when it is the only save in flight", async () => {
     post.mockRejectedValueOnce(new Error("boom"));
     const { hook, cached } = setup();
-    act(() => hook.result.current.mutate([{ skill_id: "x", enabled: false }, { skill_id: "y", enabled: true }]));
+    act(() => hook.result.current.mutate(["y"]));
     await waitFor(() => expect(hook.result.current.isError).toBe(true));
-    expect(cached()[0]!.enabled).toBe(true);
+    expect(cached().map((s) => s.skill_id)).toEqual(["x", "y"]);
   });
 
   it("invalidates skill cards and skill stats, since they are derived from agent links", async () => {
-    post.mockResolvedValueOnce([item("x", true, 0)]);
+    post.mockResolvedValueOnce([item("x", 0)]);
     const { hook, spy } = setup();
-    act(() => hook.result.current.mutate([{ skill_id: "x", enabled: true }]));
+    act(() => hook.result.current.mutate(["x"]));
     await waitFor(() => expect(hook.result.current.isSuccess).toBe(true));
     const keys = spy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] }).queryKey);
     expect(keys).toEqual(

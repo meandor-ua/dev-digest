@@ -65,8 +65,9 @@ d('GET /agents/stats, GET /agents/:id/stats, POST /agents/:id/skills', () => {
     expect(rows.length).toBe(Object.keys(agents).length);
     const general = rows.find((r) => r.agent_id === agents['General Reviewer'])!;
     expect(general.runs).toBe(14);
-    // 3 links seeded, one of them disabled — the card counts ENABLED links only,
-    // mirroring the Skills tab's "2 of 3 enabled" left-hand number.
+    // 3 links seeded; "Repo Naming Conventions" is an unvetted (imported,
+    // globally-disabled) skill — the card counts only links whose underlying
+    // skill is enabled, mirroring the Skills tab's orange "Disabled" label.
     expect(general.skills_count).toBe(2);
     expect(general.avg_score).not.toBeNull();
     expect(general.avg_cost_usd).not.toBeNull();
@@ -98,7 +99,8 @@ d('GET /agents/stats, GET /agents/:id/stats, POST /agents/:id/skills', () => {
     // reachable in the demo rather than permanently disabled.
     expect(s.run_history.every((r: { has_trace: boolean }) => r.has_trace)).toBe(true);
     expect(s.run_history.every((r: { source: string }) => r.source === 'local')).toBe(true);
-    // most-used skills = enabled linked skills, in order (placeholder 100%).
+    // most-used skills = linked skills whose own `enabled` flag is true, in
+    // order (placeholder 100%).
     expect(s.most_used_skills.map((p: { label: string }) => p.label)).toEqual([
       'Bug & Correctness Rubric',
       'Readability Rubric',
@@ -156,46 +158,39 @@ d('GET /agents/stats, GET /agents/:id/stats, POST /agents/:id/skills', () => {
     await app.close();
   });
 
-  it('GET /agents/:id/skills returns AgentSkillItem[] with name/type/enabled in order', async () => {
+  it('GET /agents/:id/skills returns AgentSkillItem[] with name/type in order', async () => {
     const app = await makeApp();
     const id = agents['General Reviewer'];
     const res = await app.inject({ method: 'GET', url: `/agents/${id}/skills` });
     expect(res.statusCode).toBe(200);
-    const items = res.json() as Array<{ name: string; type: string; enabled: boolean; order: number }>;
+    const items = res.json() as Array<{ name: string; type: string; order: number }>;
     expect(items.map((i) => i.name)).toEqual([
       'Bug & Correctness Rubric',
       'Readability Rubric',
       'Repo Naming Conventions',
     ]);
-    expect(items[2]!.enabled).toBe(false);
     expect(items[0]!.type).toBe('rubric');
     await app.close();
   });
 
-  it('POST /agents/:id/skills (skills form) reorders + toggles, persisted on GET', async () => {
+  it('POST /agents/:id/skills (skill_ids form) reorders, persisted on GET', async () => {
     const app = await makeApp();
     const id = agents['Performance Reviewer'];
     const payload = {
-      skills: [
-        { skill_id: skills['Payments Domain Notes'], enabled: false },
-        { skill_id: skills['Readability Rubric'], enabled: true },
-      ],
+      skill_ids: [skills['Payments Domain Notes'], skills['Readability Rubric']],
     };
     const res = await app.inject({ method: 'POST', url: `/agents/${id}/skills`, payload });
     expect(res.statusCode).toBe(200);
     const after = (await app.inject({ method: 'GET', url: `/agents/${id}/skills` })).json() as Array<{
       name: string;
-      enabled: boolean;
     }>;
     expect(after.map((i) => i.name)).toEqual(['Payments Domain Notes', 'Readability Rubric']);
-    expect(after[0]!.enabled).toBe(false);
-    expect(after[1]!.enabled).toBe(true);
 
-    // The card's skills_count follows the enabled flags: 2 links, 1 enabled.
+    // The card's skills_count follows the underlying skills' own `enabled` flag.
     const cards = (
       await app.inject({ method: 'GET', url: `/agents/stats?repo_id=${repoId}` })
     ).json() as Array<{ agent_id: string; skills_count: number }>;
-    expect(cards.find((c) => c.agent_id === id)!.skills_count).toBe(1);
+    expect(cards.find((c) => c.agent_id === id)!.skills_count).toBe(2);
     await app.close();
   });
 
@@ -218,7 +213,7 @@ d('GET /agents/stats, GET /agents/:id/stats, POST /agents/:id/skills', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/agents/${id}/skills`,
-      payload: { skills: [{ skill_id: foreignSkill!.id, enabled: true }] },
+      payload: { skill_ids: [foreignSkill!.id] },
     });
     expect(res.statusCode).toBe(422);
     // The foreign skill must NOT have been linked.
@@ -230,7 +225,7 @@ d('GET /agents/stats, GET /agents/:id/stats, POST /agents/:id/skills', () => {
     await app.close();
   });
 
-  it('the legacy skill_ids form rejects duplicates too (422)', async () => {
+  it('POST /agents/:id/skills rejects duplicate skill_ids (422)', async () => {
     const app = await makeApp();
     const id = agents['Performance Reviewer'];
     const dup = skills['Readability Rubric'];
@@ -268,7 +263,7 @@ d('GET /agents/stats, GET /agents/:id/stats, POST /agents/:id/skills', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/agents/${id}/skills`,
-      payload: { skills: [{ skill_id: dup }, { skill_id: dup }] },
+      payload: { skill_ids: [dup, dup] },
     });
     expect(res.statusCode).toBe(422);
     const after = (await app.inject({ method: 'GET', url: `/agents/${id}/skills` })).json();

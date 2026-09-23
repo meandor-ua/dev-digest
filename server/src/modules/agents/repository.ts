@@ -43,11 +43,10 @@ export interface UpdateAgent {
   enabled?: boolean;
 }
 
-/** A skill linked to an agent (with its order + enabled flag), joined from agent_skills. */
+/** A skill linked to an agent (with its order), joined from agent_skills. */
 export interface LinkedSkillRow {
   skill: typeof t.skills.$inferSelect;
   order: number;
-  enabled: boolean;
 }
 
 export class AgentsRepository {
@@ -193,12 +192,12 @@ export class AgentsRepository {
   /** Skills linked to an agent, in `order` ascending. */
   async linkedSkills(agentId: string): Promise<LinkedSkillRow[]> {
     const rows = await this.db
-      .select({ skill: t.skills, order: t.agentSkills.order, enabled: t.agentSkills.enabled })
+      .select({ skill: t.skills, order: t.agentSkills.order })
       .from(t.agentSkills)
       .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
       .where(eq(t.agentSkills.agentId, agentId))
       .orderBy(asc(t.agentSkills.order));
-    return rows.map((r) => ({ skill: r.skill, order: r.order, enabled: r.enabled }));
+    return rows.map((r) => ({ skill: r.skill, order: r.order }));
   }
 
   async skillIdsForAgent(agentId: string): Promise<string[]> {
@@ -225,20 +224,17 @@ export class AgentsRepository {
 
   /**
    * Replace the full set of linked skills for an agent with `items`, assigning
-   * order = index and persisting each `enabled` flag (default true). Used by the
-   * "Skills" editor tab (attach/reorder/toggle). Skills not in the list are unlinked.
+   * order = index. Used by the "Skills" editor tab (attach/detach/reorder).
+   * Skills not in the list are unlinked.
    */
-  async setSkills(
-    agentId: string,
-    items: Array<{ skillId: string; enabled?: boolean }>,
-  ): Promise<void> {
+  async setSkills(agentId: string, items: Array<{ skillId: string }>): Promise<void> {
     // One transaction: a failed insert must not leave the agent with its links already deleted.
     await this.db.transaction(async (tx) => {
       await tx.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
       if (items.length === 0) return;
       await tx
         .insert(t.agentSkills)
-        .values(items.map((it, i) => ({ agentId, skillId: it.skillId, order: i, enabled: it.enabled ?? true })));
+        .values(items.map((it, i) => ({ agentId, skillId: it.skillId, order: i })));
     });
   }
 
@@ -370,27 +366,28 @@ export class AgentsRepository {
   }
 
   /**
-   * Count of ENABLED linked skills per agent in a workspace (card stats). The
-   * card's "N skills" mirrors the Skills tab's "N of M enabled" left-hand
-   * number, so disabled links are excluded here.
+   * Count of linked skills whose underlying skill is enabled, per agent in a
+   * workspace (card stats). A globally-disabled skill stays linked/ordered but
+   * is excluded from prompt assembly (run-executor.ts), so it's excluded here too.
    */
   async skillCountByAgent(workspaceId: string): Promise<Map<string, number>> {
     const rows = await this.db
       .select({ agentId: t.agentSkills.agentId, n: sql<number>`count(*)::int` })
       .from(t.agentSkills)
       .innerJoin(t.agents, eq(t.agents.id, t.agentSkills.agentId))
-      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agentSkills.enabled, true)))
+      .innerJoin(t.skills, eq(t.skills.id, t.agentSkills.skillId))
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.skills.enabled, true)))
       .groupBy(t.agentSkills.agentId);
     return new Map(rows.map((r) => [r.agentId, r.n]));
   }
 
-  /** Enabled linked-skill names for an agent, in `order` (most-used placeholder). */
+  /** Linked-skill names for an agent whose skill is enabled, in `order` (most-used placeholder). */
   async enabledSkillNames(agentId: string): Promise<string[]> {
     const rows = await this.db
       .select({ name: t.skills.name })
       .from(t.agentSkills)
       .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
-      .where(and(eq(t.agentSkills.agentId, agentId), eq(t.agentSkills.enabled, true)))
+      .where(and(eq(t.agentSkills.agentId, agentId), eq(t.skills.enabled, true)))
       .orderBy(asc(t.agentSkills.order));
     return rows.map((r) => r.name);
   }

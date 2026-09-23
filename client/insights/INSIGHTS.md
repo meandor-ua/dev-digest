@@ -9,6 +9,13 @@ Preview/Stats tabs, skill import).
 
 ## Codebase Patterns
 
+- **2026-09-25** — The vendored `Badge` (`@devdigest/ui`) has no `title` prop
+  — wrap it in a plain `<span title="...">` instead of passing `title`
+  through, or TS rejects the extra prop. No dedicated "orange/disabled" color
+  token exists either; reuse `var(--warn)` / `var(--warn-bg)` (the WARNING
+  severity color) for any other "globally disabled but still relevant"
+  badge. Evidence: `client/src/vendor/ui/primitives/Badge.tsx`,
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/SkillsTab/SkillsTab.tsx`.
 - **2026-09-21** — Multi-tab editors that must not lose unsaved edits on a tab
   switch keep the stateful tab **mounted but hidden** (`display: none`) while
   the other tabs render conditionally — `AgentEditor` does this for `ConfigTab`

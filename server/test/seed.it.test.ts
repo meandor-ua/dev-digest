@@ -44,7 +44,7 @@ d('seed: demo PR #482 is reviewable (Testcontainers pg)', () => {
     for (const r of rows) expect(r.patch && r.patch.length).toBeGreaterThan(0);
   });
 
-  it('seeds demo skills, agent_skills links (mixed enabled) and agent_runs for the Stats tab', async () => {
+  it('seeds demo skills, agent_skills links, and agent_runs for the Stats tab', async () => {
     const { db } = pg.handle;
     const skills = await db.select().from(t.skills);
     expect(skills.length).toBeGreaterThanOrEqual(6);
@@ -58,7 +58,6 @@ d('seed: demo PR #482 is reviewable (Testcontainers pg)', () => {
       .from(t.agentSkills)
       .where(eq(t.agentSkills.agentId, general!.id));
     expect(links).toHaveLength(3);
-    expect(links.some((l) => !l.enabled)).toBe(true); // at least one disabled link
 
     const runs = await db.select().from(t.agentRuns).where(eq(t.agentRuns.agentId, general!.id));
     expect(runs.length).toBe(14); // >10 so cost/score trends render
@@ -82,7 +81,7 @@ d('seed: demo PR #482 is reviewable (Testcontainers pg)', () => {
     const { db } = pg.handle;
     const [agent] = await db.select().from(t.agents).where(eq(t.agents.name, 'API Contract Reviewer'));
     const links = await db
-      .select({ name: t.skills.name, order: t.agentSkills.order, enabled: t.agentSkills.enabled })
+      .select({ name: t.skills.name, order: t.agentSkills.order })
       .from(t.agentSkills)
       .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
       .where(eq(t.agentSkills.agentId, agent!.id));
@@ -90,7 +89,6 @@ d('seed: demo PR #482 is reviewable (Testcontainers pg)', () => {
       'API Breaking Change Rubric',
       'REST Contract Versioning Convention',
     ]);
-    expect(links.every((l) => l.enabled)).toBe(true);
   });
 
   it('re-seeding does not duplicate agent_runs (idempotent)', async () => {

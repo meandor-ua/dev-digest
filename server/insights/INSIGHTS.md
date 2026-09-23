@@ -30,6 +30,15 @@ you, so the next agent/session doesn't relearn it.
   probes `/var/run/docker.sock`, which OrbStack links only later. Run them with
   `DOCKER_HOST=unix:///Users/<you>/.orbstack/run/docker.sock pnpm exec vitest run .it.test`.
   Evidence: `server/test/helpers/pg.ts` (testcontainers `startPg`).
+- **2026-09-25** — Same "Could not find a working container runtime strategy"
+  error can also mean `/var/run/docker.sock` is a **stale symlink pointing at
+  a different user's** OrbStack socket (e.g. `/Users/<other-user>/.orbstack/
+  run/docker.sock`) — `docker ps`/`docker info` still work fine via the CLI's
+  own context resolution, only testcontainers' hardcoded socket probe fails.
+  Check `ls -la /var/run/docker.sock` before assuming it's the "OrbStack
+  starting late" case; the fix is the same explicit `DOCKER_HOST=unix:///
+  Users/<you>/.orbstack/run/docker.sock` override, pointed at your own
+  socket. Evidence: `server/test/helpers/pg.ts` (testcontainers `startPg`).
 - **2026-09-21** — Drizzle `.update(t).set({})` with an all-`undefined` patch
   throws (empty `SET`) and surfaces as a 500 on `PUT` with `{}`; short-circuit an
   empty patch as a no-op returning the existing row. Evidence:
@@ -158,6 +167,27 @@ you, so the next agent/session doesn't relearn it.
   not by "any I/O". `test/project-docs.test.ts` writes a `mkdtemp` directory and
   stays a unit test, because it needs no Postgres or testcontainers.
   Evidence: `server/test/project-docs.test.ts:36`.
+- **2026-09-25** — To un-add a column introduced entirely within the current
+  feature branch (confirmed via `git merge-base HEAD main` +
+  `git branch --contains <commit>` showing the migration's commit isn't on
+  `main`), don't rewrite/delete that migration and its snapshot — a local dev
+  DB may already have applied it. Instead edit the Drizzle schema and run
+  `pnpm exec drizzle-kit generate --name <name>` to emit a normal *new*,
+  additive migration that drops the column (e.g. `ALTER TABLE ... DROP COLUMN
+  ...`). This keeps migration history append-only even for schema changes
+  that never should have shipped. Evidence: `server/src/db/schema/agents.ts`
+  (dropped `agentSkills.enabled`),
+  `server/src/db/migrations/0013_drop_agent_skill_enabled.sql`.
+- **2026-09-25** — Collapsed two independent "enabled" concepts into one:
+  `agent_skills.enabled` (per-link toggle, added in `0011_...`, dropped in
+  `0013_...`) was removed in favor of gating solely on the skill's own
+  `skills.enabled` (global vetted state). Linking is now binary (row exists
+  or not) — a globally-disabled skill can still be linked, keeps its
+  `order`, stays draggable, and is excluded only from prompt assembly
+  (`run-executor.ts`) and usage-stat counting (`skills/repository.ts`), never
+  from the link itself. Evidence: `server/src/modules/reviews/run-executor.ts`
+  (`ActiveSkillLink`), `server/src/modules/skills/repository.ts`
+  (`listWithStats`/`stats`).
 
 ## What Doesn't Work
 
