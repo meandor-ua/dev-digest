@@ -19,6 +19,14 @@ const MD: Components = {
   strong: ({ children }) => <strong style={s.mdStrong}>{children}</strong>,
   pre: ({ children }) => <pre style={s.mdPre}>{children}</pre>,
   code: ({ children }) => <code style={s.mdCode}>{children}</code>,
+  table: ({ children }) => (
+    <div style={s.mdTableWrap}>
+      <table style={s.mdTable}>{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead style={s.mdThead}>{children}</thead>,
+  th: ({ children }) => <th style={s.mdTh}>{children}</th>,
+  td: ({ children }) => <td style={s.mdTd}>{children}</td>,
 };
 
 /**

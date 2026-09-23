@@ -63,4 +63,30 @@ export const s = {
     fontSize: "0.9em",
     color: "var(--accent-text)",
   } satisfies CSSProperties,
+  mdTableWrap: {
+    margin: "0 0 12px",
+    overflowX: "auto",
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+  } satisfies CSSProperties,
+  mdTable: {
+    borderCollapse: "collapse",
+    width: "100%",
+    fontSize: "0.95em",
+  } satisfies CSSProperties,
+  mdThead: {
+    background: "var(--bg-hover)",
+  } satisfies CSSProperties,
+  mdTh: {
+    textAlign: "left",
+    fontWeight: 650,
+    color: "var(--text-primary)",
+    padding: "8px 12px",
+    borderBottom: "1px solid var(--border)",
+  } satisfies CSSProperties,
+  mdTd: {
+    padding: "8px 12px",
+    borderTop: "1px solid var(--border)",
+    verticalAlign: "top",
+  } satisfies CSSProperties,
 } as const;
