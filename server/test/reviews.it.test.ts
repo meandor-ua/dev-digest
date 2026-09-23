@@ -770,8 +770,7 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
     const agent = await makeAgent(app, 'Sec-context-disabled');
     // imported_url skills land unvetted (disabled) until someone enables them —
-    // that's what keeps a linked skill out of prompt assembly now that
-    // agent_skills no longer carries its own enabled flag.
+    // that's what keeps a linked skill out of prompt assembly.
     const skill = (
       await app.inject({
         method: 'POST',

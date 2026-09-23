@@ -1,5 +1,5 @@
 {
-  "id": "c7e2f4a9-1b3d-4e6f-9a2c-8d5b0f1e7a34",
+  "id": "1f485db6-ec61-4dcc-a020-20d96611724e",
   "prevId": "ab6f8e71-734c-4f37-864d-096b3e6db5b7",
   "version": "7",
   "dialect": "postgresql",
@@ -1037,6 +1037,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1172,6 +1178,59 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.skill_context_docs": {
+      "name": "skill_context_docs",
+      "schema": "",
+      "columns": {
+        "skill_id": {
+          "name": "skill_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order": {
+          "name": "order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "skill_context_docs_skill_id_skills_id_fk": {
+          "name": "skill_context_docs_skill_id_skills_id_fk",
+          "tableFrom": "skill_context_docs",
+          "tableTo": "skills",
+          "columnsFrom": [
+            "skill_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "skill_context_docs_skill_id_path_pk": {
+          "name": "skill_context_docs_skill_id_path_pk",
+          "columns": [
+            "skill_id",
+            "path"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.agent_skills": {
       "name": "agent_skills",
       "schema": "",
@@ -1194,13 +1253,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
-        },
-        "enabled": {
-          "name": "enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
         }
       },
       "indexes": {},

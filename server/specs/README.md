@@ -51,14 +51,11 @@ Specs / acceptance criteria for the `server` package.
 ## `GET` / `POST /agents/:id/skills` — skill links (binary, order-only)
 
 - Linking is binary — a row in `agent_skills` means "linked", full stop.
-  There is no per-link `enabled`: migration `0011_add_agent_skill_enabled.sql`
-  added one but it never shipped past this branch, and
-  `0013_drop_agent_skill_enabled.sql` drops it again before release. The only
-  "enabled" that matters is the **skill's own** `skills.enabled` (global vetted
-  state), which gates prompt assembly (`run-executor.ts`) and usage-stat
-  counting — a globally-disabled skill can still be linked, keeps its order,
-  and is shown as "Disabled" in the Skills tab, but contributes no context to
-  reviews and no usage stats.
+  There is no per-link `enabled`. The only "enabled" that matters is the
+  **skill's own** `skills.enabled` (global vetted state), which gates prompt
+  assembly (`run-executor.ts`) and usage-stat counting — a globally-disabled
+  skill can still be linked, keeps its order, and is shown as "Disabled" in
+  the Skills tab, but contributes no context to reviews and no usage stats.
 - `GET` returns the linked skills ordered by `order`, enriched with each
   skill's `name`/`type` (`AgentSkillItem[]`).
 - `POST` replaces the whole linked set in one call from `{ skill_ids: [...] }`
