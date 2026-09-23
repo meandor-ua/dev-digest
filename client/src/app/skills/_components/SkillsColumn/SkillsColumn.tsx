@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Button, Dropdown, TextInput, Skeleton, EmptyState } from "@devdigest/ui";
 import { SkillCard } from "../SkillCard";
 import { CreateSkillModal } from "../CreateSkillModal";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import type { SkillWithStats } from "@devdigest/shared";
 import { useSkills, useUpdateSkill, useDeleteSkill } from "@/lib/hooks/skills";
 import { useToast } from "@/lib/toast";
@@ -30,9 +31,12 @@ export function SkillsColumn({
   const deleteMutation = useDeleteSkill();
   const toast = useToast();
   const confirmDiscard = useConfirmDiscard();
+  const [pendingDelete, setPendingDelete] = React.useState<SkillWithStats | null>(null);
 
-  const handleDelete = (sk: SkillWithStats) => {
-    if (!confirm(t("detail.confirmDelete", { name: sk.name }))) return;
+  const confirmDelete = () => {
+    const sk = pendingDelete;
+    if (!sk) return;
+    setPendingDelete(null);
     deleteMutation.mutate(sk.id, {
       onSuccess: () => {
         toast.success(t("detail.deleteSuccess", { name: sk.name }));
@@ -158,12 +162,19 @@ export function SkillsColumn({
                   { onError: (err) => toast.error((err as Error).message || t("column.toggleError")) },
                 )
               }
-              onDelete={() => handleDelete(sk)}
+              onDelete={() => setPendingDelete(sk)}
               deleting={deleteMutation.isPending && deleteMutation.variables === sk.id}
             />
           ))
         )}
       </div>
+      {pendingDelete && (
+        <ConfirmDialog
+          message={t("detail.confirmDelete", { name: pendingDelete.name })}
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 }

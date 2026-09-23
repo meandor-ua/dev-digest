@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { SkillWithStats } from "@devdigest/shared";
 import messages from "../../../../../messages/en/skills.json";
+import commonMessages from "../../../../../messages/en/common.json";
 import { UnsavedChangesProvider, useReportUnsaved } from "@/lib/unsaved-changes";
 import { SkillsColumn } from "./SkillsColumn";
 
@@ -99,7 +100,7 @@ function renderWithProviders(ui: React.ReactElement) {
   const qc = new QueryClient();
   return render(
     <QueryClientProvider client={qc}>
-      <NextIntlClientProvider locale="en" messages={{ skills: messages }}>
+      <NextIntlClientProvider locale="en" messages={{ skills: messages, common: commonMessages }}>
         {ui}
       </NextIntlClientProvider>
     </QueryClientProvider>,
@@ -184,19 +185,19 @@ describe("SkillsColumn", () => {
   });
 
   it("deletes a skill after the user confirms", () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     renderWithProviders(<SkillsColumn activeId="sk1" tab="config" />);
     fireEvent.click(screen.getAllByRole("button", { name: "Delete skill" })[1]!);
-    expect(window.confirm).toHaveBeenCalledWith(
-      'Delete skill "Test Coverage"? This will unlink it from all agents.',
-    );
+    expect(
+      screen.getByText('Delete skill "Test Coverage"? This will unlink it from all agents.'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ok" }));
     expect(deleteMutate).toHaveBeenCalledWith("sk2", expect.any(Object));
   });
 
   it("does not delete when the user cancels the confirm", () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     renderWithProviders(<SkillsColumn activeId="sk1" tab="config" />);
     fireEvent.click(screen.getAllByRole("button", { name: "Delete skill" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(deleteMutate).not.toHaveBeenCalled();
   });
 

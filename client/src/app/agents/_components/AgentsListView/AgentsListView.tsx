@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import { Button, Dropdown, EmptyState, ErrorState, Skeleton, Icon } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
 import { AppShell } from "../../../../components/app-shell";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAgents, useUpdateAgent, useDeleteAgent, useAgentCardStats } from "../../../../lib/hooks/agents";
 import { useActiveRepo } from "../../../../lib/repo-context";
 import { useToast } from "../../../../lib/toast";
@@ -31,9 +32,12 @@ export function AgentsListView() {
   );
   const [creating, setCreating] = React.useState(false);
   const [search, setSearch] = React.useState("");
+  const [pendingDelete, setPendingDelete] = React.useState<Agent | null>(null);
 
-  const handleDelete = (ag: Agent) => {
-    if (!window.confirm(t("card.confirmDelete", { name: ag.name }))) return;
+  const confirmDelete = () => {
+    const ag = pendingDelete;
+    if (!ag) return;
+    setPendingDelete(null);
     del.mutate(ag.id, {
       onSuccess: () => toast.success(t("card.deleteSuccess", { name: ag.name })),
       onError: (err) => toast.error((err as Error).message || t("card.deleteError")),
@@ -45,6 +49,13 @@ export function AgentsListView() {
   return (
     <AppShell crumb={[{ label: t("list.breadcrumbLab") }, { label: t("list.breadcrumb") }]}>
       {creating && <CreateAgentModal onClose={() => setCreating(false)} />}
+      {pendingDelete && (
+        <ConfirmDialog
+          message={t("card.confirmDelete", { name: pendingDelete.name })}
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
       <div style={s.page}>
         <div style={s.header}>
           <div style={s.headerText}>
@@ -107,7 +118,7 @@ export function AgentsListView() {
                 stats={statsById.get(a.id)}
                 onClick={() => router.push(`/agents/${a.id}?tab=config`)}
                 onToggle={(enabled) => update.mutate({ id: a.id, patch: { enabled } })}
-                onDelete={() => handleDelete(a)}
+                onDelete={() => setPendingDelete(a)}
                 deleting={del.isPending && del.variables === a.id}
               />
             ))}

@@ -2,11 +2,15 @@
   "actions": {
     "save": "Save",
     "cancel": "Cancel",
+    "ok": "Ok",
     "retry": "Retry",
     "close": "Close",
     "import": "Import",
     "export": "Export",
     "run": "Run"
+  },
+  "confirm": {
+    "title": "Confirm"
   },
   "states": {
     "loading": "Loading…",

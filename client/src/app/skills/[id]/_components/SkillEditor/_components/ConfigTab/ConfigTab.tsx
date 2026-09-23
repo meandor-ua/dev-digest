@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { FormField, TextInput, SelectInput, Toggle, Button, Icon, Badge } from "@devdigest/ui";
 import type { Skill, SkillType } from "@devdigest/shared";
 import { SKILL_TYPES } from "@/lib/skill-type";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useUpdateSkill, useDeleteSkill } from "@/lib/hooks/skills";
 import { useToast } from "@/lib/toast";
 import { estimateTokens } from "@/lib/tokens";
@@ -32,6 +33,7 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
   const typeOptions = SKILL_TYPES.map((v) => ({ value: v, label: t(`listItem.type.${v}`) }));
   const isUntrusted = skill.source !== "manual";
   const [changeNote, setChangeNote] = React.useState("");
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
 
   // Draft state lives in SkillEditor (useSkillDraft) so Preview renders the same unsaved body.
   const { draft, setDraft, server, dirty, reset: cancel } = state;
@@ -70,7 +72,7 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
   };
 
   const handleDelete = () => {
-    if (!confirm(t("detail.confirmDelete", { name: skill.name }))) return;
+    setConfirmingDelete(false);
     deleteMutation.mutate(skill.id, {
       onSuccess: () => {
         toast.success(t("detail.deleteSuccess", { name: skill.name }));
@@ -213,10 +215,22 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
           <div style={s.dangerTitle}>{t("config.dangerZoneTitle")}</div>
           <div style={s.dangerBody}>{t("config.dangerZoneBody")}</div>
         </div>
-        <Button kind="danger" icon="Trash" onClick={handleDelete} disabled={deleteMutation.isPending}>
+        <Button
+          kind="danger"
+          icon="Trash"
+          onClick={() => setConfirmingDelete(true)}
+          disabled={deleteMutation.isPending}
+        >
           {t("detail.delete")}
         </Button>
       </div>
+      {confirmingDelete && (
+        <ConfirmDialog
+          message={t("detail.confirmDelete", { name: skill.name })}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
     </div>
   );
 }

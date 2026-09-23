@@ -4,6 +4,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { Skill } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/skills.json";
+import commonMessages from "../../../../../../../../messages/en/common.json";
 import { ToastProvider } from "../../../../../../../lib/toast";
 
 const { updateMutate, deleteMutate, routerPush } = vi.hoisted(() => ({
@@ -44,7 +45,7 @@ function Harness({ skill }: { skill: Skill }) {
 }
 
 const wrap = (skill: Skill) => (
-  <NextIntlClientProvider locale="en" messages={{ skills: messages }}>
+  <NextIntlClientProvider locale="en" messages={{ skills: messages, common: commonMessages }}>
     <ToastProvider>
       <Harness skill={skill} />
     </ToastProvider>
@@ -193,18 +194,16 @@ describe("ConfigTab", () => {
   });
 
   it("deletes the skill from the danger zone after confirming", () => {
-    vi.stubGlobal("confirm", vi.fn(() => true));
     renderTab(MANUAL);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ok" }));
     expect(deleteMutate).toHaveBeenCalledWith("sk1", expect.anything());
-    vi.unstubAllGlobals();
   });
 
   it("does not delete when the confirmation is dismissed", () => {
-    vi.stubGlobal("confirm", vi.fn(() => false));
     renderTab(MANUAL);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(deleteMutate).not.toHaveBeenCalled();
-    vi.unstubAllGlobals();
   });
 });

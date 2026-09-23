@@ -3,6 +3,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { Agent } from "@devdigest/shared";
 import messages from "../../../../../../messages/en/agents.json";
+import commonMessages from "../../../../../../messages/en/common.json";
 import { ToastProvider } from "@/lib/toast";
 
 const { push, updateMutate, deleteMutate, toastSuccess, toastError } = vi.hoisted(() => ({
@@ -54,7 +55,7 @@ afterEach(() => {
 
 function renderColumn() {
   return render(
-    <NextIntlClientProvider locale="en" messages={{ agents: messages }}>
+    <NextIntlClientProvider locale="en" messages={{ agents: messages, common: commonMessages }}>
       <ToastProvider>
         <AgentsColumn activeId="a1" tab="stats" />
       </ToastProvider>
@@ -76,36 +77,36 @@ describe("AgentsColumn", () => {
   });
 
   it("redirects to /agents after deleting the currently open agent", () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     deleteMutate.mockImplementation((_id, opts) => opts.onSuccess());
     renderColumn();
     fireEvent.click(screen.getAllByRole("button", { name: "Delete agent" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Ok" }));
     expect(deleteMutate).toHaveBeenCalledWith("a1", expect.any(Object));
     expect(toastSuccess).toHaveBeenCalledWith('Deleted agent "Security Reviewer"');
     expect(push).toHaveBeenCalledWith("/agents");
   });
 
   it("does not redirect when deleting a non-active agent", () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     deleteMutate.mockImplementation((_id, opts) => opts.onSuccess());
     renderColumn();
     fireEvent.click(screen.getAllByRole("button", { name: "Delete agent" })[1]!);
+    fireEvent.click(screen.getByRole("button", { name: "Ok" }));
     expect(deleteMutate).toHaveBeenCalledWith("a2", expect.any(Object));
     expect(push).not.toHaveBeenCalledWith("/agents");
   });
 
   it("does not delete when the user cancels the confirm", () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     renderColumn();
     fireEvent.click(screen.getAllByRole("button", { name: "Delete agent" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(deleteMutate).not.toHaveBeenCalled();
   });
 
   it("toasts an error when deletion fails", () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     deleteMutate.mockImplementation((_id, opts) => opts.onError(new Error("boom")));
     renderColumn();
     fireEvent.click(screen.getAllByRole("button", { name: "Delete agent" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Ok" }));
     expect(toastError).toHaveBeenCalledWith("boom");
   });
 });

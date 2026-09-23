@@ -12,6 +12,7 @@ import type { Agent } from "@devdigest/shared";
 import { Button, Dropdown } from "@devdigest/ui";
 import { AgentCard } from "../../../_components/AgentCard";
 import { CreateAgentModal, TEMPLATES } from "../../../_components/CreateAgentModal";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAgents, useUpdateAgent, useDeleteAgent, useAgentCardStats } from "@/lib/hooks/agents";
 import { useActiveRepo } from "@/lib/repo-context";
 import { useToast } from "@/lib/toast";
@@ -31,6 +32,7 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
   const { repoId } = useActiveRepo();
   const { data: cardStats } = useAgentCardStats(repoId);
   const [creating, setCreating] = React.useState(false);
+  const [pendingDelete, setPendingDelete] = React.useState<Agent | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
 
   // Navigating to an agent remounts this column (it's a route-level `page.tsx`
@@ -49,8 +51,10 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
     el?.focus({ preventScroll: true });
   }, [activeId]);
 
-  const handleDelete = (ag: Agent) => {
-    if (!window.confirm(t("card.confirmDelete", { name: ag.name }))) return;
+  const confirmDelete = () => {
+    const ag = pendingDelete;
+    if (!ag) return;
+    setPendingDelete(null);
     del.mutate(ag.id, {
       onSuccess: () => {
         toast.success(t("card.deleteSuccess", { name: ag.name }));
@@ -110,11 +114,18 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
             stats={statsById.get(a.id)}
             onClick={() => router.push(`/agents/${a.id}?tab=${tab}`)}
             onToggle={(enabled) => update.mutate({ id: a.id, patch: { enabled } })}
-            onDelete={() => handleDelete(a)}
+            onDelete={() => setPendingDelete(a)}
             deleting={del.isPending && del.variables === a.id}
           />
         ))}
       </div>
+      {pendingDelete && (
+        <ConfirmDialog
+          message={t("card.confirmDelete", { name: pendingDelete.name })}
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 }
