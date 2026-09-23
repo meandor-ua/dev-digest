@@ -8,8 +8,10 @@ import { ToastProvider } from "../../../../../lib/toast";
 // Mock the data hooks so the editor renders without a network/query client.
 vi.mock("../../../../../lib/hooks/agents", () => ({
   useUpdateAgent: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, data: undefined }),
+  useDeleteAgent: () => ({ mutate: vi.fn(), isPending: false }),
   useProviderModels: () => ({ data: [{ id: "gpt-4.1", provider: "openai" }] }),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import { AgentEditor } from "./AgentEditor";
 

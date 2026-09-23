@@ -3,14 +3,21 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { Agent } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/agents.json";
+import commonMessages from "../../../../../../../../messages/en/common.json";
 import { ToastProvider } from "@/lib/toast";
 
-const { mutate } = vi.hoisted(() => ({ mutate: vi.fn() }));
+const { mutate, deleteMutate, push } = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  deleteMutate: vi.fn(),
+  push: vi.fn(),
+}));
 
 vi.mock("@/lib/hooks/agents", () => ({
   useUpdateAgent: () => ({ mutate, isPending: false, isSuccess: false, data: undefined }),
+  useDeleteAgent: () => ({ mutate: deleteMutate, isPending: false }),
   useProviderModels: () => ({ data: [{ id: "gpt-4.1", provider: "openai" }] }),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 import { ConfigTab } from "./ConfigTab";
 
@@ -35,7 +42,7 @@ const AGENT: Agent = {
 };
 
 const wrap = (agent: Agent) => (
-  <NextIntlClientProvider locale="en" messages={{ agents: messages }}>
+  <NextIntlClientProvider locale="en" messages={{ agents: messages, common: commonMessages }}>
     <ToastProvider>
       <ConfigTab agent={agent} />
     </ToastProvider>
@@ -85,5 +92,29 @@ describe("ConfigTab draft", () => {
     rerender(wrap({ ...AGENT, enabled: false }));
     expect(screen.queryByText("Cancel")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Save agent/ })).toBeDisabled();
+  });
+});
+
+describe("ConfigTab deletion", () => {
+  it("deletes the agent, confirms with a dialog, and returns to the agent list", () => {
+    deleteMutate.mockImplementation((_id, opts) => opts.onSuccess());
+    renderTab();
+
+    fireEvent.click(screen.getByRole("button", { name: messages.card.deleteTitle }));
+    expect(screen.getByText('Delete agent "Security Reviewer"? This cannot be undone.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: commonMessages.actions.ok }));
+
+    expect(deleteMutate).toHaveBeenCalledWith("ag1", expect.any(Object));
+    expect(push).toHaveBeenCalledWith("/agents");
+  });
+
+  it("does not delete when the confirmation is cancelled", () => {
+    renderTab();
+
+    fireEvent.click(screen.getByRole("button", { name: messages.card.deleteTitle }));
+    fireEvent.click(screen.getByRole("button", { name: commonMessages.actions.cancel }));
+
+    expect(deleteMutate).not.toHaveBeenCalled();
   });
 });

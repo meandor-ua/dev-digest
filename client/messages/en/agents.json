@@ -94,7 +94,9 @@
     "saving": "Saving…",
     "cancel": "Cancel",
     "saved": "Saved (v{version})",
-    "savedToast": "Agent saved (v{version})"
+    "savedToast": "Agent saved (v{version})",
+    "dangerZoneTitle": "Delete agent",
+    "dangerZoneBody": "Permanently remove this agent and its configuration."
   },
   "skills": {
     "title": "Skills",

@@ -1,10 +1,12 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { FormField, TextInput, SelectInput, SearchableSelect, Textarea, Toggle, Button } from "@devdigest/ui";
 import type { Agent, CiFailOn, Provider, ReviewStrategy } from "@devdigest/shared";
-import { useUpdateAgent, useProviderModels } from "@/lib/hooks/agents";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { useDeleteAgent, useUpdateAgent, useProviderModels } from "@/lib/hooks/agents";
 import { useToast } from "@/lib/toast";
 import { toModelOptions } from "@/lib/model-label";
 import { useDraft, draftPatch } from "@/lib/draft";
@@ -47,9 +49,12 @@ const toDraft = (a: Agent): AgentDraft => ({
  */
 export function ConfigTab({ agent }: { agent: Agent }) {
   const t = useTranslations("agents");
+  const router = useRouter();
   const toast = useToast();
   const update = useUpdateAgent();
+  const deleteMutation = useDeleteAgent();
   const { draft, setDraft, server, dirty, reset } = useDraft(agent.id, toDraft(agent), FIELDS);
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const set =
     <K extends keyof AgentDraft>(k: K) =>
     (v: AgentDraft[K]) =>
@@ -79,6 +84,19 @@ export function ConfigTab({ agent }: { agent: Agent }) {
         onSuccess: (data) => toast.success(t("config.savedToast", { version: data.version })),
       },
     );
+
+  const handleDelete = () => {
+    setConfirmingDelete(false);
+    deleteMutation.mutate(agent.id, {
+      onSuccess: () => {
+        toast.success(t("card.deleteSuccess", { name: agent.name }));
+        router.push("/agents");
+      },
+      onError: (err) => {
+        toast.error((err as Error).message || t("card.deleteError"));
+      },
+    });
+  };
 
   return (
     <div style={s.wrap}>
@@ -151,6 +169,27 @@ export function ConfigTab({ agent }: { agent: Agent }) {
           <span style={s.savedNote}>{t("config.saved", { version: update.data?.version })}</span>
         )}
       </div>
+      <div style={s.dangerZone}>
+        <div>
+          <div style={s.dangerTitle}>{t("config.dangerZoneTitle")}</div>
+          <div style={s.dangerBody}>{t("config.dangerZoneBody")}</div>
+        </div>
+        <Button
+          kind="danger"
+          icon="Trash"
+          onClick={() => setConfirmingDelete(true)}
+          disabled={deleteMutation.isPending}
+        >
+          {t("card.deleteTitle")}
+        </Button>
+      </div>
+      {confirmingDelete && (
+        <ConfirmDialog
+          message={t("card.confirmDelete", { name: agent.name })}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
     </div>
   );
 }
