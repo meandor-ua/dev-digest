@@ -6,6 +6,7 @@ the package's `insights/INSIGHTS.md`.
 
 ## Codebase Patterns
 
+- **2026-09-24** — `/skills` is the standalone browse state: it renders a searchable tile grid and must not auto-redirect to the first skill. Only selecting a tile navigates to `/skills/:id`, whose route adds the editor rail and detail pane; keep create/import actions in the grid so they retain their selected modal tab. Evidence: `client/src/app/skills/_components/SkillsListView/SkillsListView.tsx:47,77-81,108`.
 - **2026-09-21** — jsdom's `File` has no `arrayBuffer()`/`text()`, so code that
   reads uploads can't be tested with `new File(...)`. Type the input as
   `Pick<File, "name" | "size" | "arrayBuffer">` and pass plain objects in tests.

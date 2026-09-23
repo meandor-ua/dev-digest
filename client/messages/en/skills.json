@@ -3,6 +3,9 @@
     "crumbLab": "Skills Lab",
     "crumbSkills": "Skills",
     "addSkill": "Add Skill",
+    "subtitle": "Reusable instructions for your AI reviewers.",
+    "searchPlaceholder": "Search skills…",
+    "loadError": "Could not load skills",
     "empty": {
       "title": "No skills found",
       "body": "Create a skill from scratch or import markdown rules from an archive."
