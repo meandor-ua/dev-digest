@@ -5,7 +5,11 @@
     "runs": "{count, plural, one {# run} other {# runs}}",
     "scorePct": "{score}%",
     "avgCost": "{cost} avg",
-    "noValue": "—"
+    "noValue": "—",
+    "deleteTitle": "Delete agent",
+    "confirmDelete": "Delete agent \"{name}\"? This cannot be undone.",
+    "deleteSuccess": "Deleted agent \"{name}\"",
+    "deleteError": "Failed to delete agent"
   },
   "list": {
     "breadcrumbLab": "Skills Lab",

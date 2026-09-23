@@ -81,6 +81,26 @@ Preview/Stats tabs, skill import).
 
 ## What Doesn't Work
 
+- **2026-09-24** — `queryClient.removeQueries({ queryKey })` does NOT make a
+  still-mounted `useQuery` observer for that key refetch or error — it just
+  wipes the cache entry, so the component keeps rendering its last-known
+  `data` forever with `isLoading`/`isError` both `false`. `useDeleteAgent`
+  used `removeQueries(["agent", id])` on delete; deleting the agent currently
+  open in its own editor (`/agents/[id]`) left the page showing a fully
+  populated "dead" form for a row that no longer exists server-side, with the
+  rail (`AgentsColumn`) correctly refetching `["agents"]` and dropping the
+  tile — no error ever surfaced. Confirmed via network trace: DELETE →
+  GET `/agents` (refetch, 200) → **no** GET `/agents/:id` at all. Fix pattern
+  (already used by `SkillsColumn`/`useDeleteSkill`, just not mirrored for
+  agents): don't rely on cache invalidation to detect "I'm viewing something
+  that got deleted" — move delete ownership out of the leaf card
+  (`AgentCard`/`SkillCard` take `onDelete`/`deleting` props, not their own
+  mutation) up to the column/list, `mutate` with an `onSuccess` that
+  explicitly checks `deletedId === activeId` and `router.push` away (e.g. to
+  `/agents`). Evidence:
+  `client/src/lib/hooks/agents.ts` (`useDeleteAgent`),
+  `client/src/app/agents/[id]/_components/AgentsColumn/AgentsColumn.tsx`,
+  `client/src/app/skills/_components/SkillsColumn/SkillsColumn.tsx:29`.
 - **2026-09-22** — A capture-phase `scroll` listener on `window` that closes
   a Dropdown fires for every scroll, including a scroll inside the menu and
   for in-place menus. Inside an `overflow: auto` container (the agent Skills

@@ -1,16 +1,20 @@
 /* AgentsColumn — the editor page's left rail: an "Add Agent" menu and the list
    of agent cards (repo-scoped stats), each linking to the editor while keeping
-   the current tab. */
+   the current tab. Owns delete (confirm + toast) so it can redirect to
+   /agents when the deleted agent is the one currently open — otherwise the
+   editor pane is left showing a dangling, deleted agent. */
 "use client";
 
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import type { Agent } from "@devdigest/shared";
 import { Button, Dropdown } from "@devdigest/ui";
 import { AgentCard } from "../../../_components/AgentCard";
 import { CreateAgentModal, TEMPLATES } from "../../../_components/CreateAgentModal";
-import { useAgents, useUpdateAgent, useAgentCardStats } from "@/lib/hooks/agents";
+import { useAgents, useUpdateAgent, useDeleteAgent, useAgentCardStats } from "@/lib/hooks/agents";
 import { useActiveRepo } from "@/lib/repo-context";
+import { useToast } from "@/lib/toast";
 import { s } from "./styles";
 
 export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string }) {
@@ -18,9 +22,25 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
   const router = useRouter();
   const { data: agents } = useAgents();
   const update = useUpdateAgent();
+  const del = useDeleteAgent();
+  const toast = useToast();
   const { repoId } = useActiveRepo();
   const { data: cardStats } = useAgentCardStats(repoId);
   const [creating, setCreating] = React.useState(false);
+
+  const handleDelete = (ag: Agent) => {
+    if (!window.confirm(t("card.confirmDelete", { name: ag.name }))) return;
+    del.mutate(ag.id, {
+      onSuccess: () => {
+        toast.success(t("card.deleteSuccess", { name: ag.name }));
+        // Deleting the open agent leaves its editor dangling — redirect to the list.
+        if (ag.id === activeId) router.push("/agents");
+      },
+      onError: (err) => {
+        toast.error((err as Error).message || t("card.deleteError"));
+      },
+    });
+  };
 
   const statsById = React.useMemo(
     () => new Map((cardStats ?? []).map((cs) => [cs.agent_id, cs])),
@@ -63,6 +83,8 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
             stats={statsById.get(a.id)}
             onClick={() => router.push(`/agents/${a.id}?tab=${tab}`)}
             onToggle={(enabled) => update.mutate({ id: a.id, patch: { enabled } })}
+            onDelete={() => handleDelete(a)}
+            deleting={del.isPending && del.variables === a.id}
           />
         ))}
       </div>
