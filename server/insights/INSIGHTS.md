@@ -5,6 +5,12 @@ you, so the next agent/session doesn't relearn it.
 
 ## Recurring Errors & Fixes
 
+- **2026-09-24** — The server compiles raw `reviewer-core/src` through a
+  tsconfig path alias, so its common source directory is the repository parent,
+  not `server/src`; keep `rootDir: ".."` explicit alongside `outDir: "dist"`
+  and the `src/**/*.ts` include to avoid inferred-output-layout diagnostics.
+  Evidence: `server/tsconfig.json:18-29`.
+
 - **2026-09-17** — `drizzle-kit generate` fails in this dev environment with
   an esbuild/Rosetta architecture mismatch (`@esbuild/darwin-arm64` present,
   platform needs `@esbuild/darwin-x64`, or vice versa). Workaround: hand-author
