@@ -46,6 +46,7 @@ const SKILLS: SkillWithStats[] = [
     body: "# Security",
     enabled: true,
     version: 1,
+    is_dangerous: false,
   },
   {
     id: "sk2",
@@ -56,6 +57,7 @@ const SKILLS: SkillWithStats[] = [
     body: "# Tests",
     enabled: true,
     version: 1,
+    is_dangerous: false,
   },
 ];
 

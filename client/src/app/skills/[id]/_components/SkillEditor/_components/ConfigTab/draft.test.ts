@@ -31,7 +31,7 @@ describe("draftPatch", () => {
 });
 
 describe("useSkillDraft", () => {
-  const skill: Skill = { id: "sk1", source: "manual", version: 3, evidence_files: null, ...base };
+  const skill: Skill = { id: "sk1", source: "manual", version: 3, is_dangerous: false, evidence_files: null, ...base };
   const edit = (hook: { current: ReturnType<typeof useSkillDraft> }, body: string) =>
     act(() => hook.current.setDraft((d) => ({ ...d, body })));
 

@@ -15,6 +15,7 @@ const SKILL: Skill = {
   body: "# r",
   enabled: true,
   version: 5,
+  is_dangerous: false,
   evidence_files: null,
 };
 

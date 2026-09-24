@@ -146,6 +146,7 @@ export class SkillsRepository implements SkillsStore {
           source: values.source ?? 'manual',
           body: values.body,
           enabled: values.enabled ?? true,
+          isDangerous: values.isDangerous ?? false,
           version: 1,
           evidenceFiles: values.evidenceFiles ?? null,
         })
@@ -161,10 +162,11 @@ export class SkillsRepository implements SkillsStore {
     id: string,
     patch: UpdateSkill,
   ): Promise<Skill | undefined> {
-    // `message` targets skill_versions, not a `skills` column — kept out of the
-    // "is this patch empty" check below so a message-only patch (no other field)
-    // doesn't build an UPDATE with an empty SET (invalid SQL).
-    const { message, ...columnPatch } = patch;
+    // `message` targets skill_versions, `unlinkFromAgents` targets agent_skills —
+    // neither is a `skills` column, so both are kept out of the "is this patch
+    // empty" check below (an empty columnPatch would build an UPDATE with an
+    // empty SET, which is invalid SQL).
+    const { message, unlinkFromAgents, ...columnPatch } = patch;
 
     // Read-lock-write in one transaction: `FOR UPDATE` serialises concurrent
     // edits of the same skill, so two body changes get N+1 and N+2 instead of
@@ -190,6 +192,7 @@ export class SkillsRepository implements SkillsStore {
           ...(columnPatch.source !== undefined ? { source: columnPatch.source } : {}),
           ...(columnPatch.body !== undefined ? { body: columnPatch.body } : {}),
           ...(columnPatch.enabled !== undefined ? { enabled: columnPatch.enabled } : {}),
+          ...(columnPatch.isDangerous !== undefined ? { isDangerous: columnPatch.isDangerous } : {}),
           ...(columnPatch.evidenceFiles !== undefined ? { evidenceFiles: columnPatch.evidenceFiles } : {}),
           ...(bodyChanged ? { version: nextVersion } : {}),
         })
@@ -203,6 +206,13 @@ export class SkillsRepository implements SkillsStore {
           body: row.body,
           message: message ?? null,
         });
+      }
+
+      // A skill just (re-)flagged dangerous must stop running for every agent
+      // it's linked to, not just be force-disabled — same transaction so the
+      // unlink can never be left out of sync with the flag.
+      if (unlinkFromAgents && row) {
+        await tx.delete(t.agentSkills).where(eq(t.agentSkills.skillId, id));
       }
       return row ? toSkillDto(row) : undefined;
     });
@@ -228,11 +238,20 @@ export class SkillsRepository implements SkillsStore {
     return rows.map(toSkillVersionDto);
   }
 
+  async getVersion(id: string, version: number): Promise<SkillVersion | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(t.skillVersions)
+      .where(and(eq(t.skillVersions.skillId, id), eq(t.skillVersions.version, version)));
+    return row ? toSkillVersionDto(row) : undefined;
+  }
+
   async restore(
     workspaceId: string,
     id: string,
     version: number,
     message?: string | null,
+    overrides?: { enabled?: boolean; isDangerous?: boolean; unlinkFromAgents?: boolean },
   ): Promise<Skill | undefined> {
     // Same locking as `update`: a restore racing an edit must not reuse its version number.
     return this.db.transaction(async (tx) => {
@@ -252,7 +271,12 @@ export class SkillsRepository implements SkillsStore {
       const nextVersion = skill.version + 1;
       const [row] = await tx
         .update(t.skills)
-        .set({ body: targetVersion.body, version: nextVersion })
+        .set({
+          body: targetVersion.body,
+          version: nextVersion,
+          ...(overrides?.isDangerous !== undefined ? { isDangerous: overrides.isDangerous } : {}),
+          ...(overrides?.enabled !== undefined ? { enabled: overrides.enabled } : {}),
+        })
         .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
         .returning();
 
@@ -263,6 +287,12 @@ export class SkillsRepository implements SkillsStore {
           body: row.body,
           message: message ?? `Restored from v${version}`,
         });
+      }
+
+      // Same as `update`: a version restored back into dangerous territory
+      // must be pulled from every agent it's linked to, atomically.
+      if (overrides?.unlinkFromAgents && row) {
+        await tx.delete(t.agentSkills).where(eq(t.agentSkills.skillId, id));
       }
       return row ? toSkillDto(row) : undefined;
     });

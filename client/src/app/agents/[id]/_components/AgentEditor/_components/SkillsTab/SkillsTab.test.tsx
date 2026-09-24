@@ -61,6 +61,7 @@ function mkSkill(id: string, name: string, enabled = true): SkillWithStats {
     body: "",
     enabled,
     version: 1,
+    is_dangerous: false,
     evidence_files: null,
   };
 }

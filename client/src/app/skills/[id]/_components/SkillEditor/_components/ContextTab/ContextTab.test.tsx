@@ -15,6 +15,7 @@ const SKILL: Skill = {
   body: "# Rule",
   enabled: true,
   version: 1,
+  is_dangerous: false,
   evidence_files: null,
 };
 

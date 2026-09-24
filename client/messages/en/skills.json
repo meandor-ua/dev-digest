@@ -14,6 +14,8 @@
   "detail": {
     "header": "Skill",
     "disabled": "disabled",
+    "dangerousNotice": "Dangerous skill — contains suspicious patterns",
+    "dangerousWarning": "This skill contains patterns commonly used in prompt injection or code injection attacks. Suspicious patterns detected:",
     "delete": "Delete",
     "confirmDelete": "Delete skill \"{name}\"? This will unlink it from all agents.",
     "deleteSuccess": "Deleted skill \"{name}\"",
@@ -28,6 +30,8 @@
   "listItem": {
     "needsVetting": "needs vetting",
     "vettingTitle": "Untrusted source — vet before enabling",
+    "dangerousSkill": "dangerous skill",
+    "dangerousTitle": "This skill contains suspicious patterns that may indicate prompt injection or code injection attempts",
     "deleteTitle": "Delete skill",
     "type": {
       "rubric": "rubric",
@@ -52,7 +56,8 @@
     "subtitle": "Rendered as the reviewing agent receives it.",
     "draftBadge": "Unsaved draft — previewing your edits",
     "restore": "Restore v{version}",
-    "untrustedNotice": "This skill came from an external source. Read its body before enabling it — once enabled, it is injected into agent prompts as instructions."
+    "untrustedNotice": "This skill came from an external source. Read its body before enabling it — once enabled, it is injected into agent prompts as instructions.",
+    "dangerousNotice": "This skill contains suspicious patterns commonly used in prompt injection attempts. Remove the malicious content to enable this skill."
   },
   "typeOptions": {
     "rubric": "Rubric (Scoring & edge cases)",
@@ -77,6 +82,8 @@
     "changeNotePlaceholder": "What changed and why…",
     "saved": "Skill saved (v{version})",
     "saveFailed": "Failed to update skill",
+    "saveDangerous": "Skill saved (v{version}) but is dangerous — remove suspicious patterns to enable",
+    "saveFailedDangerous": "Failed to update skill. Cannot enable skills with dangerous content.",
     "savedNote": "Saved (v{version})",
     "dangerZoneTitle": "Delete this skill",
     "dangerZoneBody": "Unlinks it from every agent. This cannot be undone.",
@@ -186,6 +193,7 @@
         "nameRequired": "Skill name is required",
         "bodyRequired": "Skill body is required",
         "createFailed": "Failed to create skill",
+        "dangerousContent": "This skill contains suspicious patterns that indicate possible injection attempts. Remove them before saving.",
         "importFailed": "Failed to import skill from URL"
       },
       "success": "Created skill \"{name}\"",

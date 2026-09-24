@@ -75,6 +75,20 @@ export function SkillCard({
         )}
       </div>
 
+      {skill.is_dangerous && (
+        <div style={s.vettingRow}>
+          <span title={t("listItem.dangerousTitle")}>
+            <Badge
+              color="var(--crit)"
+              bg="var(--crit-bg)"
+              style={{ fontSize: 11, cursor: "default" }}
+            >
+              {t("listItem.dangerousSkill")}
+            </Badge>
+          </span>
+        </div>
+      )}
+
       {needsVetting && (
         <div style={s.vettingRow}>
           <span title={t("listItem.vettingTitle")}>

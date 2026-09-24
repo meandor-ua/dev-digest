@@ -17,6 +17,7 @@ const SKILL: Skill = {
   body: "# Security Rubric v2\nUpdated rules...",
   enabled: true,
   version: 2,
+  is_dangerous: false,
 };
 
 const VERSIONS: SkillVersion[] = [

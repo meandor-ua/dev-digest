@@ -126,6 +126,7 @@ export function SkillsTab({ agentId }: { agentId: string }) {
                         draggable={!filterActive}
                         onUnlink={() => unlink(sk.skill_id)}
                         isGloballyDisabled={!(skillsById.get(sk.skill_id)?.enabled ?? true)}
+                        isDangerous={skillsById.get(sk.skill_id)?.is_dangerous ?? false}
                       />
                     ))}
                   </div>
@@ -151,11 +152,13 @@ function LinkedSkillRow({
   draggable,
   onUnlink,
   isGloballyDisabled,
+  isDangerous,
 }: {
   skill: AgentSkillItem;
   draggable: boolean;
   onUnlink: () => void;
   isGloballyDisabled: boolean;
+  isDangerous: boolean;
 }) {
   const t = useTranslations("agents");
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -182,6 +185,13 @@ function LinkedSkillRow({
       <div style={s.nameCol}>
         <span style={s.name(true)}>{skill.name}</span>
       </div>
+      {isDangerous && (
+        <span title={t("skills.globallyDangerous")}>
+          <Badge color="var(--crit)" bg="var(--crit-bg)" style={s.disabledBadge}>
+            {t("skills.dangerousLabel")}
+          </Badge>
+        </span>
+      )}
       {isGloballyDisabled && (
         <span title={t("skills.globallyDisabled")}>
           <Badge color="var(--warn)" bg="var(--warn-bg)" style={s.disabledBadge}>
@@ -198,21 +208,33 @@ function UnlinkedSkillRow({ skill, onLink }: { skill: SkillWithStats; onLink: ()
   const t = useTranslations("agents");
   const color = SKILL_TYPE_COLOR[skill.type as SkillType];
   const isGloballyDisabled = !skill.enabled;
+  const isDangerous = skill.is_dangerous;
+  const cannotLink = isGloballyDisabled || isDangerous;
   return (
     <div style={s.row(false)}>
       <span style={s.handle(true)} aria-hidden="true">
         <Icon.Menu size={15} />
       </span>
-      <span style={isGloballyDisabled ? s.disabledCheckbox : undefined} title={isGloballyDisabled ? t("skills.globallyDisabled") : undefined}>
+      <span
+        style={cannotLink ? s.disabledCheckbox : undefined}
+        title={isDangerous ? t("skills.globallyDangerous") : isGloballyDisabled ? t("skills.globallyDisabled") : undefined}
+      >
         <Checkbox
           checked={false}
-          onChange={isGloballyDisabled ? undefined : onLink}
+          onChange={cannotLink ? undefined : onLink}
           aria-label={t("skills.link", { name: skill.name })}
         />
       </span>
       <div style={s.nameCol}>
         <span style={s.name(false)}>{skill.name}</span>
       </div>
+      {isDangerous && (
+        <span title={t("skills.globallyDangerous")}>
+          <Badge color="var(--crit)" bg="var(--crit-bg)" style={s.disabledBadge}>
+            {t("skills.dangerousLabel")}
+          </Badge>
+        </span>
+      )}
       {isGloballyDisabled && (
         <span title={t("skills.globallyDisabled")}>
           <Badge color="var(--warn)" bg="var(--warn-bg)" style={s.disabledBadge}>

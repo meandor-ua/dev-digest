@@ -143,6 +143,15 @@ export const s = {
     fontSize: 13,
     lineHeight: 1.5,
   } satisfies CSSProperties,
+  dangerousNotice: {
+    padding: 12,
+    borderRadius: 6,
+    background: "var(--crit-bg)",
+    border: "1px solid var(--crit)",
+    color: "var(--text-primary)",
+    fontSize: 13,
+    lineHeight: 1.5,
+  } satisfies CSSProperties,
   dangerZone: {
     marginTop: 12,
     padding: "14px 18px",

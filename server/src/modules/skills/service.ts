@@ -10,6 +10,7 @@ import type {
 } from '@devdigest/shared';
 import type { InsertSkill, UpdateSkill, SkillsServiceDeps } from './ports.js';
 import { buildImportedMarkdown, stripFrontmatter } from './helpers.js';
+import { detectInjection } from './injection-detector.js';
 import { SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX } from './constants.js';
 import { NotFoundError, ValidationError } from '../../platform/errors.js';
 
@@ -54,6 +55,11 @@ export class SkillsService {
     // Imported skills must be vetted before enabling (always disabled on creation)
     const enabled = source === 'manual' ? input.enabled : false;
 
+    // Check for injection patterns
+    const injection = detectInjection(input.body);
+    // Dangerous skills cannot be enabled
+    const finalEnabled = injection.isDangerous ? false : enabled;
+
     const insertValues: InsertSkill = {
       workspaceId,
       name: input.name,
@@ -61,7 +67,8 @@ export class SkillsService {
       type: input.type,
       source,
       body: input.body,
-      enabled,
+      enabled: finalEnabled,
+      isDangerous: injection.isDangerous,
       evidenceFiles: input.evidence_files,
     };
     return this.repo.insert(insertValues);
@@ -81,15 +88,47 @@ export class SkillsService {
         throw new ValidationError('An imported skill cannot be relabelled as manual');
       }
     }
+
+    // Get the existing skill to check if body changed
+    const existing = await this.repo.getById(workspaceId, id);
+    if (!existing) return undefined;
+
+    // Re-run injection detection on every save — not just body edits — so
+    // toggling `enabled`, renaming, or any other unrelated field change also
+    // re-validates the skill's current content. This self-heals rows that
+    // predate this check (saved dangerous but never flagged) instead of only
+    // catching newly-introduced dangerous content.
+    const effectiveBody = patch.body !== undefined ? patch.body : existing.body;
+    const injection = detectInjection(effectiveBody);
+    let isDangerous = injection.isDangerous;
+
+    // Dangerous skills cannot be enabled. An explicit attempt to enable one is
+    // rejected outright; otherwise force-disable regardless of what `patch`
+    // touched — e.g. editing the body of an already-enabled skill to newly
+    // include dangerous content must flip `enabled` off even though the patch
+    // never mentions `enabled` (leaving it `undefined` would make the repo
+    // skip that column and silently keep the skill enabled in the DB).
+    let enabled = patch.enabled;
+    if (isDangerous) {
+      if (patch.enabled === true) {
+        throw new ValidationError('Cannot enable a skill with dangerous content. Remove the suspicious patterns first.');
+      }
+      enabled = false;
+    }
+
     const updateValues: UpdateSkill = {
       name: patch.name,
       description: patch.description,
       type: patch.type,
       source: patch.source,
       body: patch.body,
-      enabled: patch.enabled,
+      enabled,
+      isDangerous,
       evidenceFiles: patch.evidence_files,
       message: patch.message,
+      // A skill flagged dangerous must not keep running for agents it's
+      // already linked to — sever every link the moment it's (re-)detected.
+      unlinkFromAgents: isDangerous,
     };
     return this.repo.update(workspaceId, id, updateValues);
   }
@@ -108,7 +147,20 @@ export class SkillsService {
     version: number,
     message?: string,
   ): Promise<Skill | undefined> {
-    return this.repo.restore(workspaceId, id, version, message);
+    // A restored version's body can itself contain dangerous content (e.g.
+    // reverting to an old draft that predates a fix, or undoing the edit that
+    // triggered a force-disable) — re-run the same check `update()` does so a
+    // restore can't silently bring back an enabled-and-dangerous skill.
+    const targetVersion = await this.repo.getVersion(id, version);
+    if (!targetVersion) return undefined;
+
+    const injection = detectInjection(targetVersion.body);
+    const overrides = {
+      isDangerous: injection.isDangerous,
+      enabled: injection.isDangerous ? false : undefined,
+      unlinkFromAgents: injection.isDangerous,
+    };
+    return this.repo.restore(workspaceId, id, version, message, overrides);
   }
 
   async stats(workspaceId: string, id: string): Promise<SkillStats | undefined> {

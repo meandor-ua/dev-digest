@@ -46,6 +46,7 @@ export interface InsertSkill {
   source?: SkillSource;
   body: string;
   enabled?: boolean;
+  isDangerous?: boolean;
   evidenceFiles?: string[] | null;
 }
 
@@ -56,9 +57,12 @@ export interface UpdateSkill {
   source?: SkillSource;
   body?: string;
   enabled?: boolean;
+  isDangerous?: boolean;
   evidenceFiles?: string[] | null;
   /** Change note for the version snapshot — only used when `body` actually changes. */
   message?: string | null;
+  /** When true, atomically removes this skill from every agent it's linked to (same transaction as the update). */
+  unlinkFromAgents?: boolean;
 }
 
 /**
@@ -72,7 +76,15 @@ export interface SkillsStore {
   update(workspaceId: string, id: string, patch: UpdateSkill): Promise<Skill | undefined>;
   deleteById(workspaceId: string, id: string): Promise<boolean>;
   listVersions(workspaceId: string, id: string): Promise<SkillVersion[] | undefined>;
-  restore(workspaceId: string, id: string, version: number, message?: string | null): Promise<Skill | undefined>;
+  /** Single historical snapshot by version number — versions are append-only, so this is always safe to read outside a lock. */
+  getVersion(id: string, version: number): Promise<SkillVersion | undefined>;
+  restore(
+    workspaceId: string,
+    id: string,
+    version: number,
+    message?: string | null,
+    overrides?: { enabled?: boolean; isDangerous?: boolean; unlinkFromAgents?: boolean },
+  ): Promise<Skill | undefined>;
   stats(workspaceId: string, id: string): Promise<SkillStats | undefined>;
   listContextPaths(skillId: string): Promise<string[]>;
   setContextPaths(skillId: string, paths: string[]): Promise<string[]>;

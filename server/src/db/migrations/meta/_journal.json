@@ -85,6 +85,13 @@
       "when": 1790066955782,
       "tag": "0011_skill_context_and_version_message",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790212731038,
+      "tag": "0012_add_skill_is_dangerous",
+      "breakpoints": true
     }
   ]
 }

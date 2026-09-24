@@ -28,6 +28,11 @@ export function SkillHeader({ skill }: { skill: Skill }) {
         v{skill.version}
       </Badge>
       {!skill.enabled && <Badge color="var(--text-muted)">{t("detail.disabled")}</Badge>}
+      {skill.is_dangerous && (
+        <span title={t("listItem.dangerousTitle")}>
+          <Badge color="var(--crit)">{t("detail.dangerousNotice")}</Badge>
+        </span>
+      )}
       {skill.source !== "manual" && !skill.enabled && (
         <span title={t("listItem.vettingTitle")}>
           <Badge color="var(--warn)">{t("listItem.needsVetting")}</Badge>

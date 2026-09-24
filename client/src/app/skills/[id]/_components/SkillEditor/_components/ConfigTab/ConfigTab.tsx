@@ -61,11 +61,20 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
       },
       {
         onSuccess: (updated) => {
-          toast.success(t("config.saved", { version: updated.version }));
+          if (updated.is_dangerous) {
+            toast.danger(t("config.saveDangerous", { version: updated.version }));
+          } else {
+            toast.success(t("config.saved", { version: updated.version }));
+          }
           setChangeNote("");
         },
         onError: (err) => {
-          toast.error((err as Error).message || t("config.saveFailed"));
+          const message = (err as Error).message || t("config.saveFailed");
+          if (message.includes("dangerous")) {
+            toast.error(t("config.saveFailedDangerous"));
+          } else {
+            toast.error(message);
+          }
         },
       },
     );
@@ -96,6 +105,11 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
           {t("preview.untrustedNotice")}
         </div>
       )}
+      {skill.is_dangerous && (
+        <div role="note" style={s.dangerousNotice}>
+          {t("preview.dangerousNotice")}
+        </div>
+      )}
       <div style={s.header}>
         <div style={s.titleRow}>
           <h2 style={s.h2}>{t("config.configTitle")}</h2>
@@ -110,7 +124,7 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
         </div>
         <label style={s.enabledLabel}>
           {t("config.enabledLabel")}
-          <Toggle on={enabled} onChange={setEnabled} size={16} />
+          <Toggle on={enabled} onChange={setEnabled} size={16} disabled={skill.is_dangerous} />
         </label>
       </div>
 

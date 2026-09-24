@@ -34,6 +34,7 @@ const MANUAL: Skill = {
   body: "# Security Rubric\nFlag secrets.",
   enabled: true,
   version: 3,
+  is_dangerous: false,
   evidence_files: null,
 };
 const IMPORTED: Skill = { ...MANUAL, source: "imported_url", enabled: false };

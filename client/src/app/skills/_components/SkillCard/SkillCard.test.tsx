@@ -16,6 +16,7 @@ const SKILL: SkillWithStats = {
   body: "# Security Rubric\n...",
   enabled: true,
   version: 1,
+  is_dangerous: false,
   agent_count: 2,
   pull_frequency_pct: 45,
   accept_rate_pct: 78,
