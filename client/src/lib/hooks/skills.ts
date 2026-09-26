@@ -132,6 +132,7 @@ export function useRestoreSkill() {
       qc.invalidateQueries({ queryKey: ["skill-versions", data.id] });
       qc.invalidateQueries({ queryKey: ["skill-stats", data.id] });
       qc.invalidateQueries({ queryKey: ["agent-skills"] });
+      qc.invalidateQueries({ queryKey: ["agent-card-stats"] });
       qc.invalidateQueries({ queryKey: ["agent-stats"] });
     },
   });

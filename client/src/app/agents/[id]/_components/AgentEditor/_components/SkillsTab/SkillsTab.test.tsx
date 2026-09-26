@@ -135,6 +135,18 @@ describe("SkillsTab", () => {
     expect(mutate).toHaveBeenCalledWith(["s3", "s1", "s2"], expect.anything());
   });
 
+  it("never resends a dangerous skill still linked in a stale cache", () => {
+    skills = [mkLinked("s1", "A", 0), mkLinked("s2", "Injected", 1), mkLinked("s3", "C", 2)];
+    availableSkills = [
+      mkSkill("s1", "A"),
+      { ...mkSkill("s2", "Injected", false), is_dangerous: true },
+      mkSkill("s3", "C"),
+    ];
+    renderTab();
+    onDragEnd!({ active: { id: "s3" }, over: { id: "s1" } });
+    expect(mutate).toHaveBeenCalledWith(["s3", "s1"], expect.anything());
+  });
+
   it("does not save when dropped onto itself or outside the list", () => {
     skills = [mkLinked("s1", "A", 0), mkLinked("s2", "B", 1)];
     availableSkills = [mkSkill("s1", "A"), mkSkill("s2", "B")];

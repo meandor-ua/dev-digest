@@ -61,8 +61,13 @@ export function SkillsTab({ agentId }: { agentId: string }) {
   const visibleLinked = filterActive ? linked.filter((sk) => sk.name.toLowerCase().includes(q)) : linked;
   const visibleUnlinked = filterActive ? unlinked.filter((sk) => sk.name.toLowerCase().includes(q)) : unlinked;
 
+  // A dangerous skill is unlinked server-side the moment it's flagged, and the
+  // server refuses to re-link one — so never resend it from a stale cache.
   const persist = (skillIds: string[]) =>
-    setSkills.mutate(skillIds, { onError: () => toast.error(t("skills.saveError")) });
+    setSkills.mutate(
+      skillIds.filter((id) => !skillsById.get(id)?.is_dangerous),
+      { onError: () => toast.error(t("skills.saveError")) },
+    );
 
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;

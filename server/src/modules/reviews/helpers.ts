@@ -106,12 +106,14 @@ export function skillBlock(skill: { name: string; source: string; body: string }
 
 /**
  * Run-log lines for the skills step: a header with the total token cost, one
- * line per attached skill (prompt order), and the linked-but-disabled ones by
- * name — so a disabled skill is visibly absent, not silently missing.
+ * line per attached skill (prompt order), and the linked-but-disabled and
+ * linked-but-dangerous ones by name — so a skipped skill is visibly absent,
+ * not silently missing.
  */
 export function skillLogLines(
   active: Array<{ name: string; type: string; tokens: number }>,
   skipped: string[],
+  dangerous: string[] = [],
 ): string[] {
   const lines: string[] = [];
   if (active.length > 0) {
@@ -121,6 +123,9 @@ export function skillLogLines(
   }
   if (skipped.length > 0) {
     lines.push(`Skills: ${skipped.length} linked skill(s) skipped (disabled): ${skipped.join(', ')}`);
+  }
+  if (dangerous.length > 0) {
+    lines.push(`Skills: ${dangerous.length} linked skill(s) skipped (dangerous content): ${dangerous.join(', ')}`);
   }
   return lines;
 }

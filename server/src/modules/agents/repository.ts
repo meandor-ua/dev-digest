@@ -248,6 +248,16 @@ export class AgentsRepository {
     return new Set(rows.map((r) => r.id));
   }
 
+  /** The subset of `skillIds` flagged `is_dangerous` — such a skill must never be (re-)linked. */
+  async dangerousSkillIds(skillIds: string[]): Promise<Set<string>> {
+    if (skillIds.length === 0) return new Set();
+    const rows = await this.db
+      .select({ id: t.skills.id })
+      .from(t.skills)
+      .where(and(inArray(t.skills.id, skillIds), eq(t.skills.isDangerous, true)));
+    return new Set(rows.map((r) => r.id));
+  }
+
   // ---- stats aggregation source rows (see ./stats.ts) ---------------------
 
   /** DONE runs of any agent whose PR is in `repoId` (card stats across agents). */
@@ -376,7 +386,7 @@ export class AgentsRepository {
       .from(t.agentSkills)
       .innerJoin(t.agents, eq(t.agents.id, t.agentSkills.agentId))
       .innerJoin(t.skills, eq(t.skills.id, t.agentSkills.skillId))
-      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.skills.enabled, true)))
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.skills.enabled, true), eq(t.skills.isDangerous, false)))
       .groupBy(t.agentSkills.agentId);
     return new Map(rows.map((r) => [r.agentId, r.n]));
   }
@@ -387,7 +397,7 @@ export class AgentsRepository {
       .select({ name: t.skills.name })
       .from(t.agentSkills)
       .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
-      .where(and(eq(t.agentSkills.agentId, agentId), eq(t.skills.enabled, true)))
+      .where(and(eq(t.agentSkills.agentId, agentId), eq(t.skills.enabled, true), eq(t.skills.isDangerous, false)))
       .orderBy(asc(t.agentSkills.order));
     return rows.map((r) => r.name);
   }

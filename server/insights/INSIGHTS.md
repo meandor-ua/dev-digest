@@ -240,6 +240,20 @@ you, so the next agent/session doesn't relearn it.
 
 ## What Doesn't Work
 
+- **2026-09-26** — Enforcing "dangerous skill ⇒ disabled + unlinked" only on
+  the skills side (update/restore) is not enough. `POST /agents/:id/skills`
+  also writes `agent_skills`, and the client's Skills tab saves the WHOLE
+  ordered set from its cache, so a tab loaded before the flag re-links the
+  skill on the next reorder. Every write path into `agent_skills` has to refuse
+  dangerous ids (`assertNoDangerousSkills`), and the run executor has to gate
+  on `!isDangerous` as well as `enabled`. Evidence:
+  `server/src/modules/agents/service.ts:211`,
+  `server/src/modules/reviews/run-executor.ts:218`.
+- **2026-09-26** — Never "clean up" a test link on a real dev agent with
+  `POST /agents/:id/skills {skill_ids: []}`. It is a full-set REPLACE, so it
+  wipes every link the agent had, not only yours. Create a throwaway agent for
+  repros instead, or delete the throwaway skill (the FK cascade drops its links).
+  Evidence: `server/src/modules/agents/repository.ts` (`setSkills`).
 - **2026-09-26** — Don't add an unbounded keyword regex to the skill injection
   detector (`/(?:system|eval|shell)/i`, `/\${.*?}/`, `on(?:click)=`). Every
   skill save re-runs it, and a hit force-disables the skill AND deletes all of

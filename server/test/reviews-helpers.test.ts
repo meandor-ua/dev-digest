@@ -55,6 +55,12 @@ describe('skillLogLines', () => {
     ]);
   });
 
+  it('names linked dangerous skills on their own skipped line', () => {
+    expect(skillLogLines([], [], ['Injected Skill'])).toEqual([
+      'Skills: 1 linked skill(s) skipped (dangerous content): Injected Skill',
+    ]);
+  });
+
   it('logs nothing when the agent has no linked skills', () => {
     expect(skillLogLines([], [])).toEqual([]);
   });

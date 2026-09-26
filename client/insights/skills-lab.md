@@ -150,6 +150,13 @@ the package's `insights/INSIGHTS.md`.
 
 ## What Doesn't Work
 
+- **2026-09-26** — The agent Skills tab's full-set autosave must drop
+  `is_dangerous` skill ids before it sends the set. Otherwise a stale
+  `agent-skills` cache (tab opened before the skill was flagged) resends the
+  flagged id: the server now answers 422 and every reorder fails until the
+  user unchecks that skill. Evidence:
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/SkillsTab/SkillsTab.tsx:68`.
+
 - **2026-09-26** — A DIFFERENT "stuck forever" bug than the `CreateSkillModal`
   one below: the Conventions page's "Re-scan" button (`page.tsx`'s
   `extract.mutate()`) had no client-side timeout, and `ConventionsService.extract`'s

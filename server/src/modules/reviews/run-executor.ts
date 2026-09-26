@@ -14,7 +14,15 @@ import { loadDiff } from './diff-loader.js';
  * without this module importing the agents module's repository or row types.
  */
 interface ActiveSkillLink {
-  skill: { id: string; name: string; type: string; source: string; body: string; enabled: boolean };
+  skill: {
+    id: string;
+    name: string;
+    type: string;
+    source: string;
+    body: string;
+    enabled: boolean;
+    isDangerous: boolean;
+  };
 }
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
@@ -203,12 +211,16 @@ export class ReviewRunExecutor {
 
       const task = taskLine(pull) + rankNote;
 
-      // Fetch skills linked to this agent; only the underlying skill's own
-      // `enabled` flag gates prompt assembly now (linking itself is binary).
+      // Fetch skills linked to this agent; the underlying skill's own `enabled`
+      // flag gates prompt assembly (linking itself is binary). A dangerous skill
+      // is never applied, even if some path left it linked AND enabled.
       const linkedSkills = await this.agents.linkedSkills(agent.id);
-      const activeLinks = linkedSkills.filter((s) => s.skill.enabled);
+      const activeLinks = linkedSkills.filter((s) => s.skill.enabled && !s.skill.isDangerous);
       const skillBodies = activeLinks.map((s) => skillBlock(s.skill));
-      const skippedSkills = linkedSkills.filter((s) => !s.skill.enabled).map((s) => s.skill.name);
+      const dangerousSkills = linkedSkills.filter((s) => s.skill.isDangerous).map((s) => s.skill.name);
+      const skippedSkills = linkedSkills
+        .filter((s) => !s.skill.enabled && !s.skill.isDangerous)
+        .map((s) => s.skill.name);
       const skillLog = skillLogLines(
         activeLinks.map((s, i) => ({
           name: s.skill.name,
@@ -216,6 +228,7 @@ export class ReviewRunExecutor {
           tokens: this.container.tokenizer.count(skillBodies[i]!),
         })),
         skippedSkills,
+        dangerousSkills,
       );
       for (const line of skillLog) runLog.info(line);
 

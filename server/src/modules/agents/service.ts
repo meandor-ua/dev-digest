@@ -14,7 +14,8 @@ import type {
 import { AgentsRepository } from './repository.js';
 import { toAgentDto, toAgentVersionDto } from './helpers.js';
 import { buildCardStats, buildRepoStats } from './stats.js';
-import { ValidationError } from '../../platform/errors.js';
+import { AppError, ValidationError } from '../../platform/errors.js';
+import { SKILL_DANGEROUS_CONTENT_CODE } from '../skills/constants.js';
 
 /**
  * A2 — agents service. Business logic for the Agents tab + Agent Editor.
@@ -173,6 +174,7 @@ export class AgentsService {
         skill_ids: foreign,
       });
     }
+    await this.assertNoDangerousSkills(ids);
     await this.repo.setSkills(
       agentId,
       items.map((it) => ({ skillId: it.skill_id })),
@@ -193,10 +195,28 @@ export class AgentsService {
     if (!owned.has(skillId)) {
       throw new ValidationError('Skill does not belong to this workspace', { skill_id: skillId });
     }
+    await this.assertNoDangerousSkills([skillId]);
     const existing = await this.repo.linkedSkills(agentId);
     const resolvedOrder = order ?? existing.length;
     await this.repo.linkSkill(agentId, skillId, resolvedOrder);
     return this.skillLinks(agentId);
+  }
+
+  /**
+   * A skill flagged dangerous is unlinked the moment it's flagged (skills
+   * service) — refuse to link it back. Checked server-side because the Skills
+   * tab saves the whole ordered set from its cache, so a tab opened before the
+   * flag would otherwise silently re-link it on the next reorder/link.
+   */
+  private async assertNoDangerousSkills(skillIds: string[]): Promise<void> {
+    const dangerous = await this.repo.dangerousSkillIds(skillIds);
+    if (dangerous.size === 0) return;
+    throw new AppError(
+      SKILL_DANGEROUS_CONTENT_CODE,
+      'Cannot link a skill with dangerous content. Remove the suspicious patterns first.',
+      422,
+      { skill_ids: [...dangerous] },
+    );
   }
 
   /**
