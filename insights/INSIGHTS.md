@@ -135,6 +135,21 @@ instead.
 
 ## What Doesn't Work
 
+- **2026-09-27** — Don't turn a grading checklist into a plan's audit table
+  with paraphrases and ✅-by-reading. L02's plan rewrote criterion 53 ("own
+  Conventions row, searchable dropdown, model chosen dynamically, **not
+  hardcoded**") as "Settings → Models → Conventions (dynamic model) ✅ —
+  entry auto-renders". That dropped the testable clause and attached no check,
+  so nobody revisited it and `conventions` shipped with a hardcoded
+  `openai/gpt-5.4` fallback. The same plan said "`repo-conventions` skill" in
+  its Context but specified an editable Name in its UI section, and the UI
+  section won (criterion 42 vs 51). Copy each criterion verbatim, give every ✅
+  an observable check, and resolve criteria that conflict explicitly. Also: a
+  mentor reviewing the PR diff can't see starter-shipped UI (Settings wasn't in
+  the diff), so point to it. Evidence:
+  `server/src/modules/conventions/service.ts:96` (runtime model resolution),
+  `server/src/modules/conventions/constants.ts` (`CONVENTIONS_SKILL_NAME`).
+
 - **2026-09-22** — Don't accept a plan implementation because its spec/README
   update says it's done: the implementing session wrote `client/specs/README.md`
   from the *plan* ("stacked Name / Description / Type" Config, Stats redesign)

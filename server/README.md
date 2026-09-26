@@ -99,6 +99,7 @@ flowchart TB
 | `EMBEDDINGS_ENABLED` | `false` | memory/RAG embeddings (OpenAI); off → **zero** OpenAI calls |
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
+| `DEVDIGEST_SECRETS_PATH` | `~/.devdigest/secrets.json` | where BYO keys are stored; `vitest.config.ts` points it at a missing file and blanks every key, so tests never spend real keys |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
 | `NODE_ENV` | `development` | `test` → silent logs + global rate-limit disabled |
 

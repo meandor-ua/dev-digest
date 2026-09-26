@@ -3,6 +3,8 @@ import {
   buildConventionSkillBody,
   buildSampleText,
   dedupeCandidates,
+  listRepoSections,
+  pickPrevalentModel,
   truncateFile,
   verifyCandidate,
   type SampledFile,
@@ -228,16 +230,17 @@ describe('buildConventionSkillBody', () => {
         created_at: new Date().toISOString(),
       },
     ];
-    const body = buildConventionSkillBody('payments-api', accepted);
-    expect(body).toContain('# payments-api-conventions');
-    expect(body).toContain('House conventions for `payments-api`');
+    const body = buildConventionSkillBody(null, 'acme/payments-api', accepted);
+    expect(body).toContain('# repo-conventions');
+    expect(body).toContain('## acme/payments-api');
+    expect(body).toContain('### always-use-asyncawait-instead-of-then');
     expect(body).toContain('Always use async/await instead of .then() chains');
     expect(body).toContain('Detected in `src/api/users.ts:23`:');
     expect(body).toContain('const user = await db.users.find(id);');
   });
 
   it('cites a line range for a multi-line snippet', () => {
-    const body = buildConventionSkillBody('payments-api', [
+    const body = buildConventionSkillBody(null, 'acme/payments-api', [
       {
         id: '1',
         category: 'style',
@@ -258,7 +261,7 @@ describe('buildConventionSkillBody', () => {
 
   it('fences a snippet that itself contains ``` with a longer fence', () => {
     const snippet = 'Run the checks:\n```sh\npnpm test\n```';
-    const body = buildConventionSkillBody('payments-api', [
+    const body = buildConventionSkillBody(null, 'acme/payments-api', [
       {
         id: '1',
         category: 'testing',
@@ -286,7 +289,8 @@ describe('buildConventionSkillBody', () => {
       '```sh\npnpm test\n```',
     ];
     const body = buildConventionSkillBody(
-      'payments-api',
+      null,
+      'acme/payments-api',
       snippets.map((evidence_snippet, i) => ({
         id: String(i),
         category: 'style',
@@ -302,5 +306,78 @@ describe('buildConventionSkillBody', () => {
       })),
     );
     expect(detectInjection(body)).toEqual({ isDangerous: false, reasons: [] });
+  });
+});
+
+function accepted(rule: string, snippet = 'const user = await db.users.find(id);'): ConventionCandidate {
+  return {
+    id: rule,
+    category: 'style',
+    rule,
+    rationale: null,
+    evidence_path: 'src/api/users.ts',
+    evidence_line: 1,
+    evidence_line_end: 1,
+    evidence_snippet: snippet,
+    confidence: 0.9,
+    status: 'accepted',
+    created_at: new Date().toISOString(),
+  };
+}
+
+describe('buildConventionSkillBody — one shared skill, one section per repo', () => {
+  it('appends a second repo without touching the first', () => {
+    const first = buildConventionSkillBody(null, 'acme/a', [accepted('Rule of A')]);
+    const both = buildConventionSkillBody(first, 'acme/b', [accepted('Rule of B')]);
+    expect(listRepoSections(both)).toEqual(['acme/a', 'acme/b']);
+    expect(both).toContain('Rule of A');
+    expect(both).toContain('Rule of B');
+    expect(both.match(/^# repo-conventions$/gm)).toHaveLength(1);
+  });
+
+  it("re-scanning a repo replaces only that repo's section", () => {
+    let body = buildConventionSkillBody(null, 'acme/a', [accepted('Old rule of A')]);
+    body = buildConventionSkillBody(body, 'acme/b', [accepted('Rule of B')]);
+    body = buildConventionSkillBody(body, 'acme/a', [accepted('New rule of A')]);
+    expect(listRepoSections(body)).toEqual(['acme/a', 'acme/b']);
+    expect(body).not.toContain('Old rule of A');
+    expect(body).toContain('New rule of A');
+    expect(body).toContain('Rule of B');
+  });
+
+  it('ignores `## ` lines inside a fenced markdown snippet', () => {
+    const md = '```md\n## acme/b\nnot a section\n```';
+    let body = buildConventionSkillBody(null, 'acme/a', [accepted('Docs rule', md)]);
+    expect(listRepoSections(body)).toEqual(['acme/a']);
+    body = buildConventionSkillBody(body, 'acme/b', [accepted('Rule of B')]);
+    expect(listRepoSections(body)).toEqual(['acme/a', 'acme/b']);
+    expect(body).toContain('not a section');
+  });
+
+  it('keeps a hand-edited body and appends when the repo has no section yet', () => {
+    const body = buildConventionSkillBody('# repo-conventions\n\nMy own notes.', 'acme/a', [accepted('Rule of A')]);
+    expect(body.startsWith('# repo-conventions\n\nMy own notes.\n\n## acme/a')).toBe(true);
+  });
+});
+
+describe('pickPrevalentModel', () => {
+  it('picks the provider+model most enabled agents use', () => {
+    expect(
+      pickPrevalentModel([
+        { provider: 'openai', model: 'gpt-4.1' },
+        { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash' },
+        { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash' },
+      ]),
+    ).toEqual({ provider: 'openrouter', model: 'deepseek/deepseek-v4-flash' });
+  });
+
+  it('breaks a tie by list order and returns undefined with no agents', () => {
+    expect(
+      pickPrevalentModel([
+        { provider: 'anthropic', model: 'claude-x' },
+        { provider: 'openai', model: 'gpt-4.1' },
+      ]),
+    ).toEqual({ provider: 'anthropic', model: 'claude-x' });
+    expect(pickPrevalentModel([])).toBeUndefined();
   });
 });

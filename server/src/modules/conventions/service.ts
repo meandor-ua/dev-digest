@@ -5,14 +5,17 @@ import {
   type ConventionExtractResult,
   type ConventionSkillDraft,
 } from '@devdigest/shared';
-import { NotFoundError, ValidationError } from '../../platform/errors.js';
+import { AppError, NotFoundError, ValidationError } from '../../platform/errors.js';
 import { renderPrompt } from '../../platform/prompts.js';
 import { wrapUntrusted } from '../../platform/prompt.js';
+import { SKILL_DESCRIPTION_MAX } from '../skills/constants.js';
 import type { ConventionsServiceDeps, PatchConvention } from './ports.js';
 import {
   buildConventionSkillBody,
   buildSampleText,
   dedupeCandidates,
+  listRepoSections,
+  pickPrevalentModel,
   readClone,
   truncateFile,
   verifyCandidate,
@@ -23,9 +26,11 @@ import {
   CANDIDATE_CAP,
   CONFIG_WISHLIST,
   CONVENTIONS_SCHEMA_NAME,
+  CONVENTIONS_SKILL_NAME,
   CONVENTIONS_TEMPERATURE,
   MAX_SNIPPET_LINES,
   RANKED_SAMPLE_COUNT,
+  SCAN_IN_PROGRESS_CODE,
 } from './constants.js';
 
 // Field order matters: the model observes (rule + evidence) before it judges
@@ -46,6 +51,9 @@ const ExtractionSchema = z.object({
 });
 
 export class ConventionsService {
+  /** `workspaceId:repoId` of every scan still running in this process. */
+  private readonly scanning = new Set<string>();
+
   constructor(private deps: ConventionsServiceDeps) {}
 
   private get repo() {
@@ -74,12 +82,31 @@ export class ConventionsService {
     if (!repo) throw new NotFoundError('Repo not found');
     const accepted = await this.repo.listAccepted(workspaceId, repoId);
     if (accepted.length === 0) throw new ValidationError('No accepted conventions to build a skill from');
+    // One shared skill for every repo: re-drafting updates this repo's section
+    // of the existing `repo-conventions` skill instead of creating another one.
+    const existing = await this.deps.skills.findByName(workspaceId, CONVENTIONS_SKILL_NAME);
+    const body = buildConventionSkillBody(existing?.body ?? null, repo.fullName, accepted);
+    const repos = listRepoSections(body);
     return {
-      name: `${repo.name}-conventions`,
-      description: `${accepted.length} house conventions extracted from ${repo.fullName}`,
-      body: buildConventionSkillBody(repo.name, accepted),
+      name: CONVENTIONS_SKILL_NAME,
+      description: `House conventions extracted from ${repos.length === 1 ? 'repository' : `${repos.length} repositories`}: ${repos.join(', ')}`.slice(0, SKILL_DESCRIPTION_MAX),
+      body,
       source_convention_ids: accepted.map((c) => c.id),
+      existing_skill_id: existing?.id ?? null,
     };
+  }
+
+  /** Settings → Feature Models choice, else the model most enabled agents run on. */
+  private async resolveModel(workspaceId: string) {
+    const choice =
+      (await this.deps.models.override(workspaceId)) ??
+      pickPrevalentModel(await this.deps.models.enabledAgentModels(workspaceId));
+    if (!choice) {
+      throw new ValidationError(
+        'No model for conventions: pick one in Settings → Feature Models, or enable an agent',
+      );
+    }
+    return { llm: await this.deps.models.llm(choice.provider), model: choice.model };
   }
 
   /**
@@ -88,6 +115,23 @@ export class ConventionsService {
    * rows survive a re-scan untouched.
    */
   async extract(workspaceId: string, repoId: string): Promise<ConventionExtractResult> {
+    const key = `${workspaceId}:${repoId}`;
+    if (this.scanning.has(key)) {
+      throw new AppError(
+        SCAN_IN_PROGRESS_CODE,
+        'A scan of this repo is still running — its candidates will appear when it finishes',
+        409,
+      );
+    }
+    this.scanning.add(key);
+    try {
+      return await this.runExtract(workspaceId, repoId);
+    } finally {
+      this.scanning.delete(key);
+    }
+  }
+
+  private async runExtract(workspaceId: string, repoId: string): Promise<ConventionExtractResult> {
     const repo = await this.deps.repos.getById(workspaceId, repoId);
     if (!repo) throw new NotFoundError('Repo not found');
     if (!repo.clonePath) {
@@ -114,7 +158,7 @@ export class ConventionsService {
     const sampleText = buildSampleText(sampled);
 
     // PROPOSE — one structured call.
-    const { llm, model } = await this.deps.resolveLlm(workspaceId);
+    const { llm, model } = await this.resolveModel(workspaceId);
     const systemPrompt = await renderPrompt('conventions.system.md', {
       cap: String(CANDIDATE_CAP),
       maxSnippetLines: String(MAX_SNIPPET_LINES),

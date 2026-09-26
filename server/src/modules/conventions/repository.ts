@@ -1,4 +1,4 @@
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { ConventionRow } from '../../db/rows.js';
@@ -83,6 +83,10 @@ export class ConventionsRepository implements ConventionsStore {
     candidates: VerifiedCandidate[],
   ): Promise<ConventionCandidate[]> {
     const rows = await this.db.transaction(async (tx) => {
+      // Serialise replaces of the same repo (across processes too): without it
+      // two overlapping scans each delete, then each insert — duplicating the
+      // pending set instead of the later scan replacing the earlier one.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`conventions:${repoId}`}, 0))`);
       await tx
         .delete(t.conventions)
         .where(

@@ -27,30 +27,40 @@ export function SettingsModels() {
   const baseOptions = toModelOptions(models);
   const noModels = models !== undefined && models.length === 0;
 
-  const setModel = (id: FeatureModelId, model: string) =>
+  // "" is the Auto option (features without a registry default): clearing the
+  // choice hands model selection back to the server's runtime default.
+  const setModel = (id: FeatureModelId, model: string) => {
+    const { [id]: _previous, ...rest } = chosen;
     update.mutate({
-      feature_models: { ...chosen, [id]: { provider: "openrouter", model } },
+      feature_models: model ? { ...rest, [id]: { provider: "openrouter", model } } : rest,
     });
+  };
 
   return (
     <div style={s.wrap}>
       <SectionTitle title={t("models.title")} body={t("models.body")} />
 
       {FEATURE_MODELS.map((f) => {
-        const current = chosen[f.id]?.model ?? f.defaultModel;
-        const isDefault = !chosen[f.id];
+        const current = chosen[f.id]?.model ?? f.defaultModel ?? "";
+        const isUnset = !chosen[f.id];
         // Ensure the current value is selectable even if it isn't in the live
         // OpenRouter list (e.g. an OpenAI registry default, or an empty list).
-        const options = baseOptions.some((o) => (typeof o === "string" ? o : o.value) === current)
-          ? baseOptions
-          : [current, ...baseOptions];
+        const listed =
+          !current || baseOptions.some((o) => (typeof o === "string" ? o : o.value) === current)
+            ? baseOptions
+            : [current, ...baseOptions];
+        const options = f.defaultModel ? listed : [{ value: "", label: t("models.auto") }, ...listed];
         return (
           <div key={f.id} style={s.row}>
             <FormField
               label={
                 <>
                   {f.label}
-                  {isDefault && <span style={s.defaultTag}>{t("models.usingDefault")}</span>}
+                  {isUnset && (
+                    <span style={s.defaultTag}>
+                      {f.defaultModel ? t("models.usingDefault") : t("models.usingAuto")}
+                    </span>
+                  )}
                 </>
               }
               hint={f.description}

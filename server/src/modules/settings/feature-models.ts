@@ -18,12 +18,19 @@ import { rowsToSettings } from './helpers.js';
  * constant, so behaviour is unchanged until a model is explicitly picked.
  */
 
+/** Features with a registry default; `conventions` has none and resolves one at runtime. */
+export type StaticFeatureModelId = Exclude<FeatureModelId, 'conventions'>;
+
 const DEFAULTS = Object.fromEntries(
-  FEATURE_MODELS.map((f) => [f.id, { provider: f.defaultProvider, model: f.defaultModel }]),
-) as Record<FeatureModelId, FeatureModelChoice>;
+  FEATURE_MODELS.flatMap((f) =>
+    f.defaultProvider && f.defaultModel
+      ? [[f.id, { provider: f.defaultProvider, model: f.defaultModel }]]
+      : [],
+  ),
+) as Record<StaticFeatureModelId, FeatureModelChoice>;
 
 /** The registry default (provider+model) for a feature — no DB read. */
-export function defaultFeatureModel(id: FeatureModelId): FeatureModelChoice {
+export function defaultFeatureModel(id: StaticFeatureModelId): FeatureModelChoice {
   return DEFAULTS[id];
 }
 
@@ -51,7 +58,7 @@ export async function getFeatureModelOverride(
 export async function resolveFeatureModel(
   container: Container,
   workspaceId: string,
-  id: FeatureModelId,
+  id: StaticFeatureModelId,
 ): Promise<FeatureModelChoice> {
   return (await getFeatureModelOverride(container, workspaceId, id)) ?? DEFAULTS[id];
 }

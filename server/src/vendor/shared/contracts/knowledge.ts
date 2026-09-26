@@ -249,6 +249,8 @@ export const ConventionSkillDraft = z.object({
   description: z.string(),
   body: z.string(),
   source_convention_ids: z.array(z.string()),
+  /** The workspace's existing `repo-conventions` skill to update, or null to create it. */
+  existing_skill_id: z.string().nullable(),
 });
 export type ConventionSkillDraft = z.infer<typeof ConventionSkillDraft>;
 

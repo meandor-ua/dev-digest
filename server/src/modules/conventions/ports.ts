@@ -1,4 +1,10 @@
-import type { ConventionCandidate, ConventionStatus, LLMProvider } from '@devdigest/shared';
+import type {
+  ConventionCandidate,
+  ConventionStatus,
+  FeatureModelChoice,
+  LLMProvider,
+  Provider,
+} from '@devdigest/shared';
 import type { VerifiedCandidate } from './helpers.js';
 
 export interface PatchConvention {
@@ -38,11 +44,25 @@ export interface ConventionSampleSource {
   getConventionSamples(repoId: string, n: number): Promise<string[]>;
 }
 
+/** Finds the workspace's shared conventions skill by name (implemented by the skills repository). */
+export interface ConventionSkillLookup {
+  findByName(workspaceId: string, name: string): Promise<{ id: string; body: string } | undefined>;
+}
+
+/** Where the conventions model comes from — Settings first, then the workspace's agents. */
+export interface ConventionModelSource {
+  /** Settings → Feature Models choice for `conventions`, if the workspace picked one. */
+  override(workspaceId: string): Promise<FeatureModelChoice | undefined>;
+  /** Provider+model of every enabled agent — the runtime default's input. */
+  enabledAgentModels(workspaceId: string): Promise<FeatureModelChoice[]>;
+  llm(provider: Provider): Promise<LLMProvider>;
+}
+
 /** Everything ConventionsService depends on, injected by constructor (onion R6). */
 export interface ConventionsServiceDeps {
   conventions: ConventionsStore;
   repos: ConventionRepoLookup;
   repoIntel: ConventionSampleSource;
-  /** Resolves the workspace's model for the `conventions` feature and a provider to call it with. */
-  resolveLlm(workspaceId: string): Promise<{ llm: LLMProvider; model: string }>;
+  skills: ConventionSkillLookup;
+  models: ConventionModelSource;
 }

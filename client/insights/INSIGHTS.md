@@ -96,6 +96,16 @@ Preview/Stats tabs, skill import).
 
 ## What Doesn't Work
 
+- **2026-09-27** — A `FEATURE_MODELS` entry may now omit
+  `defaultProvider`/`defaultModel` (conventions does: the server picks its model
+  at runtime). `SettingsModels` then shows an "Auto" option (value `""`), and
+  picking it REMOVES the key from `feature_models` rather than saving an empty
+  model. The client mirror `client/src/lib/feature-models.ts` must match the
+  vendored `platform.ts`; `client/src/lib/feature-models.test.ts` now fails on
+  drift (tests may import the vendored runtime value; only the Next bundle
+  can't). Evidence:
+  `client/src/app/settings/[section]/_components/SettingsView/_components/SettingsModels/SettingsModels.tsx`.
+
 - **2026-09-26** — A clickable card (`role="button"` + `onKeyDown` that runs
   `preventDefault(); onClick()` on Enter/Space) must ignore keys that bubble
   up from nested controls. Stopping propagation on `onClick` alone isn't

@@ -44,3 +44,16 @@ export const CONVENTIONS_TEMPERATURE = 0.1;
 
 /** Each scan is a paid LLM call over a large sample — cap it like the other LLM-backed routes. */
 export const EXTRACT_RATE_LIMIT = { max: 10, timeWindow: '1 minute' } as const;
+
+/**
+ * Accepted conventions of EVERY repo merge into this one skill (one section
+ * per repo), so it is found under the same name after any scan (criterion 42).
+ */
+export const CONVENTIONS_SKILL_NAME = 'repo-conventions';
+
+/**
+ * A scan outlives the request that started it (the client gives up first on a
+ * slow model), so a second scan of the same repo is refused with 409 while one
+ * is still running — two overlapping scans used to duplicate the pending set.
+ */
+export const SCAN_IN_PROGRESS_CODE = 'conventions_scan_in_progress';

@@ -197,6 +197,11 @@ export class AgentsService {
     }
     await this.assertNoDangerousSkills([skillId]);
     const existing = await this.repo.linkedSkills(agentId);
+    // Re-linking an already-linked skill without an explicit order is a no-op —
+    // otherwise it would jump to the end of the prompt order the user arranged.
+    if (order === undefined && existing.some((l) => l.skill.id === skillId)) {
+      return this.skillLinks(agentId);
+    }
     const resolvedOrder = order ?? existing.length;
     await this.repo.linkSkill(agentId, skillId, resolvedOrder);
     return this.skillLinks(agentId);

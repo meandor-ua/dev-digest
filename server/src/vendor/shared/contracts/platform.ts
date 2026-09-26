@@ -31,14 +31,15 @@ export type FeatureModelChoice = z.infer<typeof FeatureModelChoice>;
  * Registry of the selectable features: stable id, display label, and the
  * built-in default used when the workspace hasn't overridden the choice. The
  * defaults MIRROR each module's constants, so behaviour is unchanged until a
- * model is explicitly picked.
+ * model is explicitly picked. A feature WITHOUT a default (conventions) has no
+ * model in code at all — it resolves one at runtime when none is picked.
  */
 export interface FeatureModelDef {
   id: FeatureModelId;
   label: string;
   description: string;
-  defaultProvider: Provider;
-  defaultModel: string;
+  defaultProvider?: Provider;
+  defaultModel?: string;
 }
 export const FEATURE_MODELS: FeatureModelDef[] = [
   {
@@ -71,10 +72,9 @@ export const FEATURE_MODELS: FeatureModelDef[] = [
   },
   {
     id: 'conventions',
-    label: 'Conventions',
-    description: 'Extracts coding conventions from the repo.',
-    defaultProvider: 'openai',
-    defaultModel: 'gpt-5.4',
+    label: 'Conventions · classification',
+    description:
+      'Extracts and classifies coding conventions from the repo. Unset = the model most of your enabled agents use.',
   },
 ];
 

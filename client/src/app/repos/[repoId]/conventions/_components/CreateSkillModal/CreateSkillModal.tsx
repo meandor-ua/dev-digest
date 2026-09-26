@@ -6,7 +6,7 @@ import { Modal, Button, TextInput, Skeleton } from "@devdigest/ui";
 import type { SkillType } from "@devdigest/shared";
 import { SKILL_TYPES } from "@/lib/skill-type";
 import { useCreateConventionSkill } from "@/lib/hooks/conventions";
-import { useCreateSkill } from "@/lib/hooks/skills";
+import { useCreateSkill, useUpdateSkill } from "@/lib/hooks/skills";
 import { useAgents, useLinkAgentSkill } from "@/lib/hooks/agents";
 import { useToast } from "@/lib/toast";
 import { estimateTokens } from "@/lib/tokens";
@@ -25,6 +25,7 @@ export function CreateSkillModal({
   const toast = useToast();
   const draftMutation = useCreateConventionSkill(repoId);
   const createMutation = useCreateSkill();
+  const updateMutation = useUpdateSkill();
   const { data: agents } = useAgents();
 
   const [name, setName] = React.useState("");
@@ -32,6 +33,9 @@ export function CreateSkillModal({
   const [type, setType] = React.useState<SkillType>("convention");
   const [body, setBody] = React.useState("");
   const [sourceCount, setSourceCount] = React.useState(0);
+  // Every repo's conventions merge into ONE fixed-name skill: when it already
+  // exists, saving adds a version to it instead of creating a duplicate.
+  const [existingSkillId, setExistingSkillId] = React.useState<string | null>(null);
   // "" = don't link: the skill is saved disabled anyway, so linking is opt-in.
   const [agentId, setAgentId] = React.useState("");
 
@@ -55,6 +59,7 @@ export function CreateSkillModal({
         setDescription(draft.description);
         setBody(draft.body);
         setSourceCount(draft.source_convention_ids.length);
+        setExistingSkillId(draft.existing_skill_id);
       })
       // The error itself is already toasted by the global MutationCache.onError
       // (lib/providers.tsx) — toasting here too would show it twice.
@@ -63,39 +68,42 @@ export function CreateSkillModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCreate = () => {
+  const handleSave = () => {
     if (!name.trim() || !body.trim()) {
       toast.error(t("modal.errors.required"));
       return;
     }
-    createMutation.mutate(
-      {
-        name: name.trim(),
-        description: description.trim(),
-        type,
-        source: "extracted",
-        body: body.trim(),
-        enabled: false, // extracted skills always start disabled until vetted (SkillsService.create)
-      },
-      {
-        onSuccess: (created) => {
-          const finish = () => {
-            toast.success(t("modal.success", { name: created.name }));
-            onClose();
-          };
-          if (agentId) {
-            // A link failure is toasted globally; the skill itself exists, so still finish.
-            linkMutation.mutate(created.id, { onSettled: finish });
-          } else {
-            finish();
-          }
-        },
-      },
-    );
+    const onSaved = (skill: { id: string; name: string }) => {
+      const finish = () => {
+        toast.success(t(existingSkillId ? "modal.updated" : "modal.success", { name: skill.name }));
+        onClose();
+      };
+      if (agentId) {
+        // A link failure is toasted globally; the skill itself exists, so still finish.
+        // Re-linking an already-linked skill is a server-side no-op (keeps its order).
+        linkMutation.mutate(skill.id, { onSettled: finish });
+      } else {
+        finish();
+      }
+    };
+    const fields = {
+      description: description.trim(),
+      type,
+      body: body.trim(),
+      enabled: false, // extracted skills always start disabled until vetted (SkillsService.create)
+    };
+    if (existingSkillId) {
+      updateMutation.mutate(
+        { id: existingSkillId, patch: { ...fields, message: t("modal.versionMessage", { repo: repoName }) } },
+        { onSuccess: onSaved },
+      );
+    } else {
+      createMutation.mutate({ name: name.trim(), source: "extracted", ...fields }, { onSuccess: onSaved });
+    }
   };
 
   const loading = loadingDraft;
-  const saving = createMutation.isPending || linkMutation.isPending;
+  const saving = createMutation.isPending || updateMutation.isPending || linkMutation.isPending;
 
   return (
     <Modal title={t("modal.title")} onClose={onClose} width={580}>
@@ -108,12 +116,15 @@ export function CreateSkillModal({
         ) : (
           <>
             <div style={s.banner} role="status">
-              {t("modal.banner", { count: sourceCount, repo: repoName })}
+              {t(existingSkillId ? "modal.bannerUpdate" : "modal.banner", { count: sourceCount, repo: repoName })}
             </div>
 
             <div style={s.field}>
               <label style={s.label}>{t("modal.name")}</label>
-              <TextInput value={name} onChange={setName} aria-label={t("modal.name")} />
+              <TextInput value={name} readOnly mono aria-label={t("modal.name")} aria-describedby="conventions-skill-name-hint" />
+              <span id="conventions-skill-name-hint" style={s.hint}>
+                {t("modal.nameHint")}
+              </span>
             </div>
 
             <div style={s.field}>
@@ -183,10 +194,16 @@ export function CreateSkillModal({
             kind="primary"
             size="md"
             icon="Sparkles"
-            onClick={handleCreate}
+            onClick={handleSave}
             disabled={loading || saving || !name.trim() || !body.trim()}
           >
-            {saving ? t("modal.creating") : t("modal.create")}
+            {existingSkillId
+              ? saving
+                ? t("modal.updating")
+                : t("modal.update")
+              : saving
+                ? t("modal.creating")
+                : t("modal.create")}
           </Button>
         </div>
       </div>

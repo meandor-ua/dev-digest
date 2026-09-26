@@ -1,12 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { ConventionCandidate, ConventionCategory } from '@devdigest/shared';
+import type { ConventionCandidate, ConventionCategory, FeatureModelChoice } from '@devdigest/shared';
 import {
   MAX_FILE_CHARS,
   MAX_FILE_LINES,
   MAX_SAMPLE_CHARS,
   MAX_SNIPPET_LINES,
   MIN_SNIPPET_CHARS,
+  CONVENTIONS_SKILL_NAME,
 } from './constants.js';
 
 export async function readClone(clonePath: string, file: string): Promise<string | null> {
@@ -216,10 +217,9 @@ function fenceFor(snippet: string): string {
   return '`'.repeat(Math.max(3, longest + 1));
 }
 
-/** Merges the accepted candidates of a repo into one markdown skill body. */
-export function buildConventionSkillBody(repoSlug: string, accepted: ConventionCandidate[]): string {
-  const skillName = `${repoSlug}-conventions`;
-  const sections = accepted.map((c) => {
+/** One `## <owner/repo>` section of the shared skill, from that repo's accepted candidates. */
+export function buildRepoSection(repoFullName: string, accepted: ConventionCandidate[]): string {
+  const rules = accepted.map((c) => {
     const heading = slugifyRule(c.rule) || c.category;
     const location = !c.evidence_line
       ? c.evidence_path
@@ -229,7 +229,7 @@ export function buildConventionSkillBody(repoSlug: string, accepted: ConventionC
     const rationale = c.rationale ? `\n${c.rationale}\n` : '';
     const fence = fenceFor(c.evidence_snippet);
     return [
-      `## ${heading}`,
+      `### ${heading}`,
       c.rule,
       rationale,
       `Detected in \`${location}\`:`,
@@ -240,11 +240,88 @@ export function buildConventionSkillBody(repoSlug: string, accepted: ConventionC
       .filter((l) => l !== '')
       .join('\n');
   });
+  return [`## ${repoFullName}`, '', rules.join('\n\n')].join('\n');
+}
+
+function skillHeader(): string {
   return [
-    `# ${skillName}`,
+    `# ${CONVENTIONS_SKILL_NAME}`,
     '',
-    `House conventions for \`${repoSlug}\`. Flag changes that violate any rule below and cite the offending \`file:line\`.`,
-    '',
-    sections.join('\n\n'),
+    'House conventions extracted from your repositories, one section per repo. Apply a section only to the repository it names; flag changes that violate any of its rules and cite the offending `file:line`.',
   ].join('\n');
+}
+
+/**
+ * Line ranges of every top-level `## ` heading, skipping lines inside code
+ * fences — evidence snippets are often markdown (AGENTS.md, CONTRIBUTING.md)
+ * with `## ` lines of their own, which must not be mistaken for repo sections.
+ */
+function level2Headings(lines: string[]): Array<{ index: number; title: string }> {
+  const found: Array<{ index: number; title: string }> = [];
+  let fence: { char: string; len: number } | null = null;
+  lines.forEach((line, index) => {
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence) {
+      if (marker && marker[1]![0] === fence.char && marker[1]!.length >= fence.len && !marker[2]!.trim()) {
+        fence = null;
+      }
+      return;
+    }
+    if (marker) {
+      fence = { char: marker[1]![0]!, len: marker[1]!.length };
+      return;
+    }
+    if (line.startsWith('## ')) found.push({ index, title: line.slice(3).trim() });
+  });
+  return found;
+}
+
+/** Repo names (`owner/repo`) that have a section in the skill body, in order. */
+export function listRepoSections(body: string): string[] {
+  return level2Headings(body.split('\n')).map((h) => h.title);
+}
+
+/**
+ * The single `repo-conventions` skill body with `repoFullName`'s section
+ * replaced (or appended) and every other repo's section left untouched, so
+ * scanning a second repo never erases the first one's rules. `existingBody`
+ * is null when the skill doesn't exist yet.
+ */
+export function buildConventionSkillBody(
+  existingBody: string | null,
+  repoFullName: string,
+  accepted: ConventionCandidate[],
+): string {
+  const section = buildRepoSection(repoFullName, accepted);
+  if (!existingBody?.trim()) return `${skillHeader()}\n\n${section}`;
+
+  const lines = existingBody.split('\n');
+  const headings = level2Headings(lines);
+  const at = headings.findIndex((h) => h.title === repoFullName);
+  if (at === -1) return `${existingBody.trimEnd()}\n\n${section}`;
+
+  const start = headings[at]!.index;
+  const end = headings[at + 1]?.index ?? lines.length;
+  const before = lines.slice(0, start).join('\n').trimEnd();
+  const after = lines.slice(end).join('\n').trim();
+  return [before, section, after].filter((part) => part !== '').join('\n\n');
+}
+
+/**
+ * The conventions feature's runtime default when Settings has no model picked:
+ * the provider+model shared by the most enabled agents (ties → the earliest in
+ * `agents` order). Nothing is hardcoded, and the result is a model the
+ * workspace already has a key for. Undefined when there are no enabled agents.
+ */
+export function pickPrevalentModel(agents: FeatureModelChoice[]): FeatureModelChoice | undefined {
+  const counts = new Map<string, { choice: FeatureModelChoice; n: number }>();
+  for (const a of agents) {
+    const key = `${a.provider}\u0000${a.model}`;
+    const hit = counts.get(key);
+    if (hit) hit.n += 1;
+    else counts.set(key, { choice: { provider: a.provider, model: a.model }, n: 1 });
+  }
+  let best: { choice: FeatureModelChoice; n: number } | undefined;
+  for (const entry of counts.values()) if (!best || entry.n > best.n) best = entry;
+  return best?.choice;
 }

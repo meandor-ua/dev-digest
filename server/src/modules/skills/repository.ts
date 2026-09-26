@@ -125,6 +125,17 @@ export class SkillsRepository implements SkillsStore {
     return row ? toSkillDto(row) : undefined;
   }
 
+  /** The oldest skill named `name` — names aren't unique, so the first one wins. */
+  async findByName(workspaceId: string, name: string): Promise<Skill | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, name)))
+      .orderBy(t.skills.createdAt)
+      .limit(1);
+    return row ? toSkillDto(row) : undefined;
+  }
+
   private async getRow(workspaceId: string, id: string): Promise<SkillRow | undefined> {
     const [row] = await this.db
       .select()

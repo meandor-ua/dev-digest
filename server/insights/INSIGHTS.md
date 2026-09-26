@@ -5,6 +5,17 @@ you, so the next agent/session doesn't relearn it.
 
 ## Recurring Errors & Fixes
 
+- **2026-09-27** — Server tests used to read the developer's REAL keys:
+  `loadConfig()` hardcoded `secretsPath` to `~/.devdigest/secrets.json`, and
+  `LocalSecretsProvider` reads that file before `process.env`. So any test path
+  missing an `overrides.llm`/`github` mock made a real, paid call (a conventions
+  test did, via openrouter). Fixed hermetically: `DEVDIGEST_SECRETS_PATH` is now
+  configurable, and `vitest.config.ts` `test.env` points it at a missing file and
+  blanks every provider/GitHub key. dotenv never overrides a variable that is
+  already set, and `''` is falsy, so `container.llm()`/`github()` throw
+  `ConfigError`. Guarded by `server/test/secrets-isolation.test.ts`. Evidence:
+  `server/src/platform/config.ts` (`DEVDIGEST_SECRETS_PATH`), `server/vitest.config.ts`.
+
 - **2026-09-24** — The server compiles raw `reviewer-core/src` through a
   tsconfig path alias, so its common source directory is the repository parent,
   not `server/src`; keep `rootDir: ".."` explicit alongside `outDir: "dist"`
@@ -239,6 +250,28 @@ you, so the next agent/session doesn't relearn it.
   (`toConventionDto`).
 
 ## What Doesn't Work
+
+- **2026-09-27** — Don't mark sections of a skill body with HTML comments
+  (`<!-- repo:acme/x -->`). The injection detector's
+  `hidden HTML comment directive` regex matches lazily from the first `<!--`
+  to any later `SECRET|HIDDEN|SYSTEM|ADMIN` and then to any `-->`. So an evidence
+  snippet containing `SECRET_KEY` between two markers flags the whole skill as
+  dangerous (disabled, unlinked). The `repo-conventions` skill uses `## owner/repo`
+  headings, found by a fence-aware scan instead, because snippets are often
+  markdown with their own `## ` lines. Evidence:
+  `server/src/modules/skills/injection-detector.ts:60`,
+  `server/src/modules/conventions/helpers.ts:259` (`level2Headings`).
+- **2026-09-27** — `POST /agents/:id/skills` with only `skill_id` used to move
+  an already-linked skill to the end (`order ?? existing.length`), which
+  silently reordered the prompt on every "link after save". It is now a no-op
+  when the skill is already linked and no `order` is given. Evidence:
+  `server/src/modules/agents/service.ts:199-203`, test in
+  `server/test/conventions.it.test.ts` (fails as 4 vs 3 without the guard).
+- **2026-09-27** — A conventions integration test that mocks only
+  `llm.openai` is wrong now that the scan model comes from Settings or else the
+  enabled agents' model (seeded agents are `openrouter`): the unmocked provider
+  gets built for real. Inject the mock under both ids (`{ openai: m, openrouter: m }`).
+  Evidence: `server/test/conventions.it.test.ts` (`appWith`).
 
 - **2026-09-26** — Enforcing "dangerous skill ⇒ disabled + unlinked" only on
   the skills side (update/restore) is not enough. `POST /agents/:id/skills`
@@ -481,6 +514,22 @@ you, so the next agent/session doesn't relearn it.
   originally listed here are not in the code as of 2026-09-26.)
 
 ## Open Questions
+
+- **2026-09-27** — Conventions scans outlived the client's old 90 s timeout
+  (a live `deepseek/deepseek-v4-flash` scan took 106 s). The server kept going,
+  and a second scan started meanwhile interleaved `replacePending`
+  (delete→insert) with the first, DUPLICATING the pending set (6 became 12).
+  Fixed three ways: the client waits 300 s and refetches on error; the service
+  refuses a second scan of the same repo in-process with 409
+  `conventions_scan_in_progress`; and `replacePending` takes
+  `pg_advisory_xact_lock` per repo. A 2-way `Promise.all` did NOT reproduce the
+  race; 10 concurrent replaces failed every time without the lock. Still open:
+  (a) with several server processes the 409 guard is per process, so the lock
+  prevents duplicates but not a second paid call; (b) re-proposed decided rules
+  in new wording slip past the exact-text dedupe. Evidence:
+  `server/src/modules/conventions/service.ts` (`extract`/`scanning`),
+  `server/src/modules/conventions/repository.ts` (`replacePending`),
+  `server/test/conventions.it.test.ts` ("overlapping replaces").
 
 - **2026-09-18** — Deleting every run of a PR removes its reviews (score goes
   back to none) but leaves `pull_requests.last_reviewed_sha` set, so the list

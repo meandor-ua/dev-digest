@@ -14,9 +14,11 @@ export function useConventions(repoId: string | null | undefined) {
 }
 
 // The scan is one LLM call over a whole-repo sample with a strict JSON
-// schema — slower models can legitimately take 60-90s. Bound it so a stalled
-// call fails with a clear "timed out" error instead of spinning indefinitely.
-const EXTRACT_TIMEOUT_MS = 90_000;
+// schema. Slower models take 60-110s (a live deepseek-v4-flash scan measured
+// 106s), and the server's OpenRouter client allows 90s per attempt with 2
+// retries — so 90s here aborted scans the server then finished anyway. 5 min
+// covers the server's own worst case; beyond it, fail with a clear "timed out".
+export const EXTRACT_TIMEOUT_MS = 300_000;
 
 /** Scan (one model call). Seeds the list cache from its own response. */
 export function useExtractConventions(repoId: string | null | undefined) {
@@ -29,6 +31,9 @@ export function useExtractConventions(repoId: string | null | undefined) {
     onSuccess: (data) => {
       qc.setQueryData(["conventions", repoId], data.candidates);
     },
+    // A timed-out or refused (409: scan already running) request doesn't mean
+    // nothing changed server-side — refetch so a finished scan still shows up.
+    onError: () => qc.invalidateQueries({ queryKey: ["conventions", repoId] }),
   });
 }
 
