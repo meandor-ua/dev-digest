@@ -10,3 +10,11 @@
  * model's context.
  */
 export const REVIEW_STRATEGY = 'single-pass' as const;
+
+/**
+ * Total character budget for the project-context docs of one agent run. Each
+ * doc is already capped at read time (project-docs MAX_DOC_BYTES), but several
+ * skills × many docs would otherwise add megabytes to every agent's prompt.
+ * Docs are taken in skill order then doc order; whatever doesn't fit is logged.
+ */
+export const CONTEXT_DOCS_MAX_CHARS = 120_000;

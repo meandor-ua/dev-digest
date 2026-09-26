@@ -2,11 +2,17 @@
   "actions": {
     "save": "Save",
     "cancel": "Cancel",
+    "ok": "Ok",
     "retry": "Retry",
     "close": "Close",
     "import": "Import",
     "export": "Export",
-    "run": "Run"
+    "run": "Run",
+    "delete": "Delete",
+    "remove": "Remove"
+  },
+  "confirm": {
+    "title": "Confirm"
   },
   "states": {
     "loading": "Loading…",
@@ -17,5 +23,9 @@
     "title": "No repo selected",
     "body": "This repository isn't in your workspace — it may have been removed, or the link is stale. Add a repo or pick another from the switcher to get started.",
     "cta": "Add repository"
+  },
+  "errors": {
+    "timeout": "The request took too long and was cancelled. Try again — this can happen with slower models.",
+    "generic": "Something went wrong"
   }
 }

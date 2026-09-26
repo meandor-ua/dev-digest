@@ -38,12 +38,14 @@ If a test wouldn't catch a class of regression we care about, we don't write it.
 + jsdom). `fetch` is mocked; no API, DB, or browser. Covers the PR-review
 surface (list, diff, findings, run controls) and the agent editor.
 
-**server-unit** — the DB-free majority: adapters, prompt assembly, grounding,
-repo-intel ranking & indexing, pricing, route smoke. The `typecheck` job also
-runs on Windows, which doubles as the `@ast-grep/napi` prebuilt gate (install
-fails there if the win32 prebuilt is missing).
+**server-unit** — the DB-free majority (16 files): adapters, prompt assembly,
+grounding, repo-intel ranking & indexing, pricing, route smoke. Two jobs,
+both Linux-only: `typecheck` (which also lints) and `unit`. There is
+deliberately no Windows/macOS matrix — macOS is covered by daily local dev,
+Windows is not a ship target, and `@ast-grep/napi` is exact-pinned so its
+native binary only changes on a deliberate version bump.
 
-**server-integration** — the `*.it.test.ts` files. Each starts a real Postgres
+**server-integration** — the 11 `*.it.test.ts` files. Each starts a real Postgres
 (pgvector) via testcontainers, builds the Fastify app, migrates + seeds, and
 drives routes end-to-end: reviews + run lifecycle (incl. grounding), agents CRUD,
 repo-intel symbol clamping, pulls comments, settings models. They self-skip when
@@ -60,8 +62,9 @@ No `chat`, no model key.
 
 ```sh
 # per package
-cd client        && pnpm test           # + pnpm typecheck
-cd reviewer-core && npm test
+cd client        && pnpm test           # + pnpm typecheck, pnpm lint
+cd reviewer-core && npm test            # + npm run typecheck, npm run lint
+cd e2e           && npm run typecheck && npm run lint   # static checks only
 
 # server — the unit/integration split (see note below)
 cd server && pnpm exec vitest run --exclude '**/*.it.test.ts'   # unit, no Docker
@@ -80,14 +83,18 @@ cd e2e && npm install && npm test
   (`vitest run --exclude '**/*.it.test.ts'`); the integration lane selects only
   it (`vitest run .it.test`). A DB-backed test that imports `test/helpers/pg.ts`
   must use the `.it.test.ts` suffix.
-- **`server/package.json` is `skip-worktree`** (a local variant diverges from the
-  committed file). CI therefore invokes the split with
-  `pnpm exec vitest run …` rather than relying on committed `test:unit` /
-  `test:integration` scripts.
+- **The split is invoked directly, not via scripts.** CI and the commands
+  above run `pnpm exec vitest run …` rather than `test:unit` /
+  `test:integration`, because `server/package.json` carries no such scripts.
+  (This previously read "`server/package.json` is `skip-worktree`"; no file in
+  the repo carries that flag today — `git ls-files -v | grep '^S'` is empty.)
 - **Hermetic by default.** Reach for `src/adapters/mocks.ts` (MockLLMProvider,
   MockGitClient) rather than real network/keys.
 - **E2E specs are deterministic batch JSON** (`e2e/specs/*.flow.json`) using
   only `--url` / `--text` / `find` locators — never the AI `chat` command.
+- **Lint runs in CI for every package.** `client`, `server-unit`,
+  `reviewer-core` and the `e2e` static-checks job each run their package's
+  `lint` script; all four are clean as of 2026-09-20, so lint failures block.
 - **CI is path-filtered per package.** Cross-package source aliases are encoded
   in each workflow's `paths:` (e.g. `reviewer-core/**` triggers `server-unit`
   because the server type-checks against `../reviewer-core/src`).

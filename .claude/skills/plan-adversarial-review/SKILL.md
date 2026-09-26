@@ -91,13 +91,13 @@ open the file, you do not know.
 Plans contradict project conventions silently, because conventions live in
 prose the planner skimmed. Read what applies to the touched area:
 
-- **Agent/convention files** — root and per-package `CLAUDE.md` / `AGENTS.md`:
+- **Agent/convention files** — root and per-package `AGENTS.md` (`CLAUDE.md` symlink):
   stack, structure, naming policy, and especially **do-not-touch** rules
   (generated files, vendored copies, applied migrations, lockfiles). A plan
   step that edits one of those is a must-fix on its own.
 - **`docs/`, `specs/`** — prior decisions and explicit acceptance criteria a
   plan can quietly contradict or under-deliver against.
-- **`INSIGHTS.md` / running notes** — this is where a project records the
+- **`insights/` / running notes** — this is where a project records the
   gotcha it already paid for once. Plans re-introduce those bugs regularly.
   Search these for the components, libraries, and interactions the plan
   touches; if a note describes the exact failure mode the plan is walking

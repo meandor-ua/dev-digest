@@ -18,4 +18,26 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // The vendored shared index re-exports with server-style `.js` paths that
+    // Next's bundler can't resolve, so a value import 500s the page while
+    // Vitest stays green. Types are erased, so they're safe (client/INSIGHTS.md).
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/vendor/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@devdigest/shared',
+              allowTypeImports: true,
+              message:
+                'Only `import type` from @devdigest/shared in the client — a runtime import breaks the Next build (see client/INSIGHTS.md).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

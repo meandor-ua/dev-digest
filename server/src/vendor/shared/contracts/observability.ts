@@ -119,6 +119,79 @@ export const AgentStats = z.object({
 export type AgentStats = z.infer<typeof AgentStats>;
 
 // ---------------------------------------------------------------------------
+// Agent card + repo-scoped stats (GET /agents/stats, GET /agents/:id/stats)
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-agent aggregates for the Agents-column card, computed over the agent's
+ * DONE runs whose PR belongs to the given repo. `avg_score`/`avg_cost_usd` are
+ * per-PR-then-mean (see specs/README.md). Null when the agent has no such runs
+ * (or no scored/costed runs). One row per agent from GET /agents/stats.
+ */
+export const AgentCardStats = z.object({
+  agent_id: z.string(),
+  /** ENABLED linked skills (matches the Skills tab's "N of M enabled" N). */
+  skills_count: z.number().int(),
+  runs: z.number().int(),
+  avg_score: z.number().nullable(),
+  avg_cost_usd: z.number().nullable(),
+});
+export type AgentCardStats = z.infer<typeof AgentCardStats>;
+
+/** One (label, value) point for the stats sparklines/bars. */
+export const AgentStatPoint = z.object({ label: z.string(), value: z.number() });
+export type AgentStatPoint = z.infer<typeof AgentStatPoint>;
+
+/** Findings counts for one ISO week, split by severity (stacked bars). */
+export const AgentSeverityWeek = z.object({
+  label: z.string(),
+  CRITICAL: z.number().int(),
+  WARNING: z.number().int(),
+  SUGGESTION: z.number().int(),
+});
+export type AgentSeverityWeek = z.infer<typeof AgentSeverityWeek>;
+
+/** One row of the Stats-tab run-history table (last done runs, newest first). */
+export const AgentRunHistoryItem = z.object({
+  run_id: z.string(),
+  ran_at: z.string(),
+  pr_id: z.string().nullable(),
+  pr_number: z.number().int().nullable(),
+  tokens: z.number().int().nullable(),
+  cost_usd: z.number().nullable(),
+  findings_count: z.number().int().nullable(),
+  source: z.string(),
+  has_trace: z.boolean(),
+});
+export type AgentRunHistoryItem = z.infer<typeof AgentRunHistoryItem>;
+
+/**
+ * Repo-scoped aggregates for the Stats tab (GET /agents/:id/stats?repo_id=).
+ * Population = the agent's DONE runs whose PR is in the repo. See
+ * specs/README.md "Agent stats" for the exact aggregation rules.
+ */
+export const AgentRepoStats = z.object({
+  agent_id: z.string(),
+  repo_id: z.string(),
+  runs: z.number().int(),
+  avg_score: z.number().nullable(),
+  avg_cost_usd: z.number().nullable(),
+  avg_duration_ms: z.number().nullable(),
+  /** avg_cost(all) − avg_cost(all but last 10 by ran_at); null when ≤10 runs. */
+  cost_trend: z.number().nullable(),
+  /** Weekly mean score for the last 6 ISO weeks (oldest→newest sparkline). */
+  score_trend: z.array(AgentStatPoint),
+  /** Enabled-skill share placeholder (ordered enabled skills). */
+  most_used_skills: z.array(AgentStatPoint),
+  /** Last 6 ISO weeks × CRITICAL/WARNING/SUGGESTION finding counts. */
+  findings_by_severity: z.array(AgentSeverityWeek),
+  /** Finding counts grouped by category (descending). */
+  findings_by_category: z.array(AgentStatPoint),
+  run_history: z.array(AgentRunHistoryItem),
+});
+export type AgentRepoStats = z.infer<typeof AgentRepoStats>;
+
+// ---------------------------------------------------------------------------
 // Cross-session memory curator
 // ---------------------------------------------------------------------------
 

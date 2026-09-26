@@ -8,8 +8,10 @@ import { ToastProvider } from "../../../../../lib/toast";
 // Mock the data hooks so the editor renders without a network/query client.
 vi.mock("../../../../../lib/hooks/agents", () => ({
   useUpdateAgent: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, data: undefined }),
+  useDeleteAgent: () => ({ mutate: vi.fn(), isPending: false }),
   useProviderModels: () => ({ data: [{ id: "gpt-4.1", provider: "openai" }] }),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import { AgentEditor } from "./AgentEditor";
 
@@ -40,7 +42,7 @@ function renderWithIntl(ui: React.ReactElement) {
 
 describe("A2 Agent Editor (smoke)", () => {
   it("renders the Config tab fields", () => {
-    renderWithIntl(<AgentEditor agent={AGENT} tab="config" onTab={() => {}} />);
+    renderWithIntl(<AgentEditor agent={AGENT} tab="config" onTab={() => {}} repoId={null} />);
     expect(screen.getByText("Config")).toBeInTheDocument();
     expect(screen.getByText("Configuration")).toBeInTheDocument();
     expect(screen.getByText("Save agent")).toBeInTheDocument();

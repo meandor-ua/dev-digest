@@ -19,13 +19,15 @@ const VersionParams = z.object({
 /**
  * A2 — agents module (owner A2).
  *   GET    /agents                  → list (workspace-scoped)
+ *   GET    /agents/stats            → per-agent card stats for a repo (?repo_id=)
  *   GET    /agents/:id              → one agent
  *   POST   /agents                  → create
  *   PUT    /agents/:id              → update / toggle enabled (versions config)
  *   GET    /agents/:id/versions     → config history (newest first)
  *   GET    /agents/:id/versions/:version → one config snapshot
- *   GET    /agents/:id/skills       → linked skills (ordered)
+ *   GET    /agents/:id/skills       → linked skills (ordered, name/type)
  *   POST   /agents/:id/skills       → set/reorder linked skills OR link one
+ *   GET    /agents/:id/stats        → repo-scoped Stats-tab aggregates (?repo_id=)
  *   GET    /agents/:id/models       → dynamic model list for the agent's provider
  *   GET    /providers/:id/models    → dynamic model list for a provider (editor)
  */
@@ -56,16 +58,26 @@ const UpdateAgentBody = z.object({
   enabled: z.boolean().optional(),
 });
 
-/** Either set the whole ordered set (`skill_ids`) or link one (`skill_id`). */
+/**
+ * Set the whole ordered set of linked skills (`skill_ids`), or link one skill
+ * at an optional position (`skill_id` [+ `order`]).
+ */
 const SetSkillsBody = z
   .object({
-    skill_ids: z.array(z.string().uuid()).optional(),
+    // Duplicate ids would violate agent_skills' (agent_id, skill_id) PK mid-replace.
+    skill_ids: z
+      .array(z.string().uuid())
+      .refine((xs) => new Set(xs).size === xs.length, { message: 'Duplicate id in skill_ids' })
+      .optional(),
     skill_id: z.string().uuid().optional(),
     order: z.number().int().optional(),
   })
   .refine((b) => b.skill_ids !== undefined || b.skill_id !== undefined, {
     message: 'Provide skill_ids (set/reorder) or skill_id (link one)',
   });
+
+/** `?repo_id=` scopes agent stats to one repo (via agent_runs → pull_requests). */
+const RepoStatsQuery = z.object({ repo_id: z.string().uuid() });
 
 export default async function agentsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
@@ -74,6 +86,12 @@ export default async function agentsRoutes(appBase: FastifyInstance) {
   app.get('/agents', async (req) => {
     const { workspaceId } = await getContext(app.container, req);
     return service.list(workspaceId);
+  });
+
+  // Static route — registered before `/agents/:id` so "stats" is never read as an id.
+  app.get('/agents/stats', { schema: { querystring: RepoStatsQuery } }, async (req) => {
+    const { workspaceId } = await getContext(app.container, req);
+    return service.cardStats(workspaceId, req.query.repo_id);
   });
 
   app.get('/agents/:id', { schema: { params: IdParams } }, async (req) => {
@@ -155,12 +173,29 @@ export default async function agentsRoutes(appBase: FastifyInstance) {
     async (req) => {
       const { workspaceId } = await getContext(app.container, req);
       const body = req.body;
-      const links =
-        body.skill_ids !== undefined
-          ? await service.setSkills(workspaceId, req.params.id, body.skill_ids)
-          : await service.linkSkill(workspaceId, req.params.id, body.skill_id!, body.order);
+      let links;
+      if (body.skill_ids !== undefined) {
+        links = await service.setSkills(
+          workspaceId,
+          req.params.id,
+          body.skill_ids.map((skill_id) => ({ skill_id })),
+        );
+      } else {
+        links = await service.linkSkill(workspaceId, req.params.id, body.skill_id!, body.order);
+      }
       if (!links) throw new NotFoundError('Agent not found');
       return links;
+    },
+  );
+
+  app.get(
+    '/agents/:id/stats',
+    { schema: { params: IdParams, querystring: RepoStatsQuery } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const stats = await service.repoStats(workspaceId, req.params.id, req.query.repo_id);
+      if (!stats) throw new NotFoundError('Agent not found');
+      return stats;
     },
   );
 

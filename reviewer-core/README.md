@@ -51,5 +51,5 @@ no network. `npm run typecheck` doubles as the build. See
 
 ---
 
-Agent-facing map, conventions, and do-not-touch zones: [`CLAUDE.md`](./CLAUDE.md) ·
-deeper notes: [`docs/`](./docs/) · [`specs/`](./specs/) · [`INSIGHTS.md`](./INSIGHTS.md)
+Agent-facing map, conventions, and do-not-touch zones: [`AGENTS.md`](./AGENTS.md) ·
+deeper notes: [`docs/`](./docs/) · [`specs/`](./specs/) · [`insights/`](./insights/)

@@ -33,6 +33,8 @@ import type {
   SecretKey,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './git/diff-parser.js';
+import type { ProjectDoc, ProjectDocsAdapter } from '../modules/skills/ports.js';
+import { ValidationError } from '../platform/errors.js';
 
 /**
  * Deterministic MOCK adapters for tests/dev — NO real network. Each mirrors the
@@ -296,6 +298,34 @@ export class MockGitClient implements GitClient {
   }
   async readFile(_repo: RepoRef, path: string): Promise<string> {
     return this.opts.files?.[path] ?? '';
+  }
+}
+
+// ---------- Mock ProjectDocs (Skills Context tab + review-time doc read) ----------
+export interface MockProjectDocsOptions {
+  docs?: ProjectDoc[];
+  /** path → text; a path present in `docs` but absent here still 404s on read. */
+  files?: Record<string, string>;
+}
+
+export class MockProjectDocsAdapter implements ProjectDocsAdapter {
+  constructor(private opts: MockProjectDocsOptions = {}) {}
+
+  async list(_repo: RepoRef): Promise<ProjectDoc[]> {
+    return this.opts.docs ?? [];
+  }
+
+  async read(_repo: RepoRef, path: string): Promise<string> {
+    const text = this.opts.files?.[path];
+    if (text === undefined) throw new ValidationError('Not a recognized project doc for this repo');
+    return text;
+  }
+
+  async readMany(_repo: RepoRef, paths: string[]): Promise<Array<{ path: string; text: string }>> {
+    return paths.flatMap((path) => {
+      const text = this.opts.files?.[path];
+      return text === undefined ? [] : [{ path, text }];
+    });
   }
 }
 

@@ -23,7 +23,7 @@ for whichever lesson wires one up:
   repo skeleton when present.
 
 None of these may bypass the `INJECTION_GUARD` appended to every prompt
-(`assemblePrompt`) — see the do-not-touch note in `CLAUDE.md`.
+(`assemblePrompt`) — see the do-not-touch note in `AGENTS.md`.
 
 ## `groundFindings()` — the contract nothing downstream may relax
 

@@ -7,6 +7,7 @@
 
 import React from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Skeleton, ErrorState } from "@devdigest/ui";
 import { AppShell } from "../../../../../components/app-shell";
 import { RepoNotFound } from "@/components/repo-not-found";
@@ -14,7 +15,8 @@ import { PrDetailHeader } from "./_components/PrDetailHeader";
 import { OverviewTab } from "./_components/OverviewTab";
 import { FindingsTab } from "./_components/FindingsTab";
 import { DiffTab } from "./_components/DiffTab";
-import RunTraceDrawer from "./_components/RunTraceDrawer";
+import RunTraceDrawer from "@/components/run-trace-drawer";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { usePullDetail, usePulls } from "../../../../../lib/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -34,6 +36,7 @@ import type { FindingRecord, Severity } from "@devdigest/shared";
 const SEVERITIES: Severity[] = ["CRITICAL", "WARNING", "SUGGESTION"];
 
 export default function PRDetailPage() {
+  const t = useTranslations("prReview");
   const params = useParams<{ repoId: string; number: string }>();
   const search = useSearchParams();
   const router = useRouter();
@@ -56,6 +59,7 @@ export default function PRDetailPage() {
   const { data: activeRuns } = usePrActiveRuns(prId);
   const { data: prRuns } = usePrRuns(prId);
   const deleteRun = useDeleteRun(prId);
+  const [pendingDeleteRunId, setPendingDeleteRunId] = React.useState<string | null>(null);
   const liveRunIds = React.useMemo(() => (activeRuns ?? []).map((r) => r.run_id), [activeRuns]);
   useRefreshWhenRunsSettle(prId, activeRuns ? liveRunIds : undefined);
   const reviewRunning = liveRunIds.length > 0;
@@ -214,10 +218,7 @@ export default function PRDetailPage() {
             cancelMutation={cancel}
             onTargetChange={(runId, sev) => setParams([["agent", runId], ["severity", sev]])}
             onOpenTrace={(id) => setParam("trace", id)}
-            onDelete={(id) => {
-              if (window.confirm("Delete this run from history? (its logs are removed too)"))
-                deleteRun.mutate(id);
-            }}
+            onDelete={(id) => setPendingDeleteRunId(id)}
             onRunDone={() => {
               invalidateActiveRuns();
               invalidateRunHistory();
@@ -248,6 +249,17 @@ export default function PRDetailPage() {
           }
           running={liveRunIds.includes(traceRunId)}
           onClose={() => setParam("trace", null)}
+        />
+      )}
+      {pendingDeleteRunId && (
+        <ConfirmDialog
+          message={t("deleteConfirm.run")}
+          onConfirm={() => {
+            const id = pendingDeleteRunId;
+            setPendingDeleteRunId(null);
+            deleteRun.mutate(id);
+          }}
+          onCancel={() => setPendingDeleteRunId(null)}
         />
       )}
     </AppShell>

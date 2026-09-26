@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { tint } from "@/lib/color";
 
 /** Co-located styles for AgentCard (extracted from inline styles). */
 export const s = {
@@ -22,6 +23,25 @@ export const s = {
     placeItems: "center",
     flexShrink: 0,
   } satisfies CSSProperties,
+  /** The card's primary action: a real button holding the name, so the
+   *  Toggle/Delete controls stay siblings of it, never nested inside a button. */
+  nameBtn: {
+    fontSize: 14,
+    fontWeight: 600,
+    flex: 1,
+    minWidth: 0,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    background: "none",
+    border: "none",
+    padding: 0,
+    margin: 0,
+    textAlign: "left",
+    color: "inherit",
+    fontFamily: "inherit",
+    cursor: "pointer",
+  } satisfies CSSProperties,
   name: {
     fontSize: 14,
     fontWeight: 600,
@@ -44,8 +64,18 @@ export const s = {
     fontSize: 12,
     fontWeight: 600,
     color,
-    background: color + "1a",
+    background: tint(color),
     padding: "1px 8px",
     borderRadius: 4,
   }),
+  statsRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
+  dot: { color: "var(--text-muted)" } satisfies CSSProperties,
 } as const;

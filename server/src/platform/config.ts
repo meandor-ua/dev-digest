@@ -29,6 +29,9 @@ const EnvSchema = z.object({
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
+  // Where BYO API keys entered in the UI are stored. The vitest config points
+  // this at a missing file so tests can never read the developer's real keys.
+  DEVDIGEST_SECRETS_PATH: z.string().optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   // `.env` (and .env.example) ship `LOG_LEVEL=` empty; an empty string is not a
   // valid enum member, so coerce '' → undefined to fall through to the default.
@@ -71,7 +74,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     apiPort: parsed.API_PORT,
     webPort: parsed.WEB_PORT,
     cloneDir,
-    secretsPath: join(homedir(), '.devdigest', 'secrets.json'),
+    secretsPath: parsed.DEVDIGEST_SECRETS_PATH || join(homedir(), '.devdigest', 'secrets.json'),
     nodeEnv: parsed.NODE_ENV,
     logLevel: parsed.LOG_LEVEL ?? (parsed.NODE_ENV === 'test' ? 'silent' : 'info'),
     webOrigin: `http://localhost:${parsed.WEB_PORT}`,

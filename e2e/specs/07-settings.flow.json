@@ -1,6 +1,6 @@
 {
   "name": "Settings renders the API Keys and Feature Models sections",
-  "description": "Loads /settings/api-keys and /settings/models and confirms each section renders its title. Exercises the settings route and the refactored SettingsView (SettingsApiKeys / SettingsModels). Read-only seeded data (no model call).",
+  "description": "Loads /settings/api-keys and /settings/models and confirms each section renders its title, plus the Conventions row's Auto default (no model hardcoded). Exercises the settings route and the refactored SettingsView (SettingsApiKeys / SettingsModels). Read-only seeded data (no model call).",
   "steps": [
     { "cmd": ["open", "{BASE}/settings/api-keys"], "label": "load the API Keys settings section" },
     { "cmd": ["wait", "--url", "/settings/api-keys"], "label": "api-keys route reached" },
@@ -8,6 +8,8 @@
     { "cmd": ["wait", "--text", "API Keys"], "label": "the API Keys section renders" },
     { "cmd": ["open", "{BASE}/settings/models"], "label": "load the Feature Models settings section" },
     { "cmd": ["wait", "--url", "/settings/models"], "label": "models route reached" },
-    { "cmd": ["wait", "--text", "Feature Models"], "label": "the Feature Models section renders" }
+    { "cmd": ["wait", "--text", "Feature Models"], "label": "the Feature Models section renders" },
+    { "cmd": ["wait", "--text", "Conventions · classification"], "label": "conventions has its own model row" },
+    { "cmd": ["wait", "--text", "Auto — the model most of your enabled agents use"], "label": "no hardcoded conventions model: Auto until one is picked" }
   ]
 }

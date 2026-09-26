@@ -71,8 +71,10 @@ flowchart TB
   subgraph Review["Review & runs"]
     reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
   end
-  subgraph Agents["Agents"]
-    agents["agents<br/>/agents · /agents/:id"]
+  subgraph Agents["Agents & Skills"]
+    agents["agents<br/>/agents · /agents/:id · /agents/:id/skills"]
+    skills["skills<br/>/skills · /skills/:id · /skills/import"]
+    conventions["conventions<br/>/repos/:id/conventions · /extract · /skill<br/>/conventions/:id"]
   end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
@@ -97,6 +99,7 @@ flowchart TB
 | `EMBEDDINGS_ENABLED` | `false` | memory/RAG embeddings (OpenAI); off → **zero** OpenAI calls |
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
+| `DEVDIGEST_SECRETS_PATH` | `~/.devdigest/secrets.json` | where BYO keys are stored; `vitest.config.ts` points it at a missing file and blanks every key, so tests never spend real keys |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
 | `NODE_ENV` | `development` | `test` → silent logs + global rate-limit disabled |
 
@@ -150,5 +153,5 @@ A DB-backed test (one that imports `test/helpers/pg.ts`) **must** use the
 
 ---
 
-Agent-facing map, conventions, and do-not-touch zones: [`CLAUDE.md`](./CLAUDE.md) ·
-deeper notes: [`docs/`](./docs/) · [`specs/`](./specs/) · [`INSIGHTS.md`](./INSIGHTS.md)
+Agent-facing map, conventions, and do-not-touch zones: [`AGENTS.md`](./AGENTS.md) ·
+deeper notes: [`docs/`](./docs/) · [`specs/`](./specs/) · [`insights/`](./insights/)

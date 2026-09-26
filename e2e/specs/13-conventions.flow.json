@@ -1,0 +1,15 @@
+{
+  "name": "Conventions page renders its empty state from the sidebar",
+  "description": "From the seeded repo's PR list, the Skills Lab sidebar's Conventions link resolves its :repoId template to /repos/<id>/conventions. The seed writes no conventions, so the page shows its heading for the demo repo and the 'No conventions extracted yet' empty state with the Run scan action. Nothing is clicked that would scan — a scan is a model call. Read-only seeded data. Assumes a freshly-seeded DB (hermetic stack).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "initial data fetch settles" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "root redirects to the seeded repo's PRs" },
+    { "cmd": ["find", "role", "link", "click", "--name", "Conventions", "--exact"], "label": "open Conventions from the sidebar" },
+    { "cmd": ["wait", "--url", "/conventions"], "label": "repo-scoped conventions route reached" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "conventions fetch settles" },
+    { "cmd": ["wait", "--text", "Conventions in acme/payments-api"], "label": "heading names the active repo" },
+    { "cmd": ["wait", "--text", "No conventions extracted yet"], "label": "empty state renders (seed has no conventions)" },
+    { "cmd": ["wait", "--text", "Run scan"], "label": "the scan action is offered" }
+  ]
+}

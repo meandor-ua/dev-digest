@@ -6,10 +6,19 @@ export function Checkbox({
   checked,
   onChange,
   label,
+  disabled = false,
+  "aria-label": ariaLabel,
+  "aria-describedby": ariaDescribedBy,
 }: {
   checked: boolean;
   onChange?: (v: boolean) => void;
   label?: React.ReactNode;
+  /** Native `disabled`: announced as unavailable and skipped by click/keys. */
+  disabled?: boolean;
+  /** Accessible name when there is no visible `label`. */
+  "aria-label"?: string;
+  /** Id of the element explaining the state (e.g. why it's disabled). */
+  "aria-describedby"?: string;
 }) {
   return (
     <label
@@ -19,13 +28,16 @@ export function Checkbox({
         gap: 10,
         fontSize: 14,
         color: "var(--text-secondary)",
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
       }}
     >
       <button
         type="button"
         role="checkbox"
         aria-checked={checked}
+        aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
+        disabled={disabled}
         onClick={() => onChange?.(!checked)}
         style={{
           width: 16,

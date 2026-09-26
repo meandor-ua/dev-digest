@@ -7,7 +7,7 @@ Deep-dives for the `server` package (design rationale, decisions).
 `reviewer-core`'s `groundFindings()` drops any finding that doesn't cite a
 real line in the diff, and the score is recomputed from the *surviving*
 findings — the model's self-reported score is discarded entirely
-(`reviewer-core/CLAUDE.md`'s do-not-touch section calls this out explicitly:
+(`reviewer-core/AGENTS.md`'s do-not-touch section calls this out explicitly:
 `groundFindings()` must stay the single source of truth). `server` never
 re-derives or overrides this; it persists whatever `reviewer-core` returns
 and reads it back verbatim for `PrMeta.score`.

@@ -2,6 +2,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import {
   QueryClient,
   QueryClientProvider,
@@ -13,12 +14,15 @@ import { RepoProvider } from "./repo-context";
 import { ToastProvider, notify } from "./toast";
 import { ApiError } from "./api";
 
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong";
-}
-
 export function Providers({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("common");
+  // Client-side failures carry a stable code; show translated copy for those.
+  // Server errors keep the API's own message.
+  const errorMessage = (e: unknown): string => {
+    if (e instanceof ApiError && e.code === "timeout") return t("errors.timeout");
+    if (e instanceof Error) return e.message;
+    return t("errors.generic");
+  };
   const [qc] = React.useState(
     () =>
       new QueryClient({

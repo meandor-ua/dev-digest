@@ -6,12 +6,15 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, EmptyState, ErrorState, Skeleton, Icon } from "@devdigest/ui";
-import { AppShell } from "../../../../components/app-shell";
-import { useAgents, useUpdateAgent } from "../../../../lib/hooks/agents";
-import { AgentCard } from "../AgentCard";
-import { CreateAgentModal } from "./_components/CreateAgentModal";
-import { TEMPLATES } from "./constants";
-import { filterAgents } from "./helpers";
+import type { Agent } from "@devdigest/shared";
+import { AppShell } from "@/components/app-shell";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { useAgents, useUpdateAgent, useDeleteAgent, useAgentCardStats } from "@/lib/hooks/agents";
+import { useActiveRepo } from "@/lib/repo-context";
+import { useToast } from "@/lib/toast";
+import { AgentCard } from "@/app/agents/_components/AgentCard";
+import { CreateAgentModal, TEMPLATES } from "@/app/agents/_components/CreateAgentModal";
+import { filterAgents } from "@/app/agents/_lib/filter-agents";
 import { s } from "./styles";
 
 export function AgentsListView() {
@@ -19,14 +22,42 @@ export function AgentsListView() {
   const router = useRouter();
   const { data: agents, isLoading, isError, refetch } = useAgents();
   const update = useUpdateAgent();
-  const [creating, setCreating] = React.useState(false);
+  const del = useDeleteAgent();
+  const toast = useToast();
+  const { repoId } = useActiveRepo();
+  const { data: cardStats } = useAgentCardStats(repoId);
+  const statsById = React.useMemo(
+    () => new Map((cardStats ?? []).map((cs) => [cs.agent_id, cs])),
+    [cardStats],
+  );
+  // null = closed; otherwise the Name to prefill ("" for a blank agent).
+  const [creating, setCreating] = React.useState<string | null>(null);
+  const openCreate = (initialName: string) => setCreating(initialName);
   const [search, setSearch] = React.useState("");
+  const [pendingDelete, setPendingDelete] = React.useState<Agent | null>(null);
+
+  const confirmDelete = () => {
+    const ag = pendingDelete;
+    if (!ag) return;
+    setPendingDelete(null);
+    del.mutate(ag.id, {
+      onSuccess: () => toast.success(t("card.deleteSuccess", { name: ag.name })),
+      // No local onError: the global MutationCache toast already shows the API's message.
+    });
+  };
 
   const list = filterAgents(agents ?? [], search);
 
   return (
     <AppShell crumb={[{ label: t("list.breadcrumbLab") }, { label: t("list.breadcrumb") }]}>
-      {creating && <CreateAgentModal onClose={() => setCreating(false)} />}
+      {creating !== null && <CreateAgentModal initialName={creating} onClose={() => setCreating(null)} />}
+      {pendingDelete && (
+        <ConfirmDialog
+          message={t("card.confirmDelete", { name: pendingDelete.name })}
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
       <div style={s.page}>
         <div style={s.header}>
           <div style={s.headerText}>
@@ -51,13 +82,13 @@ export function AgentsListView() {
               </Button>
             }
             items={[
-              { label: t("list.createFromScratch"), icon: "Edit", onClick: () => setCreating(true) },
+              { label: t("list.createFromScratch"), icon: "Edit", onClick: () => openCreate("") },
               { divider: true },
               ...TEMPLATES.map((tp) => ({
-                label: tp,
+                label: t(`list.templates.${tp}`),
                 icon: "Cpu" as const,
                 muted: true,
-                onClick: () => setCreating(true),
+                onClick: () => openCreate(t("list.templateName", { template: t(`list.templates.${tp}`) })),
               })),
             ]}
           />
@@ -77,7 +108,7 @@ export function AgentsListView() {
             title={t("list.emptyTitle")}
             body={t("list.emptyBody")}
             cta={t("list.emptyCta")}
-            onCta={() => setCreating(true)}
+            onCta={() => openCreate("")}
           />
         )}
         {list.length > 0 && (
@@ -86,8 +117,11 @@ export function AgentsListView() {
               <AgentCard
                 key={a.id}
                 ag={a}
+                stats={statsById.get(a.id)}
                 onClick={() => router.push(`/agents/${a.id}?tab=config`)}
                 onToggle={(enabled) => update.mutate({ id: a.id, patch: { enabled } })}
+                onDelete={() => setPendingDelete(a)}
+                deleting={del.isPending && del.variables === a.id}
               />
             ))}
           </div>
