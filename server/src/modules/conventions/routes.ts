@@ -6,7 +6,6 @@ import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { NotFoundError } from '../../platform/errors.js';
 import { getFeatureModelOverride } from '../settings/feature-models.js';
-import { ConventionsRepository } from './repository.js';
 import { ConventionsService } from './service.js';
 import { EXTRACT_RATE_LIMIT } from './constants.js';
 
@@ -35,16 +34,13 @@ export default async function conventionsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
   const service = new ConventionsService({
-    conventions: new ConventionsRepository(container.db),
+    conventions: container.conventionsRepo,
     repos: container.reposRepo,
     repoIntel: container.repoIntel,
     skills: container.skillsRepo,
     models: {
       override: (workspaceId) => getFeatureModelOverride(container, workspaceId, 'conventions'),
-      enabledAgentModels: async (workspaceId) =>
-        (await container.agentsRepo.listEnabled(workspaceId))
-          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-          .map((a) => ({ provider: a.provider, model: a.model })),
+      enabledAgentModels: (workspaceId) => container.agentsRepo.listEnabledModels(workspaceId),
       llm: (provider: Provider) => container.llm(provider),
     },
   });

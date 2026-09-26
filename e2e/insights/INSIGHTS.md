@@ -5,14 +5,21 @@ you, so the next agent/session doesn't relearn it.
 
 ## What Doesn't Work
 
-- **2026-09-26** — `find role button click --name X` matches the accessible
-  name as a case-insensitive SUBSTRING by default. Any clickable card with
-  `role="button"` (e.g. `AgentCard`, whose name includes "… 2 skills …")
-  therefore satisfies `--name Skills` and wins by DOM order: flow 12 clicked the
-  first agent card instead of the Skills tab and silently navigated away. Add
-  `--exact` to every tab/button `--name` locator whose label is a common
-  word. Evidence: `e2e/specs/12-agent-detail.flow.json` (tab clicks),
-  `client/src/app/agents/_components/AgentCard/AgentCard.tsx:40`.
+- **2026-09-26** (corrected 2026-09-27) — `find role button click --name X`
+  matches the accessible name as a case-insensitive SUBSTRING by default. At
+  the time, `AgentCard`'s whole card carried `role="button"` with a name
+  including "… 2 skills …", so `--name Skills` matched it and won by DOM
+  order: flow 12 clicked the first agent card instead of the Skills tab and
+  silently navigated away. The 2026-09-27 a11y fix
+  (`client/insights/INSIGHTS.md`) removed `role="button"` from the card
+  itself — it's now a plain `div` wrapping a `<button data-card-primary>`
+  whose accessible name is just `ag.name`, with the skill count in a sibling
+  `Badge`, so this exact collision can no longer occur. The `--exact` fix is
+  kept anyway as defensive practice: any future common-word tab/button label
+  is one bad rename away from the same class of substring collision. Evidence:
+  `e2e/specs/12-agent-detail.flow.json` (tab clicks, description already notes
+  "AgentCards used to be role=button"),
+  `client/src/app/agents/_components/AgentCard/AgentCard.tsx:36-63`.
 - **2026-09-26** — A flow that asserts a seed-derived TOTAL (flow 12's
   "2 of 14 linked" — the Skills tab counts every workspace skill) breaks
   whenever `server/src/db/seed.ts` adds a skill. Update the flow and the
@@ -46,6 +53,15 @@ you, so the next agent/session doesn't relearn it.
   already an element's sole/direct child over text mixed with sibling nodes.
 
 ## Tool & Library Notes
+
+- **2026-09-27** — Use `click <css>` then `keyboard type "<text>"` (real
+  per-character keystrokes) to test input that reacts per keystroke, and read
+  the result with `get value <css>` plus `assert.stdoutIncludes`. jsdom unit
+  tests usually set a whole value in one `fireEvent.change`, which hid a bug
+  where Skill Name froze on the first character of a typed heading. To close a
+  dialog, `press Escape` followed by `get count "[role='dialog']"` asserting
+  `0` proves it's gone without writing data. Evidence:
+  `e2e/specs/14-skills-lab-a11y.flow.json`.
 
 - **2026-09-18** — `agent-browser get count <selector>` (e.g.
   `[data-finding-id]`) plus `"assert": {"stdoutIncludes": "N"}` is a clean,

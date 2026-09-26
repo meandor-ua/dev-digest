@@ -3,13 +3,24 @@
 Local-first AI PR reviewer. Course starter: current state works end to end;
 each course lesson adds one feature back (see `README.md`).
 
-## Before answering
+## Before answering — and before editing
 
 Search FIRST — curated, may already answer it — then read code:
 
 - Root-level or cross-package question → root `docs/`, `specs/`, `insights/`.
 - Package-specific question → that package's `docs/`, `specs/`, `insights/`.
 - Unsure which, or it could be either → check both root and the package's.
+
+**Insights gate (applies to edits, not just questions).** Before your FIRST
+edit or command in a package during a session, read that package's
+`insights/INSIGHTS.md` plus every `insights/<topic>.md` whose topic matches
+the area you're touching (`ls <package>/insights/`). This re-triggers every
+time a task crosses into another package mid-way. Reading one package's
+insights says nothing about another's (a multi-package fix once read
+`server/insights/` and then ran a formatter in `client/` that
+`client/insights/skills-lab.md` already forbade). Before running any tool
+that isn't in that package's Commands table (formatters, codegen,
+migrations, one-off scripts), `grep -ri <tool> <package>/insights/` first.
 
 ## Monorepo structure
 

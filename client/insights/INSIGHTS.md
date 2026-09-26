@@ -9,6 +9,20 @@ Preview/Stats tabs, skill import).
 
 ## Codebase Patterns
 
+- **2026-09-27** — Supersedes the 2026-09-26 toast entry below. The global
+  `MutationCache.onError` toasts EVERY mutation error, not just 5xx; the 5xx-only
+  rule is the QueryCache's. Local `onError` delete toasts were removed from the
+  agents and skills views. The toast store now dedupes repeated **error** toasts
+  only, so two quick saves show two "Saved" toasts. A client-side `ApiError` with
+  code `timeout` gets translated copy in `providers.tsx`. Evidence:
+  `client/src/lib/providers.tsx:46`, `client/src/lib/toast.tsx:65`.
+- **2026-09-27** — A list card must not be `role="button"` when it holds a Toggle or a
+  Delete button: a button's children are presentational to AT. Make the card name the
+  primary `<button data-card-primary>`, keep the card `div`'s `onClick` for mouse users,
+  and have focus restore target `[data-card-primary]`. Evidence:
+  `client/src/app/agents/_components/AgentCard/AgentCard.tsx:51`,
+  `client/src/app/skills/_components/SkillsColumn/SkillsColumn.tsx:72`.
+
 - **2026-09-26** — Every failed mutation is already toasted by the global
   `MutationCache.onError` (`client/src/lib/providers.tsx:41-43`); a caller's
   own `onError: (err) => toast.error(err.message || fallback)` repeats the

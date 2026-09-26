@@ -31,9 +31,15 @@ const DIRECTIVE_PATTERNS: InjectionPattern[] = [
     label: 'ignore previous instructions',
     re: /\bignore\s+(?:all\s+)?(?:the\s+)?(?:previous|above|prior|earlier)\s+(?:instructions|prompts?|directions?)\b/i,
   },
+  // The direction word (or an explicit "all your") is required: a bare
+  // "forget context" is ordinary advice ("don't forget context cancellation").
   {
     label: 'disregard previous instructions',
-    re: /\b(?:forget|disregard)\s+(?:all\s+)?(?:the\s+)?(?:(?:previous|above|prior|earlier)\s+)?(?:instructions|context|rules)\b/i,
+    re: /\b(?:forget|disregard)\s+(?:all\s+)?(?:the\s+|your\s+)?(?:previous|above|prior|earlier)\s+(?:instructions|context|rules)\b/i,
+  },
+  {
+    label: 'disregard previous instructions',
+    re: /\b(?:forget|disregard)\s+(?:all|any)\s+(?:of\s+)?(?:your|the)\s+(?:instructions|rules)\b/i,
   },
   {
     label: 'override previous instructions',
@@ -48,9 +54,12 @@ const DIRECTIVE_PATTERNS: InjectionPattern[] = [
     label: 'impersonate system',
     re: /\brespond\s+(?:only\s+)?(?:with|as|like)\s+(?:a|an|the)\s+(?:system|admin)\b/i,
   },
+  // A marker is a line of its own (optionally decorated: `--- END OF RULES ---`,
+  // `[end of instructions]`, `## End of skill`) — "at the end of the rule" in a
+  // sentence is prose, not a boundary the model would read as a prompt edge.
   {
     label: 'fake end-of-instructions marker',
-    re: /\b(?:end|finished?\s+with)\s+(?:of\s+)?(?:the\s+)?(?:skill|rules?|instructions?)\b/i,
+    re: /^[ \t]*[#*=\-[<(]*[ \t]*(?:end|finished?\s+with)\s+(?:of\s+)?(?:the\s+)?(?:skill|rules?|instructions?|system\s+prompt)[ \t]*[*=\-\]>).:!]*[ \t]*$/im,
   },
   {
     label: 'hidden system prompt heading',
@@ -58,7 +67,9 @@ const DIRECTIVE_PATTERNS: InjectionPattern[] = [
   },
   {
     label: 'hidden HTML comment directive',
-    re: /<!--[\s\S]*?(?:SYSTEM|ADMIN|SECRET|HIDDEN)[\s\S]*?-->/,
+    // Tempered so a match can't span `-->` and pair an innocent comment with
+    // an uppercase word that merely sits between two comments.
+    re: /<!--(?:(?!-->)[\s\S])*?\b(?:SYSTEM|ADMIN|SECRET|HIDDEN)\b(?:(?!-->)[\s\S])*?-->/,
   },
 
   // Control characters

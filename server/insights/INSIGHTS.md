@@ -249,6 +249,22 @@ you, so the next agent/session doesn't relearn it.
   Evidence: `server/src/modules/conventions/helpers.ts:82`, `:97`, `:208`
   (`toConventionDto`).
 
+- **2026-09-27** — The dangerous-skill gate has two layers. (1) `SkillsService.update`
+  judges the stored body outside the row lock whenever the patch has no `body`, so it
+  pins `expectedVersion`. The repository throws `StaleSkillVersionError` if the locked
+  row has moved on, and the service redoes the read and the decision. (2) The review run
+  re-screens every linked skill's body (`isDangerous || detectInjection(body)`) instead
+  of trusting the column, because migration 0012 defaulted `is_dangerous` to false for
+  existing rows. Evidence: `server/src/modules/skills/repository.ts:192`,
+  `server/src/modules/skills/service.ts:91`, `server/src/modules/reviews/run-executor.ts:223`.
+- **2026-09-27** — A file read from a clone must resolve inside the clone.
+  `readClone` realpaths both the clone root and the target and returns null
+  outside the root. A committed `CLAUDE.md -> ~/.devdigest/secrets.json`
+  symlink, or a symlinked parent dir, would otherwise send a local file to the
+  LLM. The repo-intel service has its own unguarded `readClone`
+  (`src/modules/repo-intel/service.ts:762`, predates this branch). Evidence:
+  `server/src/modules/conventions/helpers.ts:18`.
+
 ## What Doesn't Work
 
 - **2026-09-27** — Don't mark sections of a skill body with HTML comments
@@ -300,6 +316,21 @@ you, so the next agent/session doesn't relearn it.
   and convention-drafted skills always embed real code snippets inside
   ```` fences. Evidence: `server/src/modules/skills/injection-detector.ts:26`,
   `:73`, `:110`.
+- **2026-09-27** — Don't make the direction word optional in a "forget/disregard
+  … instructions/context/rules" pattern, and don't match an end-of-rules marker
+  anywhere in a sentence. `"Don't forget context cancellation."` and `"Put a
+  semicolon at the end of the rule."` were both flagged, and every save of such
+  a skill force-disabled it and deleted its agent links. Require
+  previous/above/prior/earlier (or "all your"), anchor markers to a line of
+  their own (`^…$`, `m` flag), and temper HTML-comment matches with
+  `(?:(?!-->)[\s\S])*?` so one match can't span two comments. Evidence:
+  `server/src/modules/skills/injection-detector.ts:37`, `:61`, `:69`.
+- **2026-09-27** — `drizzle-kit generate` wrote the migration in the wrong order
+  when a new column joined a composite primary key: it emitted `ADD CONSTRAINT …
+  PRIMARY KEY(…, "repo_id", …)` before `ADD COLUMN "repo_id"`, and added the
+  column `NOT NULL` with no backfill. Always read the generated SQL; reorder it
+  (and clear or backfill rows) by hand in the new, not-yet-applied file.
+  Evidence: `server/src/db/migrations/0016_skill_context_repo_scope.sql`.
 - **2026-09-26** — Never do file I/O at module top level in `src/db/seed.ts`:
   `src/adapters/auth/local.ts:5` imports it for `DEFAULT_WORKSPACE_NAME` /
   `SYSTEM_USER_EMAIL`, so everything at its top level runs on every API boot,

@@ -37,25 +37,36 @@ export function SkillCard({
       style={s.card(active, skill.enabled)}
       onClick={onClick}
       data-testid={`skill-card-${skill.id}`}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onClick();
-        }
-      }}
     >
       <div style={s.headerRow}>
         <div style={s.iconBox(color)}>
           <Icon.Sparkles size={14} />
         </div>
-        <span style={s.name}>{skill.name}</span>
-        <div
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
+        {/* The whole card stays clickable for the mouse; keyboard and screen
+            readers get this button. Not role="button" on the card: a button's
+            children are presentational, which would hide the Toggle/Delete. */}
+        <button
+          type="button"
+          data-card-primary
+          aria-current={active ? "true" : undefined}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          style={s.nameBtn}
         >
-          <Toggle on={skill.enabled} onChange={onToggle} size={14} />
+          {skill.name}
+        </button>
+        <div onClick={(e) => e.stopPropagation()}>
+          {/* Same rule as the editor's Config tab: the server refuses to
+              enable a dangerous skill, so don't offer it here either. */}
+          <Toggle
+            on={skill.enabled}
+            onChange={onToggle}
+            size={14}
+            disabled={skill.is_dangerous}
+            aria-label={t("listItem.toggleEnabled", { name: skill.name })}
+          />
         </div>
         {onDelete && (
           <button
@@ -64,7 +75,6 @@ export function SkillCard({
               e.stopPropagation();
               onDelete();
             }}
-            onKeyDown={(e) => e.stopPropagation()}
             disabled={deleting}
             title={t("listItem.deleteTitle")}
             aria-label={t("listItem.deleteTitle")}

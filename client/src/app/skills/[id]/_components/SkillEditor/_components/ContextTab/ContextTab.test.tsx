@@ -35,6 +35,22 @@ vi.mock("../../../../../../../lib/hooks/skills", () => ({
   useContextDoc: () => ({ data: { text: "DOC TEXT" }, isLoading: false, isError: false }),
 }));
 
+// jsdom has no layout, so dnd-kit can't be driven for real: capture what the
+// DndContext is configured with and call its drop handler directly.
+let dndSensors: Array<{ sensor: unknown }> | undefined;
+let dndDragEnd: ((e: { active: { id: string }; over: { id: string } | null }) => void) | undefined;
+vi.mock("@dnd-kit/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@dnd-kit/core")>();
+  return {
+    ...actual,
+    DndContext: (props: { sensors?: typeof dndSensors; onDragEnd?: typeof dndDragEnd; children?: React.ReactNode }) => {
+      dndSensors = props.sensors;
+      dndDragEnd = props.onDragEnd;
+      return <>{props.children}</>;
+    },
+  };
+});
+
 import { ContextTab } from "./ContextTab";
 
 function renderTab() {
@@ -54,6 +70,8 @@ afterEach(() => {
   context = undefined;
   contextLoading = false;
   contextError = false;
+  dndSensors = undefined;
+  dndDragEnd = undefined;
 });
 
 describe("ContextTab", () => {
@@ -165,5 +183,33 @@ describe("ContextTab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Preview document" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("DOC TEXT")).toBeInTheDocument();
+  });
+
+  it("registers a keyboard sensor so attached docs can be reordered without a mouse", async () => {
+    context = {
+      available: [
+        { path: "docs/a.md", dir: "docs", category: "docs" },
+        { path: "docs/b.md", dir: "docs", category: "docs" },
+      ],
+      attached: ["docs/a.md", "docs/b.md"],
+    };
+    renderTab();
+    const { KeyboardSensor, PointerSensor } = await import("@dnd-kit/core");
+    expect(dndSensors?.map((d) => d.sensor)).toEqual(expect.arrayContaining([KeyboardSensor, PointerSensor]));
+  });
+
+  it("persists the attached docs in their new order after a drop", () => {
+    context = {
+      available: [
+        { path: "docs/a.md", dir: "docs", category: "docs" },
+        { path: "docs/b.md", dir: "docs", category: "docs" },
+        { path: "docs/c.md", dir: "docs", category: "docs" },
+      ],
+      attached: ["docs/a.md", "docs/b.md"],
+    };
+    renderTab();
+    dndDragEnd?.({ active: { id: "docs/b.md" }, over: { id: "docs/a.md" } });
+    // docs/c.md is not attached, so it's never serialized.
+    expect(setContextMutate).toHaveBeenCalledWith(["docs/b.md", "docs/a.md"], expect.anything());
   });
 });

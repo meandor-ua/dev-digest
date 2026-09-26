@@ -58,6 +58,14 @@ export const s = {
     border: "1px solid var(--border)",
     overflowX: "auto",
   } satisfies CSSProperties,
+  mdImagePlaceholder: {
+    display: "inline-block",
+    padding: "2px 8px",
+    borderRadius: 5,
+    border: "1px dashed var(--border-strong)",
+    color: "var(--text-muted)",
+    fontSize: 12,
+  } satisfies CSSProperties,
   mdCode: {
     fontFamily: "var(--font-mono)",
     fontSize: "0.9em",

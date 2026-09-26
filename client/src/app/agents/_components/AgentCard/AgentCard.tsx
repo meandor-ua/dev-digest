@@ -8,7 +8,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon, Badge, Toggle } from "@devdigest/ui";
 import type { Agent, AgentCardStats } from "@devdigest/shared";
-import { formatCost } from "../../../../lib/cost";
+import { formatCost } from "@/lib/cost";
 import { modelColor, scoreColor } from "./helpers";
 import { s } from "./styles";
 
@@ -37,27 +37,38 @@ export function AgentCard({
       onClick={onClick}
       style={s.card(!!active, ag.enabled)}
       data-testid={`agent-card-${ag.id}`}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        // Only keys pressed on the card itself — Enter/Space on the nested
-        // Toggle or Delete button bubble here too, and preventDefault would
-        // cancel their own activation and navigate instead.
-        if (e.target !== e.currentTarget) return;
-        if (onClick && (e.key === "Enter" || e.key === " ")) {
-          e.preventDefault();
-          onClick();
-        }
-      }}
     >
       <div style={s.headerRow}>
         <div style={s.iconBox}>
           <Icon.Cpu size={15} />
         </div>
-        <span style={s.name}>{ag.name}</span>
+        {/* The whole card stays clickable for the mouse; keyboard and screen
+            readers get this button. Not role="button" on the card: a button's
+            children are presentational, which would hide the Toggle/Delete. */}
+        {onClick ? (
+          <button
+            type="button"
+            data-card-primary
+            aria-current={active ? "true" : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick();
+            }}
+            style={s.nameBtn}
+          >
+            {ag.name}
+          </button>
+        ) : (
+          <span style={s.name}>{ag.name}</span>
+        )}
         {onToggle && (
           <div onClick={(e) => e.stopPropagation()}>
-            <Toggle on={ag.enabled} onChange={onToggle} size={14} />
+            <Toggle
+              on={ag.enabled}
+              onChange={onToggle}
+              size={14}
+              aria-label={t("card.toggleEnabled", { name: ag.name })}
+            />
           </div>
         )}
         {onDelete && (

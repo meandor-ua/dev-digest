@@ -113,6 +113,13 @@
       "when": 1790387977132,
       "tag": "0015_light_prodigy",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790463541525,
+      "tag": "0016_skill_context_repo_scope",
+      "breakpoints": true
     }
   ]
 }

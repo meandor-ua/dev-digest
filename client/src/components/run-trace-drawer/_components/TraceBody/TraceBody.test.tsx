@@ -35,6 +35,11 @@ describe("TraceBody", () => {
     expect(screen.getByText(messages.trace.noToolCalls)).toBeInTheDocument();
   });
 
+  it("hides the Findings section when the run's findings aren't known, rather than claiming none", () => {
+    renderRuns(<TraceBody trace={TRACE} />);
+    expect(screen.queryByText(messages.trace.noFindings)).not.toBeInTheDocument();
+  });
+
   it("only lists prompt blocks for the segments the run actually had", () => {
     renderRuns(<TraceBody trace={TRACE} findings={[]} />);
     fireEvent.click(screen.getByText(messages.trace.promptAssembly));

@@ -478,7 +478,7 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
   }
   await db
     .insert(t.skillContextDocs)
-    .values({ skillId: paymentsSkill.id, path: 'docs/README.md', order: 0 })
+    .values({ skillId: paymentsSkill.id, repoId, path: 'docs/README.md', order: 0 })
     .onConflictDoNothing();
 
   // ---- demo agent_runs (+reviews/findings) so the Stats tab & cards render ----

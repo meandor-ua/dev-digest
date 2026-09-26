@@ -14,6 +14,11 @@ let availableSkills: SkillWithStats[] = [];
 // onDragEnd and call it directly with a synthetic drop event.
 let onDragEnd: ((e: { active: { id: string }; over: { id: string } | null }) => void) | undefined;
 let sensors: Array<{ sensor: unknown }> | undefined;
+type Announcements = {
+  onDragStart: (e: { active: { id: string } }) => string | undefined;
+  onDragEnd: (e: { active: { id: string }; over: { id: string } | null }) => string | undefined;
+};
+let accessibility: { announcements?: Announcements; screenReaderInstructions?: { draggable: string } } | undefined;
 vi.mock("@dnd-kit/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@dnd-kit/core")>();
   return {
@@ -21,10 +26,12 @@ vi.mock("@dnd-kit/core", async (importOriginal) => {
     DndContext: (props: {
       onDragEnd?: typeof onDragEnd;
       sensors?: typeof sensors;
+      accessibility?: typeof accessibility;
       children?: React.ReactNode;
     }) => {
       onDragEnd = props.onDragEnd;
       sensors = props.sensors;
+      accessibility = props.accessibility;
       return <>{props.children}</>;
     },
   };
@@ -231,6 +238,28 @@ describe("SkillsTab", () => {
     expect(checkbox).not.toBeChecked();
     fireEvent.click(checkbox);
     expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it("marks an unlinkable skill's checkbox disabled and describes why", () => {
+    skills = [];
+    availableSkills = [{ ...mkSkill("s2", "Injected", false), is_dangerous: true }];
+    renderTab();
+    const checkbox = screen.getByRole("checkbox", { name: "Link Injected to this agent" });
+    expect(checkbox).toBeDisabled();
+    expect(checkbox).toHaveAccessibleDescription(messages.skills.globallyDangerous);
+  });
+
+  it("announces drag-and-drop with translated text and the skill's name, never its id", () => {
+    skills = [mkLinked("s1", "Secrets", 0), mkLinked("s2", "Naming", 1)];
+    availableSkills = [mkSkill("s1", "Secrets"), mkSkill("s2", "Naming")];
+    renderTab();
+    expect(accessibility?.screenReaderInstructions?.draggable).toBe(messages.skills.dnd.instructions);
+    expect(accessibility?.announcements?.onDragStart({ active: { id: "s2" } })).toBe(
+      "Picked up Naming, position 2 of 2.",
+    );
+    expect(accessibility?.announcements?.onDragEnd({ active: { id: "s2" }, over: { id: "s1" } })).toBe(
+      "Naming dropped at position 1 of 2.",
+    );
   });
 
   it("still allows unlinking a linked skill even though it is globally disabled", () => {

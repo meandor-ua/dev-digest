@@ -21,7 +21,8 @@ export function ConventionCard({
   evidenceUrl: string | null;
   onAccept: () => void;
   onReject: () => void;
-  onSave: (patch: { rule: string; rationale: string | null }) => void;
+  /** Call `onSaved` once the save succeeds — the card stays in edit mode until then. */
+  onSave: (patch: { rule: string; rationale: string | null }, onSaved: () => void) => void;
   onDelete: () => void;
   saving?: boolean;
 }) {
@@ -37,10 +38,11 @@ export function ConventionCard({
   };
 
   // The API rejects an empty rule, so stay in edit mode instead of sending one.
+  // Leave edit mode only once the save lands: a failed PATCH (toasted
+  // globally) must keep the typed rule/rationale on screen to retry.
   const save = () => {
     if (!rule.trim()) return;
-    onSave({ rule: rule.trim(), rationale: rationale.trim() || null });
-    setEditing(false);
+    onSave({ rule: rule.trim(), rationale: rationale.trim() || null }, () => setEditing(false));
   };
 
   const location = formatEvidenceLocation(candidate);

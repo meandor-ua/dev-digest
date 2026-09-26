@@ -59,11 +59,12 @@ export function CreateSkillModal({
   // submit reflect where the content came from — not which tab is open.
   const [origin, setOrigin] = React.useState<"manual" | "imported">("manual");
 
-  // Which of Name/Description currently hold a value an import put there (as
-  // opposed to one the user typed or had ready before importing). File import
-  // resolves each field as: form value > file frontmatter > code fallback —
-  // so only an empty or import-filled field gets replaced (e.g. switching
-  // between files of one archive), never one the user owns.
+  // Which of Name/Description currently hold a value we derived (from an
+  // import, or live from the scratch body's header) as opposed to one the user
+  // typed or had ready. Each field resolves as: form value > derived value >
+  // code fallback — so only an empty or derived field gets replaced (e.g.
+  // switching between files of one archive, or typing a `# heading` one
+  // character at a time), never one the user owns.
   const importFilled = React.useRef({ name: false, description: false });
   const editName = (value: string) => {
     importFilled.current.name = false;
@@ -111,6 +112,9 @@ export function CreateSkillModal({
   };
 
   const handleFile = async (file: File) => {
+    // One extraction at a time: a second drop mid-extract would race the first
+    // and whichever resolved last would win the form.
+    if (importingFile) return;
     setImportingFile(true);
     try {
       const extracted = await extractMarkdownFiles(file);
@@ -139,22 +143,33 @@ export function CreateSkillModal({
 
   // Create-from-scratch: the body is edited directly, so a pasted/typed YAML
   // header is never stripped from what's shown — only used, live, as a
-  // fallback for Name/Description while those fields are still empty. The
-  // header itself is cut only at submit time (see handleSubmit).
+  // fallback for Name/Description while the user hasn't typed their own. A
+  // derived value keeps following the body as it's typed (`# S` → `# Security
+  // rubric`), and stops the moment the user edits the field. The header itself
+  // is cut only at submit time (see handleSubmit).
   const handleBodyChange = (value: string) => {
     setBody(value);
     if (tab !== "scratch" || origin !== "manual") return;
     const parsed = parseSkillMarkdown(value, "");
-    if (!name.trim() && parsed.name) setName(parsed.name);
-    if (!description.trim() && parsed.description) setDescription(parsed.description);
+    const follow = (field: "name" | "description", derived: string, current: string, set: (v: string) => void) => {
+      if (current.trim() && !importFilled.current[field]) return;
+      importFilled.current[field] = derived !== "";
+      set(derived);
+    };
+    follow("name", parsed.name, name, setName);
+    follow("description", parsed.description, description, setDescription);
+  };
+
+  const open = (created: { id: string }) => {
+    onClose();
+    router.push(`/skills/${created.id}`);
   };
 
   const finish = (created: { id: string; name: string }) => {
     const key =
       tab === "scratch" ? "create.scratch.success" : tab === "import" ? "create.file.createSuccess" : "create.url.success";
     toast.success(t(key, { name: created.name }));
-    onClose();
-    router.push(`/skills/${created.id}`);
+    open(created);
   };
 
   const handleSubmit = () => {
@@ -177,12 +192,12 @@ export function CreateSkillModal({
     //   YAML header — cut only now, never while the user was still editing.
     let v1Body = trimmedBody;
     let v2Body: string | null = null;
-    let stripMessage = "Removed YAML frontmatter";
+    let stripMessage = t("create.versionMessages.stripFrontmatter");
     if (origin === "imported") {
       if (rawBody.trim() !== trimmedBody) {
         v1Body = rawBody.trim();
         v2Body = trimmedBody;
-        stripMessage = "Removed imported YAML frontmatter";
+        stripMessage = t("create.versionMessages.stripImportedFrontmatter");
       }
     } else {
       const stripped = stripFrontmatter(trimmedBody);
@@ -209,8 +224,12 @@ export function CreateSkillModal({
             { id: created.id, patch: { body: v2Body!, message: stripMessage } },
             {
               onSuccess: () => finish(created),
-              onError: (err) => {
-                toast.error((err as Error).message || t("create.scratch.errors.createFailed"));
+              // The skill already exists (v1 is saved) — staying in the modal
+              // would invite a retry that creates a duplicate. Open it instead;
+              // the header can be removed in the editor.
+              onError: () => {
+                toast.error(t("create.scratch.errors.stripFailed", { name: created.name }));
+                open(created);
               },
             },
           );
@@ -284,10 +303,22 @@ export function CreateSkillModal({
               style={{ display: "none" }}
               onChange={(e) => {
                 const f = e.target.files?.[0];
+                // Reset so picking the same file again still fires onChange.
+                e.target.value = "";
                 if (f) handleFile(f);
               }}
             />
             <div
+              role="button"
+              tabIndex={0}
+              aria-label={t("create.file.dropzone")}
+              aria-busy={importingFile}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
               style={s.dropzone(isDragOver)}
               onDragOver={(e) => {
                 e.preventDefault();

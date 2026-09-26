@@ -63,6 +63,20 @@ export interface UpdateSkill {
   message?: string | null;
   /** When true, atomically removes this skill from every agent it's linked to (same transaction as the update). */
   unlinkFromAgents?: boolean;
+  /**
+   * Optimistic guard: the version the caller's `enabled`/`isDangerous` decision
+   * was based on. If the locked row has moved past it, the store throws
+   * `StaleSkillVersionError` instead of writing a decision made on a stale body.
+   */
+  expectedVersion?: number;
+}
+
+/** Thrown by `SkillsStore.update` when `expectedVersion` no longer matches the locked row. */
+export class StaleSkillVersionError extends Error {
+  constructor() {
+    super('Skill changed while it was being updated');
+    this.name = 'StaleSkillVersionError';
+  }
 }
 
 /**
@@ -86,8 +100,8 @@ export interface SkillsStore {
     overrides?: { enabled?: boolean; isDangerous?: boolean; unlinkFromAgents?: boolean },
   ): Promise<Skill | undefined>;
   stats(workspaceId: string, id: string): Promise<SkillStats | undefined>;
-  listContextPaths(skillId: string): Promise<string[]>;
-  setContextPaths(skillId: string, paths: string[]): Promise<string[]>;
+  listContextPaths(skillId: string, repoId: string): Promise<string[]>;
+  setContextPaths(skillId: string, repoId: string, paths: string[]): Promise<string[]>;
 }
 
 /** Everything SkillsService depends on, injected by constructor (onion R6). */

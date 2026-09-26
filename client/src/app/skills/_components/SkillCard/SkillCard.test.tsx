@@ -97,6 +97,23 @@ describe("SkillCard", () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
+  it("disables the enable toggle for a dangerous skill (the server refuses to enable it)", () => {
+    renderWithIntl(
+      <SkillCard skill={{ ...SKILL, is_dangerous: true, enabled: false }} active={false} onClick={vi.fn()} onToggle={vi.fn()} />,
+    );
+    expect(screen.getByRole("switch", { name: `Enable ${SKILL.name}` })).toBeDisabled();
+  });
+
+  it("exposes opening the skill as a named button that doesn't contain the other controls", () => {
+    renderWithIntl(
+      <SkillCard skill={SKILL} active onClick={vi.fn()} onToggle={vi.fn()} onDelete={vi.fn()} />,
+    );
+    const open = screen.getByRole("button", { name: SKILL.name });
+    expect(open).toHaveAttribute("aria-current", "true");
+    expect(open).not.toContainElement(screen.getByRole("switch"));
+    expect(screen.getByTestId(`skill-card-${SKILL.id}`)).not.toHaveAttribute("role");
+  });
+
   it("disables the delete button while deleting", () => {
     renderWithIntl(
       <SkillCard skill={SKILL} active={false} onClick={vi.fn()} onToggle={vi.fn()} onDelete={vi.fn()} deleting />,

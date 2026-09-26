@@ -10,6 +10,17 @@ export const s = {
   nameCol: { flex: 1, minWidth: 0 } satisfies CSSProperties,
   disabledBadge: { flexShrink: 0 } satisfies CSSProperties,
   disabledCheckbox: { opacity: 0.45, cursor: "not-allowed" } satisfies CSSProperties,
+  srOnly: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: "hidden",
+    clip: "rect(0 0 0 0)",
+    whiteSpace: "nowrap",
+    border: 0,
+  } satisfies CSSProperties,
   list: { display: "flex", flexDirection: "column", gap: 6 } satisfies CSSProperties,
   row: (dragging: boolean): CSSProperties => ({
     display: "flex",

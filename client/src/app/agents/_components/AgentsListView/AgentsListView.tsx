@@ -7,14 +7,14 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, EmptyState, ErrorState, Skeleton, Icon } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
-import { AppShell } from "../../../../components/app-shell";
+import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { useAgents, useUpdateAgent, useDeleteAgent, useAgentCardStats } from "../../../../lib/hooks/agents";
-import { useActiveRepo } from "../../../../lib/repo-context";
-import { useToast } from "../../../../lib/toast";
-import { AgentCard } from "../AgentCard";
-import { CreateAgentModal, TEMPLATES } from "../CreateAgentModal";
-import { filterAgents } from "../../_lib/filter-agents";
+import { useAgents, useUpdateAgent, useDeleteAgent, useAgentCardStats } from "@/lib/hooks/agents";
+import { useActiveRepo } from "@/lib/repo-context";
+import { useToast } from "@/lib/toast";
+import { AgentCard } from "@/app/agents/_components/AgentCard";
+import { CreateAgentModal, TEMPLATES } from "@/app/agents/_components/CreateAgentModal";
+import { filterAgents } from "@/app/agents/_lib/filter-agents";
 import { s } from "./styles";
 
 export function AgentsListView() {
@@ -30,7 +30,9 @@ export function AgentsListView() {
     () => new Map((cardStats ?? []).map((cs) => [cs.agent_id, cs])),
     [cardStats],
   );
-  const [creating, setCreating] = React.useState(false);
+  // null = closed; otherwise the Name to prefill ("" for a blank agent).
+  const [creating, setCreating] = React.useState<string | null>(null);
+  const openCreate = (initialName: string) => setCreating(initialName);
   const [search, setSearch] = React.useState("");
   const [pendingDelete, setPendingDelete] = React.useState<Agent | null>(null);
 
@@ -40,7 +42,7 @@ export function AgentsListView() {
     setPendingDelete(null);
     del.mutate(ag.id, {
       onSuccess: () => toast.success(t("card.deleteSuccess", { name: ag.name })),
-      onError: (err) => toast.error((err as Error).message || t("card.deleteError")),
+      // No local onError: the global MutationCache toast already shows the API's message.
     });
   };
 
@@ -48,7 +50,7 @@ export function AgentsListView() {
 
   return (
     <AppShell crumb={[{ label: t("list.breadcrumbLab") }, { label: t("list.breadcrumb") }]}>
-      {creating && <CreateAgentModal onClose={() => setCreating(false)} />}
+      {creating !== null && <CreateAgentModal initialName={creating} onClose={() => setCreating(null)} />}
       {pendingDelete && (
         <ConfirmDialog
           message={t("card.confirmDelete", { name: pendingDelete.name })}
@@ -80,13 +82,13 @@ export function AgentsListView() {
               </Button>
             }
             items={[
-              { label: t("list.createFromScratch"), icon: "Edit", onClick: () => setCreating(true) },
+              { label: t("list.createFromScratch"), icon: "Edit", onClick: () => openCreate("") },
               { divider: true },
               ...TEMPLATES.map((tp) => ({
-                label: tp,
+                label: t(`list.templates.${tp}`),
                 icon: "Cpu" as const,
                 muted: true,
-                onClick: () => setCreating(true),
+                onClick: () => openCreate(t("list.templateName", { template: t(`list.templates.${tp}`) })),
               })),
             ]}
           />
@@ -106,7 +108,7 @@ export function AgentsListView() {
             title={t("list.emptyTitle")}
             body={t("list.emptyBody")}
             cta={t("list.emptyCta")}
-            onCta={() => setCreating(true)}
+            onCta={() => openCreate("")}
           />
         )}
         {list.length > 0 && (

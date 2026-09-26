@@ -8,7 +8,7 @@ import type {
   SkillType,
   SkillSource,
 } from '@devdigest/shared';
-import type { InsertSkill, UpdateSkill, SkillsServiceDeps } from './ports.js';
+import { StaleSkillVersionError, type InsertSkill, type UpdateSkill, type SkillsServiceDeps } from './ports.js';
 import { buildImportedMarkdown, stripFrontmatter } from './helpers.js';
 import { detectInjection } from './injection-detector.js';
 import {
@@ -16,6 +16,7 @@ import {
   SKILL_DANGEROUS_CONTENT_CODE,
   SKILL_DESCRIPTION_MAX,
   SKILL_NAME_MAX,
+  UPDATE_STALE_RETRIES,
 } from './constants.js';
 import { AppError, NotFoundError, ValidationError } from '../../platform/errors.js';
 
@@ -84,6 +85,24 @@ export class SkillsService {
     id: string,
     patch: UpdateSkillDto,
   ): Promise<Skill | undefined> {
+    // The dangerous-content decision below is made on a body read outside the
+    // store's row lock; when it's the *stored* body (patch has no `body`), a
+    // concurrent body save could land in between. The store rejects that via
+    // `expectedVersion`, and we simply redo the read + decision.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.updateOnce(workspaceId, id, patch);
+      } catch (err) {
+        if (!(err instanceof StaleSkillVersionError) || attempt >= UPDATE_STALE_RETRIES) throw err;
+      }
+    }
+  }
+
+  private async updateOnce(
+    workspaceId: string,
+    id: string,
+    patch: UpdateSkillDto,
+  ): Promise<Skill | undefined> {
     // Provenance is one-way: an imported skill can be vetted (enabled) but never
     // relabelled 'manual', which would hide its untrusted origin in the UI.
     if (patch.source === 'manual') {
@@ -139,6 +158,9 @@ export class SkillsService {
       // A skill flagged dangerous must not keep running for agents it's
       // already linked to — sever every link the moment it's (re-)detected.
       unlinkFromAgents: isDangerous,
+      // A new body is judged on itself; otherwise the judgement rests on the
+      // stored body we read, so pin the version it came from.
+      expectedVersion: patch.body === undefined ? existing.version : undefined,
     };
     return this.repo.update(workspaceId, id, updateValues);
   }
@@ -245,7 +267,7 @@ export class SkillsService {
 
     const [available, attached] = await Promise.all([
       this.deps.projectDocs.list({ owner: repoRow.owner, name: repoRow.name }),
-      this.repo.listContextPaths(id),
+      this.repo.listContextPaths(id, repoId),
     ]);
     return { available, attached };
   }
@@ -253,11 +275,14 @@ export class SkillsService {
   async setContext(
     workspaceId: string,
     id: string,
+    repoId: string,
     paths: string[],
   ): Promise<string[] | undefined> {
     const skill = await this.repo.getById(workspaceId, id);
     if (!skill) return undefined;
-    return this.repo.setContextPaths(id, paths);
+    const repoRow = await this.deps.repos.getById(workspaceId, repoId);
+    if (!repoRow) throw new NotFoundError('Repo not found');
+    return this.repo.setContextPaths(id, repoId, paths);
   }
 
   async readContextDoc(workspaceId: string, repoId: string, path: string): Promise<string> {

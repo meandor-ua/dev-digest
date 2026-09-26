@@ -31,7 +31,7 @@ export function SkillsListView() {
     setPendingDelete(null);
     deleteMutation.mutate(skill.id, {
       onSuccess: () => toast.success(t("detail.deleteSuccess", { name: skill.name })),
-      onError: (err) => toast.error((err as Error).message || t("detail.deleteError")),
+      // No local onError: the global MutationCache toast already shows the API's message.
     });
   };
 

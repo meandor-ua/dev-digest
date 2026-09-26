@@ -78,6 +78,28 @@ export function SkillsTab({ agentId }: { agentId: string }) {
     persist(arrayMove(linked, from, to).map((sk) => sk.skill_id));
   };
 
+  // dnd-kit's default announcements are English and read out the sortable id
+  // (a skill UUID) — speak translated text with the skill's name instead.
+  const nameOf = (id: string | number) => linked.find((sk) => sk.skill_id === id)?.name ?? String(id);
+  const positionOf = (id: string | number) => linked.findIndex((sk) => sk.skill_id === id) + 1;
+  const dndAccessibility = {
+    screenReaderInstructions: { draggable: t("skills.dnd.instructions") },
+    announcements: {
+      onDragStart: ({ active }: { active: { id: string | number } }) =>
+        t("skills.dnd.pickedUp", { name: nameOf(active.id), position: positionOf(active.id), total: linked.length }),
+      onDragOver: ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) =>
+        over
+          ? t("skills.dnd.movedOver", { name: nameOf(active.id), position: positionOf(over.id), total: linked.length })
+          : undefined,
+      onDragEnd: ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) =>
+        over
+          ? t("skills.dnd.dropped", { name: nameOf(active.id), position: positionOf(over.id), total: linked.length })
+          : t("skills.dnd.cancelled", { name: nameOf(active.id) }),
+      onDragCancel: ({ active }: { active: { id: string | number } }) =>
+        t("skills.dnd.cancelled", { name: nameOf(active.id) }),
+    },
+  };
+
   const link = (skillId: string) => persist([...linked.map((sk) => sk.skill_id), skillId]);
   const unlink = (skillId: string) =>
     persist(linked.filter((sk) => sk.skill_id !== skillId).map((sk) => sk.skill_id));
@@ -121,7 +143,12 @@ export function SkillsTab({ agentId }: { agentId: string }) {
             <EmptyState icon="Search" title={t("skills.noMatch")} />
           ) : (
             <>
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={onDragEnd}
+                accessibility={dndAccessibility}
+              >
                 <SortableContext items={visibleLinked.map((sk) => sk.skill_id)} strategy={verticalListSortingStrategy}>
                   <div style={s.list}>
                     {visibleLinked.map((sk) => (
@@ -230,29 +257,34 @@ function UnlinkedSkillRow({ skill, onLink }: { skill: SkillWithStats; onLink: ()
   const isDangerous = skill.is_dangerous;
   const needsVetting = skill.source !== "manual" && !skill.enabled;
   const cannotLink = isGloballyDisabled || isDangerous;
+  const reasonId = React.useId();
+  const reason = isDangerous
+    ? t("skills.globallyDangerous")
+    : needsVetting
+      ? t("skills.needsVettingTitle")
+      : isGloballyDisabled
+        ? t("skills.globallyDisabled")
+        : undefined;
   return (
     <div style={s.row(false)}>
       <span style={s.handle(true)} aria-hidden="true">
         <Icon.Menu size={15} />
       </span>
-      <span
-        style={cannotLink ? s.disabledCheckbox : undefined}
-        title={
-          isDangerous
-            ? t("skills.globallyDangerous")
-            : needsVetting
-              ? t("skills.needsVettingTitle")
-              : isGloballyDisabled
-                ? t("skills.globallyDisabled")
-                : undefined
-        }
-      >
+      <span style={cannotLink ? s.disabledCheckbox : undefined} title={reason}>
         <Checkbox
           checked={false}
           onChange={cannotLink ? undefined : onLink}
+          disabled={cannotLink}
           aria-label={t("skills.link", { name: skill.name })}
+          aria-describedby={cannotLink ? reasonId : undefined}
         />
       </span>
+      {/* `title` only reaches mouse users — give AT the same reason. */}
+      {cannotLink && (
+        <span id={reasonId} style={s.srOnly}>
+          {reason}
+        </span>
+      )}
       <div style={s.nameCol}>
         <span style={s.name(false)}>{skill.name}</span>
       </div>

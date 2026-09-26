@@ -31,12 +31,38 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
   const handle = timeoutController
     ? setTimeout(() => timeoutController.abort(), timeoutMs)
     : undefined;
+  // Honour BOTH a caller's signal and the timeout — neither replaces the other.
+  if (timeoutController && rest.signal) {
+    const caller = rest.signal;
+    if (caller.aborted) timeoutController.abort();
+    else caller.addEventListener("abort", () => timeoutController.abort(), { once: true });
+  }
+  const timedOut = () => !!timeoutController?.signal.aborted && !rest.signal?.aborted;
+  const timeoutError = (e: unknown) =>
+    // Code-keyed: the global toast (providers.tsx) shows translated copy for it.
+    new ApiError("The request took too long and was cancelled.", 0, "timeout", e);
 
+  // The timeout covers the whole exchange — a slow body stream included —
+  // so it's cleared only once the response has been fully read.
+  try {
+    return await readResponse<T>(path, rest, timeoutController?.signal, timedOut, timeoutError);
+  } finally {
+    clearTimeout(handle);
+  }
+}
+
+async function readResponse<T>(
+  path: string,
+  rest: RequestInit,
+  timeoutSignal: AbortSignal | undefined,
+  timedOut: () => boolean,
+  timeoutError: (e: unknown) => ApiError,
+): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...rest,
-      signal: timeoutController?.signal ?? rest.signal,
+      signal: timeoutSignal ?? rest.signal,
       headers: {
         // Only declare a JSON body when one is actually sent — otherwise a
         // body-less POST/PUT (e.g. tour generate, refresh, reindex) trips
@@ -46,14 +72,9 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
       },
     });
   } catch (e) {
-    if (timeoutController?.signal.aborted) {
-      throw new ApiError(
-        "The request took too long and was cancelled. Try again — this can happen with slower models.",
-        0,
-        "timeout",
-        e,
-      );
-    }
+    if (timedOut()) throw timeoutError(e);
+    // A caller's own abort isn't an outage — let it through as-is.
+    if (rest.signal?.aborted) throw e;
     // network failure / API down → full-screen error candidate
     throw new ApiError(
       `Cannot reach the DevDigest engine at ${API_BASE}. Is the API running?`,
@@ -61,8 +82,6 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
       "network_error",
       e
     );
-  } finally {
-    clearTimeout(handle);
   }
 
   if (!res.ok) {
@@ -83,7 +102,12 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
   }
 
   if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  try {
+    return (await res.json()) as T;
+  } catch (e) {
+    if (timedOut()) throw timeoutError(e);
+    throw e;
+  }
 }
 
 export const api = {

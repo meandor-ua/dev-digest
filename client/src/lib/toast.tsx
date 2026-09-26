@@ -56,12 +56,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const push = React.useCallback((message: string, kind: ToastKind = "info") => {
     const id = seq.current++;
-    // Drop an exact repeat of a toast still on screen. A failed mutation is
-    // toasted by the global MutationCache.onError (providers.tsx) AND often by
-    // the caller's own `onError` with the same `err.message` — without this,
-    // every such error shows twice.
+    // Drop an exact repeat of an ERROR toast still on screen. A failed
+    // mutation is toasted by the global MutationCache.onError (providers.tsx)
+    // AND sometimes by the caller's own `onError` with the same `err.message`
+    // — without this, such an error shows twice. Success/info toasts are
+    // never deduped: saving twice in a row should confirm both saves.
     setItems((prev) =>
-      prev.some((t) => t.kind === kind && t.message === message) ? prev : [...prev, { id, kind, message }],
+      kind === "error" && prev.some((t) => t.kind === kind && t.message === message)
+        ? prev
+        : [...prev, { id, kind, message }],
     );
     // auto-dismiss after 4s
     setTimeout(() => setItems((prev) => prev.filter((t) => t.id !== id)), 4000);

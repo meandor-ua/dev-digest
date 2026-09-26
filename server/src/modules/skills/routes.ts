@@ -13,6 +13,7 @@ import {
   SKILL_MESSAGE_MAX,
   SKILL_CONTEXT_MAX_DOCS,
   SKILL_CONTEXT_PATH_MAX,
+  SKILL_EVIDENCE_FILES_MAX,
   REMOTE_IMPORT_RATE_LIMIT,
 } from './constants.js';
 
@@ -23,7 +24,7 @@ const CreateSkillBody = z.object({
   source: SkillSource.optional(),
   body: z.string().max(SKILL_BODY_MAX),
   enabled: z.boolean().optional(),
-  evidence_files: z.array(z.string()).optional(),
+  evidence_files: z.array(z.string().max(SKILL_CONTEXT_PATH_MAX)).max(SKILL_EVIDENCE_FILES_MAX).optional(),
 });
 
 const UpdateSkillBody = z.object({
@@ -33,7 +34,7 @@ const UpdateSkillBody = z.object({
   source: SkillSource.optional(),
   body: z.string().max(SKILL_BODY_MAX).optional(),
   enabled: z.boolean().optional(),
-  evidence_files: z.array(z.string()).optional(),
+  evidence_files: z.array(z.string().max(SKILL_CONTEXT_PATH_MAX)).max(SKILL_EVIDENCE_FILES_MAX).optional(),
   message: z.string().max(SKILL_MESSAGE_MAX).optional(),
 });
 
@@ -53,6 +54,7 @@ const RestoreSkillBody = z.object({
 });
 
 const SetContextBody = z.object({
+  repo_id: z.string().uuid(),
   paths: z.array(z.string().min(1).max(SKILL_CONTEXT_PATH_MAX)).max(SKILL_CONTEXT_MAX_DOCS),
 });
 
@@ -204,7 +206,7 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
     { schema: { params: IdParams, body: SetContextBody } },
     async (req) => {
       const { workspaceId } = await getContext(app.container, req);
-      const attached = await service.setContext(workspaceId, req.params.id, req.body.paths);
+      const attached = await service.setContext(workspaceId, req.params.id, req.body.repo_id, req.body.paths);
       if (attached === undefined) throw new NotFoundError('Skill not found');
       return { attached };
     },

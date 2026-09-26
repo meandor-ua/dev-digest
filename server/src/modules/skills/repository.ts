@@ -4,7 +4,7 @@ import * as t from '../../db/schema.js';
 import type { SkillRow } from '../../db/rows.js';
 import type { Skill, SkillStats, SkillVersion, SkillWithStats } from '@devdigest/shared';
 import { toSkillDto, toSkillVersionDto } from './helpers.js';
-import type { InsertSkill, SkillsStore, UpdateSkill } from './ports.js';
+import { StaleSkillVersionError, type InsertSkill, type SkillsStore, type UpdateSkill } from './ports.js';
 
 export type { InsertSkill, UpdateSkill };
 
@@ -177,7 +177,7 @@ export class SkillsRepository implements SkillsStore {
     // neither is a `skills` column, so both are kept out of the "is this patch
     // empty" check below (an empty columnPatch would build an UPDATE with an
     // empty SET, which is invalid SQL).
-    const { message, unlinkFromAgents, ...columnPatch } = patch;
+    const { message, unlinkFromAgents, expectedVersion, ...columnPatch } = patch;
 
     // Read-lock-write in one transaction: `FOR UPDATE` serialises concurrent
     // edits of the same skill, so two body changes get N+1 and N+2 instead of
@@ -189,6 +189,9 @@ export class SkillsRepository implements SkillsStore {
         .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
         .for('update');
       if (!existing) return undefined;
+      if (expectedVersion !== undefined && existing.version !== expectedVersion) {
+        throw new StaleSkillVersionError();
+      }
 
       const bodyChanged = columnPatch.body !== undefined && columnPatch.body !== existing.body;
       const nextVersion = bodyChanged ? existing.version + 1 : existing.version;
@@ -311,25 +314,44 @@ export class SkillsRepository implements SkillsStore {
 
   // ---- Context docs (skill_context_docs) -----------------------------------
 
-  /** Attached doc paths for a skill, in `order` ascending. */
-  async listContextPaths(skillId: string): Promise<string[]> {
+  /** Doc paths attached to a skill for one repo, in `order` ascending. */
+  async listContextPaths(skillId: string, repoId: string): Promise<string[]> {
     const rows = await this.db
       .select({ path: t.skillContextDocs.path })
       .from(t.skillContextDocs)
-      .where(eq(t.skillContextDocs.skillId, skillId))
+      .where(and(eq(t.skillContextDocs.skillId, skillId), eq(t.skillContextDocs.repoId, repoId)))
       .orderBy(asc(t.skillContextDocs.order));
     return rows.map((r) => r.path);
   }
 
-  /** Replace the attached set — array order becomes the persisted `order`. */
-  async setContextPaths(skillId: string, paths: string[]): Promise<string[]> {
+  /** Same as `listContextPaths`, for many skills in one query (review hot path). */
+  async listContextPathsForSkills(skillIds: string[], repoId: string): Promise<Map<string, string[]>> {
+    const bySkill = new Map<string, string[]>();
+    if (skillIds.length === 0) return bySkill;
+    const rows = await this.db
+      .select({ skillId: t.skillContextDocs.skillId, path: t.skillContextDocs.path })
+      .from(t.skillContextDocs)
+      .where(and(inArray(t.skillContextDocs.skillId, skillIds), eq(t.skillContextDocs.repoId, repoId)))
+      .orderBy(asc(t.skillContextDocs.order));
+    for (const r of rows) {
+      const paths = bySkill.get(r.skillId) ?? [];
+      paths.push(r.path);
+      bySkill.set(r.skillId, paths);
+    }
+    return bySkill;
+  }
+
+  /** Replace a skill's attached set for one repo — array order becomes the persisted `order`. */
+  async setContextPaths(skillId: string, repoId: string, paths: string[]): Promise<string[]> {
     const unique = [...new Set(paths)];
     return this.db.transaction(async (tx) => {
-      await tx.delete(t.skillContextDocs).where(eq(t.skillContextDocs.skillId, skillId));
+      await tx
+        .delete(t.skillContextDocs)
+        .where(and(eq(t.skillContextDocs.skillId, skillId), eq(t.skillContextDocs.repoId, repoId)));
       if (unique.length > 0) {
         await tx
           .insert(t.skillContextDocs)
-          .values(unique.map((path, order) => ({ skillId, path, order })));
+          .values(unique.map((path, order) => ({ skillId, repoId, path, order })));
       }
       return unique;
     });

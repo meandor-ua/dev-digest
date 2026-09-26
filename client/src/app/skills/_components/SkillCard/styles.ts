@@ -27,6 +27,25 @@ export const s = {
     placeItems: "center",
     flexShrink: 0,
   }),
+  /** The card's primary action: a real button holding the name, so the
+   *  Toggle/Delete controls stay siblings of it, never nested inside a button. */
+  nameBtn: {
+    fontSize: 14,
+    fontWeight: 600,
+    flex: 1,
+    minWidth: 0,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    background: "none",
+    border: "none",
+    padding: 0,
+    margin: 0,
+    textAlign: "left",
+    color: "inherit",
+    fontFamily: "inherit",
+    cursor: "pointer",
+  } satisfies CSSProperties,
   name: {
     fontSize: 14,
     fontWeight: 600,

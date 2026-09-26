@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { Agent } from "@devdigest/shared";
 import messages from "../../../../../../messages/en/agents.json";
@@ -79,6 +79,13 @@ describe("AgentsColumn", () => {
     expect(screen.queryByText("Perf Reviewer")).not.toBeInTheDocument();
   });
 
+  it("prefills the create form's Name from a quick-start template", () => {
+    renderColumn();
+    fireEvent.click(screen.getByRole("button", { name: /Add Agent/ }));
+    fireEvent.click(screen.getByText("Security"));
+    expect(screen.getByDisplayValue("Security reviewer")).toBeInTheDocument();
+  });
+
   it("opens another agent on the same editor tab", () => {
     renderColumn();
     fireEvent.click(screen.getByText("Perf Reviewer"));
@@ -89,7 +96,7 @@ describe("AgentsColumn", () => {
     deleteMutate.mockImplementation((_id, opts) => opts.onSuccess());
     renderColumn();
     fireEvent.click(screen.getAllByRole("button", { name: "Delete agent" })[0]!);
-    fireEvent.click(screen.getByRole("button", { name: "Ok" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(deleteMutate).toHaveBeenCalledWith("a1", expect.any(Object));
     expect(toastSuccess).toHaveBeenCalledWith('Deleted agent "Security Reviewer"');
     expect(push).toHaveBeenCalledWith("/agents");
@@ -99,7 +106,7 @@ describe("AgentsColumn", () => {
     deleteMutate.mockImplementation((_id, opts) => opts.onSuccess());
     renderColumn();
     fireEvent.click(screen.getAllByRole("button", { name: "Delete agent" })[1]!);
-    fireEvent.click(screen.getByRole("button", { name: "Ok" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(deleteMutate).toHaveBeenCalledWith("a2", expect.any(Object));
     expect(push).not.toHaveBeenCalledWith("/agents");
   });
@@ -111,11 +118,12 @@ describe("AgentsColumn", () => {
     expect(deleteMutate).not.toHaveBeenCalled();
   });
 
-  it("toasts an error when deletion fails", () => {
-    deleteMutate.mockImplementation((_id, opts) => opts.onError(new Error("boom")));
+  it("leaves a failed deletion's toast to the global MutationCache handler (no duplicate) and stays put", () => {
+    deleteMutate.mockImplementation((_id, opts) => opts.onError?.(new Error("boom")));
     renderColumn();
     fireEvent.click(screen.getAllByRole("button", { name: "Delete agent" })[0]!);
-    fireEvent.click(screen.getByRole("button", { name: "Ok" }));
-    expect(toastError).toHaveBeenCalledWith("boom");
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+    expect(toastError).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 });

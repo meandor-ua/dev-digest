@@ -279,6 +279,46 @@ describe("CreateSkillModal", () => {
     );
   });
 
+  it("keeps a heading-derived Name following the body as it is typed character by character", () => {
+    renderModal("scratch");
+    for (const prefix of ["#", "# ", "# S", "# Se", "# Security rubric"]) type("Skill Body (Markdown)", prefix);
+    expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("Security rubric");
+
+    // Once the user edits Name, the body no longer drives it.
+    type("Skill Name", "Mine");
+    type("Skill Body (Markdown)", "# Security rubric v2");
+    expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("Mine");
+  });
+
+  it("clears a derived Name when the heading it came from is deleted", () => {
+    renderModal("scratch");
+    type("Skill Body (Markdown)", "# Rule");
+    type("Skill Body (Markdown)", "plain body");
+    expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("");
+  });
+
+  it("opens the created skill instead of staying on the form when the v2 header-strip fails", () => {
+    createMutate.mockImplementation((_input, opts) => opts.onSuccess({ id: "sk9", name: "Pasted Rule" }));
+    updateMutate.mockImplementation((_input, opts) => opts.onError(new Error("boom")));
+    const { onClose } = renderModal("scratch");
+    type("Skill Body (Markdown)", "---\nname: Pasted Rule\n---\nbody");
+    fireEvent.click(screen.getByRole("button", { name: /Create Skill/ }));
+
+    expect(onClose).toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith("/skills/sk9");
+    expect(screen.getByText(/couldn't be removed/)).toBeInTheDocument();
+  });
+
+  it("opens the file picker from the keyboard via the dropzone", () => {
+    renderModal("import");
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const click = vi.spyOn(input, "click");
+    const dropzone = screen.getByRole("button", { name: messages.create.file.dropzone });
+    dropzone.focus();
+    fireEvent.keyDown(dropzone, { key: "Enter" });
+    expect(click).toHaveBeenCalled();
+  });
+
   it("file import keeps Name/Description the user filled in before importing", async () => {
     extractMarkdownFiles.mockResolvedValue([
       { filename: "SKILL.md", content: "---\nname: file-name\ndescription: File desc.\n---\n# Rules\nbody" },
@@ -344,5 +384,20 @@ describe("CreateSkillModal", () => {
     fireEvent.change(input, { target: { files: [new File(["x"], "a.zip")] } });
     expect(await screen.findByText("Archive has more than 50 Markdown files.")).toBeInTheDocument();
     expect(screen.queryByText("english only")).not.toBeInTheDocument();
+  });
+
+  it("ignores a second file while the first is still extracting, so the last-resolving one can't win the form", async () => {
+    let finishFirst!: (v: { filename: string; content: string }[]) => void;
+    extractMarkdownFiles.mockImplementationOnce(() => new Promise((r) => (finishFirst = r)));
+    renderModal("import");
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "first.zip")] } });
+    expect(await screen.findByText(messages.create.file.extracting)).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { files: [new File(["y"], "second.md")] } });
+    expect(extractMarkdownFiles).toHaveBeenCalledTimes(1);
+
+    finishFirst([{ filename: "first.md", content: "# First\nbody" }]);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("First"));
   });
 });

@@ -1,11 +1,11 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { SkillWithStats } from "@devdigest/shared";
 import messages from "../../../../../messages/en/skills.json";
 import commonMessages from "../../../../../messages/en/common.json";
-import { UnsavedChangesProvider, useReportUnsaved } from "@/lib/unsaved-changes";
+import { UnsavedChangesProvider, useReportUnsaved } from "@/app/skills/_lib/unsaved-changes";
 import { SkillsColumn } from "./SkillsColumn";
 
 afterEach(cleanup);
@@ -193,7 +193,7 @@ describe("SkillsColumn", () => {
     expect(
       screen.getByText('Delete skill "Test Coverage"? This will unlink it from all agents.'),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Ok" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(deleteMutate).toHaveBeenCalledWith("sk2", expect.any(Object));
   });
 
@@ -234,6 +234,20 @@ describe("SkillsColumn", () => {
     fireEvent.click(screen.getByRole("button", { name: /Add Skill/ }));
     fireEvent.click(screen.getByText("Import from URL"));
     expect(screen.getByText("Skill URL")).toBeInTheDocument();
+  });
+
+  it("asks before opening the create modal while the editor has unsaved changes", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderWithProviders(
+      <UnsavedChangesProvider>
+        <SkillsColumn activeId="sk1" tab="config" />
+        <DirtyEditor dirty />
+      </UnsavedChangesProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Add Skill/ }));
+    fireEvent.click(screen.getByText("Import from URL"));
+    expect(confirm).toHaveBeenCalledWith("You have unsaved changes to this skill. Discard them?");
+    expect(screen.queryByText("Skill URL")).not.toBeInTheDocument();
   });
 
   it("navigates without asking when nothing is unsaved", () => {

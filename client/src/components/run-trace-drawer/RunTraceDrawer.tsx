@@ -21,7 +21,10 @@ export interface RunTraceDrawerProps {
   /** Title context (agent name / PR number). */
   agentName?: string | null;
   prNumber?: number | null;
-  /** Persisted findings of this run (shown in the Findings section). */
+  /**
+   * Persisted findings of this run (shown in the Findings section). Omit when
+   * they aren't known (yet) — the section is hidden rather than showing 0.
+   */
   findings?: FindingRecord[];
   /** When true, the drawer defaults to the live log and streams SSE. */
   running?: boolean;
@@ -37,7 +40,7 @@ export default function RunTraceDrawer({
   runId,
   agentName,
   prNumber,
-  findings = [],
+  findings,
   running = false,
   onClose,
 }: RunTraceDrawerProps) {

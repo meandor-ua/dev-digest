@@ -19,7 +19,6 @@
     "delete": "Delete",
     "confirmDelete": "Delete skill \"{name}\"? This will unlink it from all agents.",
     "deleteSuccess": "Deleted skill \"{name}\"",
-    "deleteError": "Failed to delete skill",
     "loadError": "Could not load this skill.",
     "runOnEvals": "Run on evals",
     "runOnEvalsTitle": "Not available yet",
@@ -49,7 +48,8 @@
       "agents": "{count, plural, one {# agent} other {# agents}}",
       "pull": "{pct}% pull",
       "accept": "{pct}% accept"
-    }
+    },
+    "toggleEnabled": "Enable {name}"
   },
   "preview": {
     "title": "Preview",
@@ -57,7 +57,8 @@
     "draftBadge": "Unsaved draft — previewing your edits",
     "restore": "Restore v{version}",
     "untrustedNotice": "This skill came from an external source. Read its body before enabling it — once enabled, it is injected into agent prompts as instructions.",
-    "dangerousNotice": "This skill contains suspicious patterns commonly used in prompt injection attempts. Remove the malicious content to enable this skill."
+    "dangerousNotice": "This skill contains suspicious patterns commonly used in prompt injection attempts. Remove the malicious content to enable this skill.",
+    "imagePlaceholder": "Image not loaded in preview: {alt}"
   },
   "typeOptions": {
     "rubric": "Rubric (Scoring & edge cases)",
@@ -101,7 +102,8 @@
     "loadError": "Could not load skill statistics",
     "loadErrorBody": "Usage metrics could not be retrieved from the server.",
     "agentsUnit": "{count, plural, one {agent} other {agents}}",
-    "open": "Open"
+    "open": "Open",
+    "otherCategory": "other"
   },
   "versions": {
     "title": "Version history",
@@ -120,7 +122,7 @@
   },
   "context": {
     "heading": "Project context to use",
-    "subtitle": "Any agent using this skill inherits these documents.",
+    "subtitle": "Any agent using this skill inherits these documents when it reviews this repo. Each repo keeps its own selection.",
     "attachedCount": "{count, plural, one {# attached} other {# attached}}",
     "filterPlaceholder": "Filter docs…",
     "dragHandle": "Reorder",
@@ -194,7 +196,8 @@
         "bodyRequired": "Skill body is required",
         "createFailed": "Failed to create skill",
         "dangerousContent": "This skill contains suspicious patterns that indicate possible injection attempts. Remove them before saving.",
-        "importFailed": "Failed to import skill from URL"
+        "importFailed": "Failed to import skill from URL",
+        "stripFailed": "Created \"{name}\", but its YAML header couldn't be removed — edit it out in the skill editor."
       },
       "success": "Created skill \"{name}\"",
       "importedNotice": "This content was imported — it will be saved disabled until you vet and enable it.",
@@ -204,7 +207,7 @@
       "dropzone": "Click or drag .md or .zip archive here",
       "extracting": "Extracting...",
       "hint": "Extracts only markdown (.md) rule blocks. Discards all executable scripts safely.",
-      "success": "Extracted {count} markdown file(s)",
+      "success": "Extracted {count, plural, one {# markdown file} other {# markdown files}}",
       "extractFailed": "Failed to extract markdown from file",
       "importedDescription": "Imported from {filename}",
       "errors": {
@@ -228,6 +231,10 @@
       "urlRequired": "URL is required",
       "importedDescription": "Imported from {url}",
       "success": "Imported \"{name}\". Disabled until you vet + enable it."
+    },
+    "versionMessages": {
+      "stripFrontmatter": "Removed YAML frontmatter",
+      "stripImportedFrontmatter": "Removed imported YAML frontmatter"
     }
   }
 }

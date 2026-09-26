@@ -45,6 +45,26 @@ export function PreviewTab({
   onRestore: () => void;
 }) {
   const t = useTranslations("skills");
+  // Skill bodies can be imported from untrusted sources. react-markdown already
+  // drops raw HTML and `javascript:` URLs; on top of that, never fetch a
+  // remote image just by opening Preview (a tracking-pixel / IP leak), and
+  // open links away from the app with no opener access.
+  const components = React.useMemo<Components>(
+    () => ({
+      ...MD,
+      img: ({ src, alt }) => (
+        <span style={s.mdImagePlaceholder} title={typeof src === "string" ? src : undefined}>
+          {t("preview.imagePlaceholder", { alt: alt || "—" })}
+        </span>
+      ),
+      a: ({ href, children }) => (
+        <a href={href} target="_blank" rel="noopener noreferrer nofollow">
+          {children}
+        </a>
+      ),
+    }),
+    [t],
+  );
 
   return (
     <div style={s.wrap}>
@@ -65,7 +85,7 @@ export function PreviewTab({
 
       <div style={s.previewContainer}>
         <div style={s.markdownBody}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
             {body}
           </ReactMarkdown>
         </div>

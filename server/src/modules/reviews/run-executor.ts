@@ -4,9 +4,10 @@ import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
-import { REVIEW_STRATEGY } from './constants.js';
+import { CONTEXT_DOCS_MAX_CHARS, REVIEW_STRATEGY } from './constants.js';
 import { skillBlock, skillLogLines, taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
+import { detectInjection } from '../skills/injection-detector.js';
 
 /**
  * The slice of an agent↔skill link the review needs (prompt block + context
@@ -213,13 +214,19 @@ export class ReviewRunExecutor {
 
       // Fetch skills linked to this agent; the underlying skill's own `enabled`
       // flag gates prompt assembly (linking itself is binary). A dangerous skill
-      // is never applied, even if some path left it linked AND enabled.
+      // is never applied, even if some path left it linked AND enabled. The
+      // stored `isDangerous` flag is not trusted alone: rows that predate the
+      // column (migration 0012 defaults it to false) or the current patterns
+      // are re-screened here, right before their body reaches the model.
       const linkedSkills = await this.agents.linkedSkills(agent.id);
-      const activeLinks = linkedSkills.filter((s) => s.skill.enabled && !s.skill.isDangerous);
+      const isDangerous = (sk: (typeof linkedSkills)[number]['skill']) =>
+        sk.isDangerous || detectInjection(sk.body).isDangerous;
+      const dangerousIds = new Set(linkedSkills.filter((s) => isDangerous(s.skill)).map((s) => s.skill.id));
+      const activeLinks = linkedSkills.filter((s) => s.skill.enabled && !dangerousIds.has(s.skill.id));
       const skillBodies = activeLinks.map((s) => skillBlock(s.skill));
-      const dangerousSkills = linkedSkills.filter((s) => s.skill.isDangerous).map((s) => s.skill.name);
+      const dangerousSkills = linkedSkills.filter((s) => dangerousIds.has(s.skill.id)).map((s) => s.skill.name);
       const skippedSkills = linkedSkills
-        .filter((s) => !s.skill.enabled && !s.skill.isDangerous)
+        .filter((s) => !s.skill.enabled && !dangerousIds.has(s.skill.id))
         .map((s) => s.skill.name);
       const skillLog = skillLogLines(
         activeLinks.map((s, i) => ({
@@ -235,7 +242,7 @@ export class ReviewRunExecutor {
       // Project-context docs attached to those same active skills (Context tab)
       // — re-read from the PR's repo clone so they always reflect HEAD; a skill
       // stores doc PATHS only, never content.
-      const specs = await this.buildContextDocs(activeLinks, repo, runLog);
+      const specs = await this.buildContextDocs(activeLinks, pull.repoId, repo, runLog);
 
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
@@ -421,37 +428,50 @@ export class ReviewRunExecutor {
   }
 
   /**
-   * Collect the attached project-context doc paths across `activeLinks`
-   * (dedupe, skill order then doc order), then re-read each from the PR's
+   * Collect the project-context doc paths attached to `activeLinks` for this
+   * repo (dedupe, skill order then doc order), then re-read each from the PR's
    * repo clone. A doc missing from the clone (renamed/deleted since the skill
-   * was configured) is silently skipped rather than failing the run.
+   * was configured) is silently skipped rather than failing the run; docs past
+   * CONTEXT_DOCS_MAX_CHARS are dropped and logged.
    */
   private async buildContextDocs(
     activeLinks: ActiveSkillLink[],
+    repoId: string,
     repo: RepoRef,
     runLog: RunLogger,
   ): Promise<string[] | undefined> {
     if (activeLinks.length === 0) return undefined;
 
-    const seen = new Set<string>();
-    const paths: string[] = [];
-    for (const link of activeLinks) {
-      const skillPaths = await this.container.skillsRepo.listContextPaths(link.skill.id);
-      for (const p of skillPaths) {
-        if (!seen.has(p)) {
-          seen.add(p);
-          paths.push(p);
-        }
-      }
-    }
+    const bySkill = await this.container.skillsRepo.listContextPathsForSkills(
+      activeLinks.map((l) => l.skill.id),
+      repoId,
+    );
+    const paths = [...new Set(activeLinks.flatMap((l) => bySkill.get(l.skill.id) ?? []))];
     if (paths.length === 0) return undefined;
 
     const docs = await this.container.projectDocs.readMany(repo, paths);
-    const contents = docs.map((d) => `### ${d.path}\n${d.text}`);
     const read = new Set(docs.map((d) => d.path));
     const skipped = paths.filter((p) => !read.has(p));
     if (skipped.length > 0) {
       runLog.info(`Context: skipped ${skipped.length} doc(s) (missing or over size cap): ${skipped.join(', ')}`);
+    }
+
+    const contents: string[] = [];
+    const overBudget: string[] = [];
+    let used = 0;
+    for (const d of docs) {
+      const block = `### ${d.path}\n${d.text}`;
+      if (used + block.length > CONTEXT_DOCS_MAX_CHARS) {
+        overBudget.push(d.path);
+        continue;
+      }
+      used += block.length;
+      contents.push(block);
+    }
+    if (overBudget.length > 0) {
+      runLog.info(
+        `Context: dropped ${overBudget.length} doc(s) over the ${CONTEXT_DOCS_MAX_CHARS}-char total budget: ${overBudget.join(', ')}`,
+      );
     }
     if (contents.length === 0) return undefined;
     runLog.info(`Context: ${contents.length} project doc(s) attached`);

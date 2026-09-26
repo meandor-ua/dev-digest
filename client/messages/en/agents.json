@@ -9,7 +9,7 @@
     "deleteTitle": "Delete agent",
     "confirmDelete": "Delete agent \"{name}\"? This cannot be undone.",
     "deleteSuccess": "Deleted agent \"{name}\"",
-    "deleteError": "Failed to delete agent"
+    "toggleEnabled": "Enable {name}"
   },
   "list": {
     "breadcrumbLab": "Skills Lab",
@@ -22,7 +22,15 @@
     "loadError": "Could not load agents.",
     "emptyTitle": "No agents yet",
     "emptyBody": "An agent is a configured reviewer — a model, a prompt, and the skills it uses. Create one to start reviewing.",
-    "emptyCta": "Create your first agent"
+    "emptyCta": "Create your first agent",
+    "templates": {
+      "Security": "Security",
+      "Performance": "Performance",
+      "Mentor": "Mentor",
+      "Conformance": "Conformance",
+      "Architecture": "Architecture"
+    },
+    "templateName": "{template} reviewer"
   },
   "create": {
     "title": "Create agent",
@@ -116,7 +124,14 @@
     "dragHandle": "Drag to reorder {name}",
     "filterLabel": "Filter skills",
     "link": "Link {name} to this agent",
-    "unlink": "Unlink {name} from this agent"
+    "unlink": "Unlink {name} from this agent",
+    "dnd": {
+      "instructions": "To reorder a skill, press Space or Enter on its handle, use the arrow keys to move it, then press Space or Enter again to drop it, or Escape to cancel.",
+      "pickedUp": "Picked up {name}, position {position} of {total}.",
+      "movedOver": "{name} moved to position {position} of {total}.",
+      "dropped": "{name} dropped at position {position} of {total}.",
+      "cancelled": "Reordering cancelled. {name} returned to its original position."
+    }
   },
   "empty": {
     "evalsTitle": "No evals yet",
@@ -141,7 +156,6 @@
     "viewTrace": "View trace",
     "noTrace": "No trace",
     "cols": {
-      "run": "Run",
       "pr": "PR",
       "when": "When",
       "tokens": "Tokens",
@@ -149,7 +163,17 @@
       "findings": "Findings",
       "source": "Source",
       "trace": "Trace"
-    }
+    },
+    "severity": {
+      "CRITICAL": "Critical",
+      "WARNING": "Warning",
+      "SUGGESTION": "Suggestion"
+    },
+    "sources": {
+      "local": "local",
+      "ci": "CI"
+    },
+    "otherCategory": "other"
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."

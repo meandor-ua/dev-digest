@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ConventionCandidate } from "@devdigest/shared";
 import messages from "../../../../../../../messages/en/conventions.json";
@@ -136,10 +136,33 @@ describe("ConventionCard", () => {
     expect(screen.queryAllByRole("textbox")).toHaveLength(2);
     expect(screen.getByText(CANDIDATE.evidence_snippet)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Save"));
-    expect(onSave).toHaveBeenCalledWith({
-      rule: "Always await, never .then()",
-      rationale: "Keeps stack traces readable.",
-    });
+    expect(onSave).toHaveBeenCalledWith(
+      { rule: "Always await, never .then()", rationale: "Keeps stack traces readable." },
+      expect.any(Function),
+    );
+  });
+
+  it("stays in edit mode with the typed text until the save succeeds", () => {
+    const onSave = vi.fn();
+    renderWithIntl(
+      <ConventionCard
+        candidate={CANDIDATE}
+        evidenceUrl={null}
+        onAccept={vi.fn()}
+        onReject={vi.fn()}
+        onSave={onSave}
+        onDelete={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Edit"));
+    fireEvent.change(screen.getByLabelText("Rule"), { target: { value: "Edited rule" } });
+    fireEvent.click(screen.getByLabelText("Save"));
+    // Save in flight (or failed): the edit is still on screen.
+    expect(screen.getByLabelText("Rule")).toHaveValue("Edited rule");
+
+    const onSaved = onSave.mock.calls[0]![1] as () => void;
+    act(() => onSaved());
+    expect(screen.queryByLabelText("Rule")).not.toBeInTheDocument();
   });
 
   it("keeps edit and delete visible while editing; a second Edit click discards", () => {

@@ -106,6 +106,7 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `11-pr-brief` | PR #482 → Overview tab renders the PR BRIEF card (verdict, findings count, summary, PR SCORE) above the DESCRIPTION |
 | `12-agent-detail` | `/agents` → open Security Reviewer → five-tab editor: Config form, Skills lists the 2 seeded linked skills ("2 of 14 linked" over every workspace skill), repo-scoped Stats shows the seeded runs (Total runs / Run history), Evals + CI placeholders |
 | `13-conventions` | PR list → sidebar Conventions link → `/repos/<id>/conventions` heading + empty state with "Run scan" (no scan is triggered — that's a model call) |
+| `14-skills-lab-a11y` | agent card's name button opens the editor → Delete agent opens the ConfirmDialog, Escape closes it (nothing deleted) → `/skills` Create from scratch: typing `# Security rubric` keystroke by keystroke makes Skill Name follow the full heading; Cancel (nothing saved) |
 
 ---
 

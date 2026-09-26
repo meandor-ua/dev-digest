@@ -150,9 +150,9 @@ export default function ConventionsPage() {
               saving={savingId === c.id}
               onAccept={() => setStatus(c.id, c.status === "accepted" ? "pending" : "accepted")}
               onReject={() => setStatus(c.id, c.status === "rejected" ? "pending" : "rejected")}
-              onSave={(p) => {
+              onSave={(p, onSaved) => {
                 setSavingId(c.id);
-                patch.mutate({ id: c.id, patch: p }, { onSettled: () => setSavingId(null) });
+                patch.mutate({ id: c.id, patch: p }, { onSuccess: onSaved, onSettled: () => setSavingId(null) });
               }}
               onDelete={() => del.mutate(c.id)}
             />

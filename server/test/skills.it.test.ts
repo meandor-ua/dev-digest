@@ -8,6 +8,7 @@ import * as t from '../src/db/schema.js';
 import { MockGitClient, MockGitHubClient, MockProjectDocsAdapter } from '../src/adapters/mocks.js';
 import { SkillsService } from '../src/modules/skills/service.js';
 import { SkillsRepository } from '../src/modules/skills/repository.js';
+import { StaleSkillVersionError } from '../src/modules/skills/ports.js';
 import type { RemoteTextFetcher } from '../src/adapters/remote-text/index.js';
 import { ValidationError, ExternalServiceError } from '../src/platform/errors.js';
 
@@ -151,6 +152,12 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
     expect(ctx.statusCode).toBe(422);
     const doc = await app.inject({ method: 'GET', url: '/skills/context/doc?repo_id=abc&path=docs/a.md' });
     expect(doc.statusCode).toBe(422);
+    const put = await app.inject({
+      method: 'PUT',
+      url: `/skills/${skillId}/context`,
+      payload: { repo_id: 'abc', paths: ['docs/a.md'] },
+    });
+    expect(put.statusCode).toBe(422);
     const imp = await app.inject({
       method: 'POST',
       url: '/skills/import',
@@ -356,7 +363,7 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
       const set1 = await app.inject({
         method: 'PUT',
         url: `/skills/${skill.id}/context`,
-        payload: { paths: ['docs/a.md', 'specs/b.md'] },
+        payload: { repo_id: repoId, paths: ['docs/a.md', 'specs/b.md'] },
       });
       expect(set1.statusCode).toBe(200);
       expect(set1.json()).toEqual({ attached: ['docs/a.md', 'specs/b.md'] });
@@ -371,7 +378,7 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
       const set2 = await app.inject({
         method: 'PUT',
         url: `/skills/${skill.id}/context`,
-        payload: { paths: ['specs/b.md', 'docs/a.md'] },
+        payload: { repo_id: repoId, paths: ['specs/b.md', 'docs/a.md'] },
       });
       expect(set2.json()).toEqual({ attached: ['specs/b.md', 'docs/a.md'] });
       const get2 = await app.inject({
@@ -383,14 +390,14 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
       const dupes = await app.inject({
         method: 'PUT',
         url: `/skills/${skill.id}/context`,
-        payload: { paths: ['docs/a.md', 'docs/a.md'] },
+        payload: { repo_id: repoId, paths: ['docs/a.md', 'docs/a.md'] },
       });
       expect(dupes.json()).toEqual({ attached: ['docs/a.md'] });
 
       const tooMany = await app.inject({
         method: 'PUT',
         url: `/skills/${skill.id}/context`,
-        payload: { paths: Array.from({ length: 101 }, (_, i) => `docs/${i}.md`) },
+        payload: { repo_id: repoId, paths: Array.from({ length: 101 }, (_, i) => `docs/${i}.md`) },
       });
       expect(tooMany.statusCode).toBe(422);
 
@@ -482,8 +489,26 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
     expect(await service.get(otherWs!.id, foreign.id)).toBeDefined();
     expect(await service.get(defaultWs!, foreign.id)).toBeUndefined();
     expect(await service.listVersions(defaultWs!, foreign.id)).toBeUndefined();
-    expect(await service.setContext(defaultWs!, foreign.id, ['docs/a.md'])).toBeUndefined();
+    expect(await service.setContext(defaultWs!, foreign.id, 'irrelevant-repo-id', ['docs/a.md'])).toBeUndefined();
     expect(await service.getContext(defaultWs!, foreign.id, 'irrelevant-repo-id')).toBeUndefined();
+  });
+
+  it('update with a stale expectedVersion throws StaleSkillVersionError and writes nothing', async () => {
+    const { db } = pg.handle;
+    const [ws] = await db.insert(t.workspaces).values({ name: 'stale-version-ws' }).returning();
+    const repo = new SkillsRepository(db);
+    const created = await repo.insert({ workspaceId: ws!.id, name: 'S', type: 'rubric', body: 'v1' });
+    await repo.update(ws!.id, created.id, { body: 'v2' });
+
+    await expect(
+      repo.update(ws!.id, created.id, { enabled: true, isDangerous: false, expectedVersion: 1 }),
+    ).rejects.toBeInstanceOf(StaleSkillVersionError);
+    const after = await repo.getById(ws!.id, created.id);
+    expect(after).toMatchObject({ version: 2, body: 'v2' });
+
+    await expect(
+      repo.update(ws!.id, created.id, { name: 'Renamed', expectedVersion: 2 }),
+    ).resolves.toMatchObject({ name: 'Renamed' });
   });
 
   // ---- Skill import tests ----
@@ -1006,6 +1031,24 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
       });
 
       expect(res.statusCode).toBe(422);
+      await app.close();
+    });
+
+    it('POST /skills with too many or too-long evidence_files returns 422', async () => {
+      const app = await makeApp();
+      const base = { name: 'Evidence', body: 'content', type: 'rubric' };
+      const tooMany = await app.inject({
+        method: 'POST',
+        url: '/skills',
+        payload: { ...base, evidence_files: Array.from({ length: 201 }, (_, i) => `src/${i}.ts`) },
+      });
+      expect(tooMany.statusCode).toBe(422);
+      const tooLong = await app.inject({
+        method: 'POST',
+        url: '/skills',
+        payload: { ...base, evidence_files: ['a'.repeat(501)] },
+      });
+      expect(tooLong.statusCode).toBe(422);
       await app.close();
     });
 

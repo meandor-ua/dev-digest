@@ -1,8 +1,13 @@
 # server (@devdigest/api)
 
-## Before answering
+## Before answering — and before editing
 
 Search `server/docs/`, `server/specs/`, `server/insights/` first.
+Before your first edit or command in this package (including when a task
+crosses in from another package), read `server/insights/INSIGHTS.md` and any
+matching `server/insights/<topic>.md`, and grep `server/insights/` for any tool
+you're about to run that isn't listed under Commands — see the root
+`AGENTS.md` insights gate.
 
 ## Tech stack
 
@@ -16,6 +21,10 @@ required to boot — every secret is optional and settable at runtime.
 
 - Run: `pnpm dev` (`:3001`).
 - Migrate/seed: `pnpm db:migrate`, `pnpm db:seed`.
+- New migration: `pnpm db:generate` (drizzle-kit), then **read the generated
+  SQL before running it** — it has emitted statements in an order that can't
+  apply (a PK on a column added later) and `NOT NULL` adds with no backfill.
+  Known generate quirks are in `insights/INSIGHTS.md` (grep `drizzle-kit`).
 - Test: `pnpm test` — unit (`vitest run --exclude '**/*.it.test.ts'`, no
   Docker) + integration (`vitest run .it.test`, real Postgres via
   testcontainers, self-skips without Docker). `pnpm test` runs both.

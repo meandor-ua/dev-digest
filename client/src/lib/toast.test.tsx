@@ -39,4 +39,17 @@ describe("ToastProvider", () => {
     expect(screen.getAllByText("Skill not found")).toHaveLength(2);
     expect(screen.getByText("Couldn’t save skills. Reverted.")).toBeInTheDocument();
   });
+
+  it("does not dedupe repeated success toasts — each save is confirmed", () => {
+    render(
+      <ToastProvider>
+        <Grab />
+      </ToastProvider>,
+    );
+    act(() => {
+      api.success("Saved");
+      api.success("Saved");
+    });
+    expect(screen.getAllByText("Saved")).toHaveLength(2);
+  });
 });

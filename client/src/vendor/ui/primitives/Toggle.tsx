@@ -5,6 +5,7 @@ export function Toggle({
   onChange,
   size = 18,
   disabled = false,
+  "aria-label": ariaLabel,
 }: {
   on: boolean;
   onChange?: (v: boolean) => void;
@@ -12,6 +13,8 @@ export function Toggle({
   /** Renders dimmed and blocks clicks (native `disabled` — no click event
    *  reaches `onClick` at all, so `onChange` can safely stay undefined). */
   disabled?: boolean;
+  /** A bare switch has no text — name what it toggles. */
+  "aria-label"?: string;
 }) {
   return (
     <button
@@ -19,6 +22,7 @@ export function Toggle({
       onClick={() => onChange?.(!on)}
       role="switch"
       aria-checked={on}
+      aria-label={ariaLabel}
       disabled={disabled}
       style={{
         width: size * 1.85,

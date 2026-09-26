@@ -10,9 +10,9 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { Agent } from "@devdigest/shared";
 import { Button, Dropdown, TextInput } from "@devdigest/ui";
-import { AgentCard } from "../../../_components/AgentCard";
-import { CreateAgentModal, TEMPLATES } from "../../../_components/CreateAgentModal";
-import { filterAgents } from "../../../_lib/filter-agents";
+import { AgentCard } from "@/app/agents/_components/AgentCard";
+import { CreateAgentModal, TEMPLATES } from "@/app/agents/_components/CreateAgentModal";
+import { filterAgents } from "@/app/agents/_lib/filter-agents";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAgents, useUpdateAgent, useDeleteAgent, useAgentCardStats } from "@/lib/hooks/agents";
 import { useActiveRepo } from "@/lib/repo-context";
@@ -32,7 +32,9 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
   const toast = useToast();
   const { repoId } = useActiveRepo();
   const { data: cardStats } = useAgentCardStats(repoId);
-  const [creating, setCreating] = React.useState(false);
+  // null = closed; otherwise the Name to prefill ("" for a blank agent).
+  const [creating, setCreating] = React.useState<string | null>(null);
+  const openCreate = (initialName: string) => setCreating(initialName);
   const [search, setSearch] = React.useState("");
   const [pendingDelete, setPendingDelete] = React.useState<Agent | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
@@ -49,7 +51,7 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
 
   React.useEffect(() => {
     if (!activeId) return;
-    const el = listRef.current?.querySelector<HTMLElement>(`[data-testid="agent-card-${activeId}"]`);
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-testid="agent-card-${activeId}"] [data-card-primary]`);
     el?.focus({ preventScroll: true });
   }, [activeId]);
 
@@ -63,9 +65,7 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
         // Deleting the open agent leaves its editor dangling — redirect to the list.
         if (ag.id === activeId) router.push("/agents");
       },
-      onError: (err) => {
-        toast.error((err as Error).message || t("card.deleteError"));
-      },
+      // No local onError: the global MutationCache toast already shows the API's message.
     });
   };
 
@@ -77,7 +77,7 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
 
   return (
     <div style={s.column}>
-      {creating && <CreateAgentModal onClose={() => setCreating(false)} />}
+      {creating !== null && <CreateAgentModal initialName={creating} onClose={() => setCreating(null)} />}
       <div style={s.headerPad}>
         <div style={s.headerRow}>
           <h1 style={s.h1}>{t("list.breadcrumb")}</h1>
@@ -90,13 +90,13 @@ export function AgentsColumn({ activeId, tab }: { activeId: string; tab: string 
               </Button>
             }
             items={[
-              { label: t("list.createFromScratch"), icon: "Edit", onClick: () => setCreating(true) },
+              { label: t("list.createFromScratch"), icon: "Edit", onClick: () => openCreate("") },
               { divider: true },
               ...TEMPLATES.map((tp) => ({
-                label: tp,
+                label: t(`list.templates.${tp}`),
                 icon: "Cpu" as const,
                 muted: true,
-                onClick: () => setCreating(true),
+                onClick: () => openCreate(t("list.templateName", { template: t(`list.templates.${tp}`) })),
               })),
             ]}
           />

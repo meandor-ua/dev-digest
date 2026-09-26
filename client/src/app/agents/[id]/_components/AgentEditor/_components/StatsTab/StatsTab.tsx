@@ -12,11 +12,13 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
 } from "recharts";
 import { MetricCard, BarRow, Donut, Button, EmptyState, Skeleton } from "@devdigest/ui";
 import type { AgentRunHistoryItem } from "@devdigest/shared";
 import { useAgentStats } from "@/lib/hooks/agents";
+import { usePrReviews } from "@/lib/hooks/reviews";
 import { formatCost } from "@/lib/cost";
 import RunTraceDrawer from "@/components/run-trace-drawer";
 import { SEVERITY_BARS } from "./constants";
@@ -28,6 +30,7 @@ interface OpenTrace {
   runId: string;
   agentName: string;
   prNumber: number | null;
+  prId: string | null;
 }
 
 export function StatsTab({
@@ -42,6 +45,10 @@ export function StatsTab({
   const t = useTranslations("agents");
   const { data: stats, isLoading } = useAgentStats(agentId, repoId);
   const [open, setOpen] = React.useState<OpenTrace | null>(null);
+  // The drawer's Findings section needs the run's persisted findings, which
+  // live on the PR's reviews — undefined (section hidden) until they load.
+  const { data: prReviews } = usePrReviews(open?.prId);
+  const openFindings = open ? prReviews?.find((rv) => rv.run_id === open.runId)?.findings : undefined;
 
   if (!repoId) return <EmptyState icon="BarChart" title={t("stats.noRepo")} />;
   if (isLoading) {
@@ -68,7 +75,7 @@ export function StatsTab({
     (w) => w.CRITICAL + w.WARNING + w.SUGGESTION > 0,
   );
   // Category shares of all findings, as whole percents summing to exactly 100.
-  const donutSegments = categoryDonutSegments(stats.findings_by_category);
+  const donutSegments = categoryDonutSegments(stats.findings_by_category, t("stats.otherCategory"));
 
   return (
     <div style={s.wrap}>
@@ -81,7 +88,7 @@ export function StatsTab({
           </div>
           <div style={s.costTrend(trendColor)}>{trendText}</div>
         </div>
-        <MetricCard label={t("stats.avgDuration")} value={formatDuration(stats.avg_duration_ms)} />
+        <MetricCard label={t("stats.avgDuration")} value={formatDuration(stats.avg_duration_ms, t("card.noValue"))} />
         <MetricCard
           label={t("stats.avgScore")}
           value={stats.avg_score != null ? Math.round(stats.avg_score) : t("card.noValue")}
@@ -115,18 +122,37 @@ export function StatsTab({
         <div style={s.section}>
           <h3 style={s.sectionTitle}>{t("stats.findingsBySeverity")}</h3>
           {hasSeverityData ? (
-            <div style={{ width: "100%", height: 220 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.findings_by_severity} margin={{ top: 10, right: 14, bottom: 8, left: -10 }}>
-                  <CartesianGrid stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 12, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} width={30} allowDecimals={false} />
-                  {SEVERITY_BARS.map((b) => (
-                    <Bar key={b.key} dataKey={b.key} stackId="sev" fill={b.color} isAnimationActive={false} />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <>
+              <div style={{ width: "100%", height: 220 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.findings_by_severity} margin={{ top: 10, right: 14, bottom: 8, left: -10 }}>
+                    <CartesianGrid stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} width={30} allowDecimals={false} />
+                    <Tooltip cursor={{ fill: "var(--bg-hover)" }} />
+                    {SEVERITY_BARS.map((b) => (
+                      <Bar
+                        key={b.key}
+                        dataKey={b.key}
+                        name={t(`stats.severity.${b.key}`)}
+                        stackId="sev"
+                        fill={b.color}
+                        isAnimationActive={false}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Colour alone can't tell severities apart — always name them. */}
+              <ul style={s.legend} aria-label={t("stats.findingsBySeverity")}>
+                {[...SEVERITY_BARS].reverse().map((b) => (
+                  <li key={b.key} style={s.legendItem}>
+                    <span style={s.legendSwatch(b.color)} aria-hidden />
+                    {t(`stats.severity.${b.key}`)}
+                  </li>
+                ))}
+              </ul>
+            </>
           ) : (
             <EmptyState icon="BarChart" title={t("stats.noData")} />
           )}
@@ -164,10 +190,11 @@ export function StatsTab({
                 key={r.run_id}
                 r={r}
                 repoId={repoId}
-                onOpen={() => setOpen({ runId: r.run_id, agentName, prNumber: r.pr_number })}
+                onOpen={() => setOpen({ runId: r.run_id, agentName, prNumber: r.pr_number, prId: r.pr_id })}
                 viewLabel={t("stats.viewTrace")}
                 noTraceLabel={t("stats.noTrace")}
                 noValue={t("card.noValue")}
+                sourceLabel={(src) => (src === "local" || src === "ci" ? t(`stats.sources.${src}`) : src)}
               />
             ))}
           </tbody>
@@ -175,7 +202,13 @@ export function StatsTab({
       </div>
 
       {open && (
-        <RunTraceDrawer runId={open.runId} agentName={open.agentName} prNumber={open.prNumber} onClose={() => setOpen(null)} />
+        <RunTraceDrawer
+          runId={open.runId}
+          agentName={open.agentName}
+          prNumber={open.prNumber}
+          findings={openFindings}
+          onClose={() => setOpen(null)}
+        />
       )}
     </div>
   );
@@ -188,6 +221,7 @@ function RunRow({
   viewLabel,
   noTraceLabel,
   noValue,
+  sourceLabel,
 }: {
   r: AgentRunHistoryItem;
   repoId: string;
@@ -195,6 +229,7 @@ function RunRow({
   viewLabel: string;
   noTraceLabel: string;
   noValue: string;
+  sourceLabel: (source: string) => string;
 }) {
   return (
     <tr>
@@ -220,7 +255,7 @@ function RunRow({
         {r.findings_count != null ? r.findings_count : noValue}
       </td>
       <td style={s.td}>
-        <span style={s.sourceBadge(r.source)}>{r.source}</span>
+        <span style={s.sourceBadge(r.source)}>{sourceLabel(r.source)}</span>
       </td>
       <td style={s.td}>
         {r.has_trace ? (

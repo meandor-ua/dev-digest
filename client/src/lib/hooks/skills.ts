@@ -73,6 +73,9 @@ export function useUpdateSkill() {
       qc.invalidateQueries({ queryKey: ["skill-versions", data.id] });
       qc.invalidateQueries({ queryKey: ["skill-stats", data.id] });
       qc.invalidateQueries({ queryKey: ["agent-skills"] });
+      // Toggling `enabled` (or a dangerous-content force-disable + unlink)
+      // changes the agent cards' enabled-skill counts.
+      qc.invalidateQueries({ queryKey: ["agent-card-stats"] });
       qc.invalidateQueries({ queryKey: ["agent-stats"] });
     },
   });
@@ -160,8 +163,9 @@ export function useSetSkillContext(skillId: string, repoId: string | null | unde
   const qc = useQueryClient();
   const key = ["skill-context", skillId, repoId];
   return useMutation({
+    // Attachments are per repo (server: skill_context_docs.repo_id).
     mutationFn: (paths: string[]) =>
-      api.put<{ attached: string[] }>(`/skills/${skillId}/context`, { paths }),
+      api.put<{ attached: string[] }>(`/skills/${skillId}/context`, { repo_id: repoId, paths }),
     onMutate: async (paths) => {
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<SkillContext>(key);

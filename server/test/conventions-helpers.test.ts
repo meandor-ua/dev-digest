@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
+import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   buildConventionSkillBody,
   buildSampleText,
   dedupeCandidates,
   listRepoSections,
   pickPrevalentModel,
+  readClone,
   truncateFile,
   verifyCandidate,
   type SampledFile,
@@ -30,6 +34,28 @@ function raw(overrides: Partial<RawConventionCandidate> = {}): RawConventionCand
 function sample(path: string, lines: string[]): SampledFile {
   return { path, lines };
 }
+
+describe('readClone', () => {
+  it('reads files inside the clone but refuses symlinks (file or parent dir) that resolve outside it', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'readclone-'));
+    const clone = join(base, 'clone');
+    const outside = join(base, 'outside');
+    await mkdir(join(clone, 'docs'), { recursive: true });
+    await mkdir(outside);
+    await writeFile(join(outside, 'secrets.json'), '{"key":"sk-live"}');
+    await writeFile(join(clone, 'AGENTS.md'), 'real rules');
+    await symlink(join(outside, 'secrets.json'), join(clone, 'CLAUDE.md'));
+    await symlink(outside, join(clone, 'linked'));
+    await symlink(join(clone, 'AGENTS.md'), join(clone, 'docs', 'alias.md'));
+
+    expect(await readClone(clone, 'AGENTS.md')).toBe('real rules');
+    expect(await readClone(clone, 'docs/alias.md')).toBe('real rules');
+    expect(await readClone(clone, 'CLAUDE.md')).toBeNull();
+    expect(await readClone(clone, 'linked/secrets.json')).toBeNull();
+    expect(await readClone(clone, '../outside/secrets.json')).toBeNull();
+    expect(await readClone(clone, 'missing.md')).toBeNull();
+  });
+});
 
 describe('truncateFile', () => {
   it('caps at MAX_FILE_LINES', () => {

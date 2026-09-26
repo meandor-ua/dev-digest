@@ -11,6 +11,7 @@ import { useGlobalShortcuts, useShellCommands, useShellContext } from "./hooks";
 
 export function AppShell({ children, crumb }: { children: React.ReactNode; crumb?: Crumb[] }) {
   const t = useTranslations("shell");
+  const tc = useTranslations("common");
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
   const openPalette = React.useCallback(() => setPaletteOpen(true), []);
@@ -34,6 +35,7 @@ export function AppShell({ children, crumb }: { children: React.ReactNode; crumb
       {pendingRemoveRepo && (
         <ConfirmDialog
           message={t("removeRepo.confirm", { name: pendingRemoveRepo.name })}
+          confirmLabel={tc("actions.remove")}
           onConfirm={confirmRemoveRepo}
           onCancel={cancelRemoveRepo}
         />

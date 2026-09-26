@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { AgentRepoStats } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/agents.json";
@@ -11,9 +11,18 @@ vi.mock("@/lib/hooks/agents", () => ({
   useAgentStats: () => ({ data: stats, isLoading: loading }),
 }));
 
-// RunTraceDrawer pulls in run hooks/query — stub it (never opened in these tests).
+let prReviews: Array<{ run_id: string | null; findings: Array<{ id: string }> }> | undefined;
+vi.mock("@/lib/hooks/reviews", () => ({
+  usePrReviews: (prId: string | null | undefined) => ({ data: prId ? prReviews : undefined }),
+}));
+
+// RunTraceDrawer pulls in run hooks/query — stub it, recording what it's given.
+const drawerProps = vi.hoisted(() => ({ last: null as null | { runId: string; findings?: unknown[] } }));
 vi.mock("@/components/run-trace-drawer", () => ({
-  default: () => null,
+  default: (props: { runId: string; findings?: unknown[] }) => {
+    drawerProps.last = props;
+    return null;
+  },
 }));
 
 import { StatsTab } from "./StatsTab";
@@ -21,6 +30,8 @@ import { StatsTab } from "./StatsTab";
 afterEach(() => {
   cleanup();
   loading = false;
+  prReviews = undefined;
+  drawerProps.last = null;
 });
 
 function renderTab(repoId: string | null) {
@@ -107,6 +118,33 @@ describe("StatsTab", () => {
     expect(screen.getByText("25%")).toBeInTheDocument();
     // raw counts are no longer printed
     expect(screen.queryByText("3.00")).not.toBeInTheDocument();
+  });
+
+  it("names each severity in a legend next to the stacked chart", () => {
+    stats = FULL;
+    renderTab("r1");
+    const legend = screen.getByRole("list", { name: "Findings by severity" });
+    expect(legend).toHaveTextContent("Critical");
+    expect(legend).toHaveTextContent("Warning");
+    expect(legend).toHaveTextContent("Suggestion");
+  });
+
+  it("translates the run source", () => {
+    stats = { ...FULL, run_history: [{ ...FULL.run_history[0]!, source: "ci" }] };
+    renderTab("r1");
+    expect(screen.getByText("CI")).toBeInTheDocument();
+  });
+
+  it("opens the trace drawer with that run's persisted findings from its PR", () => {
+    stats = { ...FULL, run_history: [{ ...FULL.run_history[0]!, has_trace: true }] };
+    prReviews = [
+      { run_id: "other", findings: [{ id: "f0" }] },
+      { run_id: "run1", findings: [{ id: "f1" }, { id: "f2" }] },
+    ];
+    renderTab("r1");
+    fireEvent.click(screen.getByRole("button", { name: /View trace/ }));
+    expect(drawerProps.last?.runId).toBe("run1");
+    expect(drawerProps.last?.findings).toEqual([{ id: "f1" }, { id: "f2" }]);
   });
 
   it("shows a no-data state for findings-by-severity when every week is zero", () => {

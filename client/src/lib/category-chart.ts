@@ -33,12 +33,31 @@ export function toPercentages(values: number[]): number[] {
   return floors;
 }
 
-/** Category counts → donut segments whose values are whole percents summing to 100. */
-export function categoryDonutSegments(entries: { label: string; value: number }[]): DonutSegment[] {
-  const pct = toPercentages(entries.map((e) => e.value));
-  return entries.map((e, i) => ({
+/**
+ * Category counts → donut segments whose values are whole percents summing to
+ * 100. Zero-count categories are dropped (so all-zero input is `[]` and the
+ * caller's empty state shows). Past the palette size, the smallest categories
+ * are folded into one `otherLabel` segment instead of reusing a colour.
+ */
+export function categoryDonutSegments(
+  entries: { label: string; value: number }[],
+  otherLabel: string,
+): DonutSegment[] {
+  const nonZero = entries.filter((e) => e.value > 0).sort((a, b) => b.value - a.value);
+  const buckets =
+    nonZero.length <= CATEGORY_PALETTE.length
+      ? nonZero
+      : [
+          ...nonZero.slice(0, CATEGORY_PALETTE.length - 1),
+          {
+            label: otherLabel,
+            value: nonZero.slice(CATEGORY_PALETTE.length - 1).reduce((a, e) => a + e.value, 0),
+          },
+        ];
+  const pct = toPercentages(buckets.map((e) => e.value));
+  return buckets.map((e, i) => ({
     label: e.label,
     value: pct[i] ?? 0,
-    color: CATEGORY_PALETTE[i % CATEGORY_PALETTE.length] ?? "var(--text-secondary)",
+    color: CATEGORY_PALETTE[i] ?? "var(--text-secondary)",
   }));
 }

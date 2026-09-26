@@ -10,7 +10,7 @@ import { SkillHeader } from "./_components/SkillHeader";
 import { ErrorState, Skeleton } from "@devdigest/ui";
 import { useSkill } from "@/lib/hooks/skills";
 import { ApiError } from "@/lib/api";
-import { UnsavedChangesProvider } from "@/lib/unsaved-changes";
+import { UnsavedChangesProvider } from "@/app/skills/_lib/unsaved-changes";
 
 const VALID_TABS: string[] = SKILL_TABS.map((tb) => tb.key);
 

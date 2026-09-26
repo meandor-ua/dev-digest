@@ -270,4 +270,23 @@ d('GET /agents/stats, GET /agents/:id/stats, POST /agents/:id/skills', () => {
     expect(after).toEqual(before);
     await app.close();
   });
+
+  it('listEnabledModels returns only enabled agents, oldest first (the conventions model fallback order)', async () => {
+    const { db } = pg.handle;
+    const [ws] = await db.insert(t.workspaces).values({ name: 'models-order-ws' }).returning();
+    const base = { workspaceId: ws!.id, systemPrompt: 'p' };
+    // Inserted newest-first so insertion order can't masquerade as created_at order.
+    await db.insert(t.agents).values([
+      { ...base, name: 'newest', provider: 'anthropic', model: 'm-newest', createdAt: new Date('2026-03-01') },
+      { ...base, name: 'disabled', provider: 'openai', model: 'm-disabled', enabled: false, createdAt: new Date('2026-01-15') },
+      { ...base, name: 'oldest', provider: 'openrouter', model: 'm-oldest', createdAt: new Date('2026-01-01') },
+      { ...base, name: 'middle', provider: 'openai', model: 'm-middle', createdAt: new Date('2026-02-01') },
+    ]);
+
+    expect(await new AgentsRepository(db).listEnabledModels(ws!.id)).toEqual([
+      { provider: 'openrouter', model: 'm-oldest' },
+      { provider: 'openai', model: 'm-middle' },
+      { provider: 'anthropic', model: 'm-newest' },
+    ]);
+  });
 });

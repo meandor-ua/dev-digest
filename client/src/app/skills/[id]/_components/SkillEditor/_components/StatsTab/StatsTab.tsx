@@ -42,6 +42,7 @@ export function StatsTab({ skillId }: { skillId: string }) {
 
   const segments = categoryDonutSegments(
     Object.entries(stats.findings_by_category).map(([label, value]) => ({ label, value })),
+    t("stats.otherCategory"),
   );
 
   return (

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Tabs } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
 import { ConfigTab, useSkillDraft } from "./_components/ConfigTab";
-import { useReportUnsaved } from "@/lib/unsaved-changes";
+import { useReportUnsaved } from "@/app/skills/_lib/unsaved-changes";
 import { PreviewTab } from "./_components/PreviewTab";
 import { StatsTab } from "./_components/StatsTab";
 import { VersionsTab } from "./_components/VersionsTab";

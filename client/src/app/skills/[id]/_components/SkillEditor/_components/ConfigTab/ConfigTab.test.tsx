@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { Skill } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/skills.json";
@@ -68,10 +68,12 @@ afterEach(() => {
 describe("ConfigTab", () => {
   it("shows the skill's current values", () => {
     renderTab(MANUAL);
-    expect(screen.getByDisplayValue("Security Rubric")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Detects security issues")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: messages.config.nameLabel })).toHaveValue("Security Rubric");
+    expect(screen.getByRole("textbox", { name: messages.config.descriptionLabel })).toHaveValue(
+      "Detects security issues",
+    );
     expect(body()).toHaveValue(MANUAL.body);
-    expect(screen.getByRole("combobox")).toHaveValue("security");
+    expect(screen.getByRole("combobox", { name: messages.config.typeLabel })).toHaveValue("security");
   });
 
   it("keeps Save disabled and Cancel hidden until something changes", () => {
@@ -219,7 +221,7 @@ describe("ConfigTab", () => {
   it("deletes the skill from the danger zone after confirming", () => {
     renderTab(MANUAL);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    fireEvent.click(screen.getByRole("button", { name: "Ok" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(deleteMutate).toHaveBeenCalledWith("sk1", expect.anything());
   });
 

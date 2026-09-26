@@ -92,9 +92,7 @@ export function ConfigTab({ agent }: { agent: Agent }) {
         toast.success(t("card.deleteSuccess", { name: agent.name }));
         router.push("/agents");
       },
-      onError: (err) => {
-        toast.error((err as Error).message || t("card.deleteError"));
-      },
+      // No local onError: the global MutationCache toast already shows the API's message.
     });
   };
 

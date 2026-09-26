@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import type { SkillWithStats } from "@devdigest/shared";
 import { useSkills, useUpdateSkill, useDeleteSkill } from "@/lib/hooks/skills";
 import { useToast } from "@/lib/toast";
-import { useConfirmDiscard } from "@/lib/unsaved-changes";
+import { useConfirmDiscard } from "@/app/skills/_lib/unsaved-changes";
 import { s } from "./styles";
 
 // Module-level (not component state) because navigating to /skills/[id] fully
@@ -43,13 +43,17 @@ export function SkillsColumn({
         // Deleting the open skill leaves its page dangling — /skills redirects to the next one.
         if (sk.id === activeId) router.push("/skills");
       },
-      onError: (err) => {
-        toast.error((err as Error).message || t("detail.deleteError"));
-      },
+      // No local onError: the global MutationCache toast already shows the API's message.
     });
   };
 
   const [modalState, setModalState] = React.useState<"scratch" | "import" | "url" | null>(null);
+  // Creating a skill navigates to it on success, replacing the open editor —
+  // ask before the modal opens rather than after the user has filled it in.
+  const openCreate = (tab: "scratch" | "import" | "url") => {
+    if (!confirmDiscard(t("column.discardConfirm"))) return;
+    setModalState(tab);
+  };
   const [search, setSearch] = React.useState("");
   const listRef = React.useRef<HTMLDivElement>(null);
 
@@ -65,7 +69,7 @@ export function SkillsColumn({
 
   React.useEffect(() => {
     if (!activeId) return;
-    const el = listRef.current?.querySelector<HTMLElement>(`[data-testid="skill-card-${activeId}"]`);
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-testid="skill-card-${activeId}"] [data-card-primary]`);
     el?.focus({ preventScroll: true });
   }, [activeId]);
 
@@ -103,17 +107,17 @@ export function SkillsColumn({
               {
                 label: t("column.addScratch"),
                 icon: "Edit",
-                onClick: () => setModalState("scratch"),
+                onClick: () => openCreate("scratch"),
               },
               {
                 label: t("column.addImport"),
                 icon: "Upload",
-                onClick: () => setModalState("import"),
+                onClick: () => openCreate("import"),
               },
               {
                 label: t("column.addUrl"),
                 icon: "Link",
-                onClick: () => setModalState("url"),
+                onClick: () => openCreate("url"),
               },
             ]}
           />
@@ -123,6 +127,7 @@ export function SkillsColumn({
           value={search}
           onChange={setSearch}
           placeholder={t("column.search")}
+          aria-label={t("column.search")}
         />
       </div>
 

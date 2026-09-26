@@ -1,0 +1,198 @@
+{
+  "name": "Skills Lab keyboard/a11y: card button, confirm dialog, live name from the body",
+  "description": "Regression flow for the 2026-09-27 pr-self-review fixes, all read-only (nothing is saved or deleted). An agent card is opened through its name button (cards are no longer role=button). The destructive-action ConfirmDialog opens with the canonical prompt and closes on Escape with the agent intact, a keyboard path that used to do nothing. In Create from scratch, typing a body heading with real keystrokes makes Skill Name follow the whole heading, not freeze on its first character. Only the Cancel button is pressed, so no skill is created.",
+  "steps": [
+    {
+      "cmd": [
+        "open",
+        "{BASE}/agents"
+      ],
+      "label": "load the agents page"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/agents"
+      ],
+      "label": "agents route reached"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "agents fetch settles"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Security Reviewer"
+      ],
+      "label": "seeded agent card is visible"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Security Reviewer",
+        "--exact"
+      ],
+      "label": "open the agent via the card's own name button"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "tab=config"
+      ],
+      "label": "land on the editor's Config tab"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Save agent"
+      ],
+      "label": "Config form renders"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Delete agent",
+        "--exact"
+      ],
+      "label": "ask to delete an agent (opens the confirm dialog)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "This cannot be undone."
+      ],
+      "label": "the confirm dialog shows its prompt"
+    },
+    {
+      "cmd": [
+        "get",
+        "count",
+        "[role='dialog']"
+      ],
+      "label": "exactly one dialog is open",
+      "assert": {
+        "stdoutIncludes": "1"
+      }
+    },
+    {
+      "cmd": [
+        "press",
+        "Escape"
+      ],
+      "label": "Escape dismisses the dialog"
+    },
+    {
+      "cmd": [
+        "get",
+        "count",
+        "[role='dialog']"
+      ],
+      "label": "the dialog is gone",
+      "assert": {
+        "stdoutIncludes": "0"
+      }
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Save agent"
+      ],
+      "label": "still on the editor — nothing was deleted"
+    },
+    {
+      "cmd": [
+        "open",
+        "{BASE}/skills"
+      ],
+      "label": "load the skills page"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "skills fetch settles"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Add Skill"
+      ],
+      "label": "open the Add Skill menu"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Create from scratch",
+        "--exact"
+      ],
+      "label": "choose Create from scratch"
+    },
+    {
+      "cmd": [
+        "click",
+        "textarea[aria-label='Skill Body (Markdown)']"
+      ],
+      "label": "focus the body editor"
+    },
+    {
+      "cmd": [
+        "keyboard",
+        "type",
+        "# Security rubric"
+      ],
+      "label": "type a heading one keystroke at a time"
+    },
+    {
+      "cmd": [
+        "get",
+        "value",
+        "input[aria-label='Skill Name']"
+      ],
+      "label": "Skill Name follows the full heading, not its first letter",
+      "assert": {
+        "stdoutIncludes": "Security rubric"
+      }
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Cancel",
+        "--exact"
+      ],
+      "label": "cancel — nothing is created"
+    }
+  ]
+}

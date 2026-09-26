@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { Agent } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/agents.json";
@@ -103,7 +103,7 @@ describe("ConfigTab deletion", () => {
     fireEvent.click(screen.getByRole("button", { name: messages.card.deleteTitle }));
     expect(screen.getByText('Delete agent "Security Reviewer"? This cannot be undone.')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: commonMessages.actions.ok }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: commonMessages.actions.delete }));
 
     expect(deleteMutate).toHaveBeenCalledWith("ag1", expect.any(Object));
     expect(push).toHaveBeenCalledWith("/agents");

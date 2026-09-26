@@ -13,7 +13,7 @@
   "removeRepo": {
     "confirm": "Remove {name} from DevDigest?\n\nThis only removes it from DevDigest (and its imported PRs). Nothing is deleted on GitHub, and your local clone on disk is left untouched.",
     "fallbackName": "this repository",
-    "deleteSuccess": "Deleted repository \"{name}\""
+    "deleteSuccess": "Removed \"{name}\" from DevDigest"
   },
   "nav": {
     "pulls": "Pull Requests",

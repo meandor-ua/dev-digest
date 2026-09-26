@@ -1,9 +1,14 @@
 # e2e (@devdigest/e2e)
 
-## Before answering
+## Before answering — and before editing
 
 Search `e2e/docs/` and `e2e/insights/` first. (`e2e/specs/` here means
 agent-browser flow definitions, not narrative specs — see below.)
+Before your first edit or command in this package (including when a task
+crosses in from another package), read `e2e/insights/INSIGHTS.md` and any
+matching `e2e/insights/<topic>.md`, and grep `e2e/insights/` for any tool
+you're about to run that isn't listed under Commands — see the root
+`AGENTS.md` insights gate.
 
 ## Tech stack
 

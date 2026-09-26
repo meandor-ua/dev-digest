@@ -11,12 +11,19 @@ import { useTranslations } from "next-intl";
 import {
   DndContext,
   closestCenter,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Icon, TextInput, Checkbox, Badge, EmptyState, Skeleton, Modal, IconBtn } from "@devdigest/ui";
 import type { Skill, ProjectDoc } from "@devdigest/shared";
@@ -43,7 +50,12 @@ export function ContextTab({ skill }: { skill: Skill }) {
   const [filter, setFilter] = React.useState("");
   const [previewPath, setPreviewPath] = React.useState<string | null>(null);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  // Keyboard too: the handle is focusable (dnd-kit gives it role=button), and
+  // Space/arrows must be able to reorder what gets persisted as `attached`.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   if (!reposLoaded || (repoId && isLoading)) {
     return (
@@ -117,7 +129,12 @@ export function ContextTab({ skill }: { skill: Skill }) {
           {t("context.attachedCount", { count: context.attached.length })}
         </Badge>
         <div style={s.filter}>
-          <TextInput value={filter} onChange={setFilter} placeholder={t("context.filterPlaceholder")} />
+          <TextInput
+            value={filter}
+            onChange={setFilter}
+            placeholder={t("context.filterPlaceholder")}
+            aria-label={t("context.filterPlaceholder")}
+          />
         </div>
       </div>
       <p style={s.subtitle}>{t("context.subtitle")}</p>

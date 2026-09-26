@@ -85,6 +85,8 @@ Copy this checklist and work through it:
 3. **Draft ≤5 candidates**, ranked by signal (user corrections and gotchas highest; nice-to-know patterns lowest). Each candidate = the exact proposed line + its target section + `file:line` evidence.
 4. **Dedup.** Drop any candidate already covered by an existing entry. If reality contradicts an old entry, add a new dated note that supersedes it — never edit the old one.
 5. **Append** the survivors (automatic mode — no approval prompt). If nothing substantial survives gate + dedup, write nothing.
+   **Promote command-level traps.** If an entry says "never run X" or "always do Y after running X" (a formatter, codegen, migration or test command), also add a one-line rule next to that package's Commands in its `AGENTS.md`. Insights files are long and only read on demand, while `AGENTS.md` is always loaded, so a trap that sits only in insights gets repeated. Example: `client/AGENTS.md`'s "No formatter" line, promoted after `npx prettier` was run despite `client/insights/skills-lab.md` forbidding it.
+   **Also check whether you read it in time.** If the session repeated a mistake an existing entry already covered, the file wasn't read before editing. Record that under Session Notes and promote the entry as above, rather than adding a duplicate.
 6. **Summary.** One line: what was written, to which file, what was skipped.
 
 ## Non-destructive write contract (hard rule)

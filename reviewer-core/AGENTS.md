@@ -1,9 +1,14 @@
 # reviewer-core (@devdigest/reviewer-core)
 
-## Before answering
+## Before answering — and before editing
 
 Search `reviewer-core/docs/`, `reviewer-core/specs/`,
 `reviewer-core/insights/` first.
+Before your first edit or command in this package (including when a task
+crosses in from another package), read `reviewer-core/insights/INSIGHTS.md` and any
+matching `reviewer-core/insights/<topic>.md`, and grep `reviewer-core/insights/` for any tool
+you're about to run that isn't listed under Commands — see the root
+`AGENTS.md` insights gate.
 
 ## Tech stack
 

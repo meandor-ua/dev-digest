@@ -10,11 +10,18 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER, MODAL_WIDTH, PROVIDER_OPTIONS } from "
 import { s } from "./styles";
 
 /** Create-agent modal — name/description/provider/model/system-prompt. */
-export function CreateAgentModal({ onClose }: { onClose: () => void }) {
+export function CreateAgentModal({
+  onClose,
+  initialName = "",
+}: {
+  onClose: () => void;
+  /** Prefilled Name — set when the modal is opened from a quick-start template. */
+  initialName?: string;
+}) {
   const t = useTranslations("agents");
   const router = useRouter();
   const create = useCreateAgent();
-  const [name, setName] = React.useState("");
+  const [name, setName] = React.useState(initialName);
   const [description, setDescription] = React.useState("");
   const [provider, setProvider] = React.useState<Provider>(DEFAULT_PROVIDER);
   const [model, setModel] = React.useState(DEFAULT_MODEL);

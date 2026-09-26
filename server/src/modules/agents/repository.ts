@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
+import type { CiFailOn, FeatureModelChoice, Provider, ReviewStrategy } from '@devdigest/shared';
 import { DEFAULT_AGENT_DESCRIPTION, INITIAL_AGENT_VERSION } from './constants.js';
 import { isConfigChange } from './helpers.js';
 import type { RunRow, FindingRow } from './stats.js';
@@ -61,6 +61,15 @@ export class AgentsRepository {
       .select()
       .from(t.agents)
       .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.enabled, true)));
+  }
+
+  /** provider/model of every enabled agent, oldest first — a model fallback list for single-call LLM features. */
+  async listEnabledModels(workspaceId: string): Promise<FeatureModelChoice[]> {
+    return this.db
+      .select({ provider: t.agents.provider, model: t.agents.model })
+      .from(t.agents)
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.enabled, true)))
+      .orderBy(asc(t.agents.createdAt));
   }
 
   async getById(workspaceId: string, id: string): Promise<AgentRow | undefined> {

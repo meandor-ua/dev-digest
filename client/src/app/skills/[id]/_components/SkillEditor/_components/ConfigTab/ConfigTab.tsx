@@ -88,9 +88,7 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
         toast.success(t("detail.deleteSuccess", { name: skill.name }));
         router.push("/skills");
       },
-      onError: (err) => {
-        toast.error((err as Error).message || t("detail.deleteError"));
-      },
+      // No local onError: the global MutationCache toast already shows the API's message.
     });
   };
 
@@ -130,14 +128,14 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
       </div>
 
       <FormField label={t("config.nameLabel")} required>
-        <TextInput value={name} onChange={setName} />
+        <TextInput value={name} onChange={setName} aria-label={t("config.nameLabel")} />
       </FormField>
 
       <FormField
         label={t("config.descriptionLabel")}
         hint={t("config.descriptionHint")}
       >
-        <TextInput value={description} onChange={setDescription} />
+        <TextInput value={description} onChange={setDescription} aria-label={t("config.descriptionLabel")} />
       </FormField>
 
       <FormField label={t("config.typeLabel")}>
@@ -145,6 +143,7 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
           value={type}
           onChange={(v) => setType(v as SkillType)}
           options={typeOptions}
+          aria-label={t("config.typeLabel")}
         />
       </FormField>
 
@@ -202,6 +201,7 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
             value={changeNote}
             onChange={setChangeNote}
             placeholder={t("config.changeNotePlaceholder")}
+            aria-label={t("config.changeNoteLabel")}
           />
         </FormField>
       )}

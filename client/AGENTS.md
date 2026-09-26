@@ -1,8 +1,15 @@
 # client (@devdigest/web)
 
-## Before answering
+## Before answering — and before editing
 
 Search `client/docs/`, `client/specs/`, `client/insights/` first.
+Before your first edit or command in this package (including when a task
+crosses in from another package), read `client/insights/INSIGHTS.md` and any
+matching `client/insights/<topic>.md`, and grep `client/insights/` for any tool
+you're about to run that isn't listed under Commands — see the root
+`AGENTS.md` insights gate.
+Topic files: `insights/skills-lab.md` (skills/agents/conventions screens),
+`insights/pr-review.md` (PR detail).
 
 ## Tech stack
 
@@ -20,6 +27,9 @@ GitHub or Postgres directly.
 - Test: `pnpm test` (vitest + jsdom, `fetch` mocked — no API/browser needed).
 - Typecheck: `pnpm typecheck`.
 - Lint: `pnpm lint` (eslint).
+- **No formatter.** Prettier is not configured here — never run
+  `npx prettier` (it reformats whole files at 80 cols and buries the real
+  diff). Match the surrounding code's formatting by hand.
 
 ## Naming conventions
 

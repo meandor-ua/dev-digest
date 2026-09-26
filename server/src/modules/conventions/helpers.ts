@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile, realpath } from 'node:fs/promises';
+import { join, sep } from 'node:path';
 import type { ConventionCandidate, ConventionCategory, FeatureModelChoice } from '@devdigest/shared';
 import {
   MAX_FILE_CHARS,
@@ -10,8 +10,19 @@ import {
   CONVENTIONS_SKILL_NAME,
 } from './constants.js';
 
+/**
+ * Read a file from a clone — `null` if it's missing, or if it resolves outside
+ * the clone. The repo is untrusted: a committed `CLAUDE.md -> ~/.devdigest/secrets.json`
+ * symlink (or a symlinked parent dir) would otherwise ship a local file to the LLM.
+ */
 export async function readClone(clonePath: string, file: string): Promise<string | null> {
-  return readFile(join(clonePath, file), 'utf8').catch(() => null);
+  try {
+    const [root, target] = await Promise.all([realpath(clonePath), realpath(join(clonePath, file))]);
+    if (!target.startsWith(root + sep)) return null;
+    return await readFile(target, 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 /** A sampled file, truncated to MAX_FILE_LINES/MAX_FILE_CHARS — the ONLY source of truth for verification. */

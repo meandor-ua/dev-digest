@@ -48,4 +48,13 @@ describe("PreviewTab", () => {
     expect(screen.getByRole("button", { name: "Restore v4" })).toBeDisabled();
     expect(screen.queryByText(messages.preview.draftBadge)).not.toBeInTheDocument();
   });
+
+  it("never loads a remote image from an (untrusted) body, and opens links with no opener", () => {
+    renderTab({ body: "![pixel](https://tracker.example/p.gif)\n\n[docs](https://example.com/docs)" });
+    expect(document.querySelector("img")).toBeNull();
+    expect(screen.getByText("Image not loaded in preview: pixel")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "docs" });
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+  });
 });
