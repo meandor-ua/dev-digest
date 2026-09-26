@@ -51,13 +51,18 @@ function mkLinked(id: string, name: string, order: number): AgentSkillItem {
   return { agent_id: "ag1", skill_id: id, order, name, type: "rubric" };
 }
 
-function mkSkill(id: string, name: string, enabled = true): SkillWithStats {
+function mkSkill(
+  id: string,
+  name: string,
+  enabled = true,
+  source: SkillWithStats["source"] = "manual",
+): SkillWithStats {
   return {
     id,
     name,
     description: "",
     type: "rubric",
-    source: "manual",
+    source,
     body: "",
     enabled,
     version: 1,
@@ -192,6 +197,18 @@ describe("SkillsTab", () => {
     renderTab();
     const labels = screen.getAllByText("Disabled");
     expect(labels).toHaveLength(2);
+  });
+
+  it("shows the orange 'Needs vetting' label instead of 'Disabled' for a disabled, non-manual skill, linked or not", () => {
+    skills = [mkLinked("s1", "Secrets", 0), mkLinked("s2", "Naming", 1)];
+    availableSkills = [
+      mkSkill("s1", "Secrets", true),
+      mkSkill("s2", "Naming", false, "imported_url"), // disabled + imported, still linked
+      mkSkill("s3", "Unlinked unvetted", false, "imported_url"), // disabled + imported, not linked
+    ];
+    renderTab();
+    expect(screen.getAllByText("Needs vetting")).toHaveLength(2);
+    expect(screen.queryByText("Disabled")).not.toBeInTheDocument();
   });
 
   it("cannot link an unlinked globally-disabled skill by clicking its checkbox", () => {

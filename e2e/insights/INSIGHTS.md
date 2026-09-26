@@ -5,6 +5,20 @@ you, so the next agent/session doesn't relearn it.
 
 ## What Doesn't Work
 
+- **2026-09-26** — `find role button click --name X` matches the accessible
+  name as a case-insensitive SUBSTRING by default. Any clickable card with
+  `role="button"` (e.g. `AgentCard`, whose name includes "… 2 skills …")
+  therefore satisfies `--name Skills` and wins by DOM order: flow 12 clicked the
+  first agent card instead of the Skills tab and silently navigated away. Add
+  `--exact` to every tab/button `--name` locator whose label is a common
+  word. Evidence: `e2e/specs/12-agent-detail.flow.json` (tab clicks),
+  `client/src/app/agents/_components/AgentCard/AgentCard.tsx:40`.
+- **2026-09-26** — A flow that asserts a seed-derived TOTAL (flow 12's
+  "2 of 14 linked" — the Skills tab counts every workspace skill) breaks
+  whenever `server/src/db/seed.ts` adds a skill. Update the flow and the
+  README coverage row in the same change as the seed. Evidence:
+  `e2e/specs/12-agent-detail.flow.json`, `server/src/db/seed.ts`
+  (`seedSkills`).
 - **2026-09-21** — Clicking anything after opening the run-trace drawer
   (`View trace`) fails. The drawer stays open as an overlay, so e.g.
   `find role button click --name Evals` errors, and no existing flow has a

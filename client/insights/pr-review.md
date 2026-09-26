@@ -94,7 +94,7 @@ SSE/polling wiring. General client conventions live in the package's
   comment, none → approve), the same rule as the Timeline's `outcomeOf`.
   Verdict colours come only from `VerdictBanner/constants.ts`'s
   `VERDICT_META` (a divergent local map was removed). Evidence: `client/src/lib/findings.ts:19-29`,
-  `client/src/app/repos/[repoId]/pulls/[number]/_components/ReviewRunAccordion/ReviewRunAccordion.tsx:99-102`.
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/ReviewRunAccordion/ReviewRunAccordion.tsx:117-118`.
 - **2026-09-18** — For a quiet table-row action with a hover highlight, use
   the shared `Button`'s `kind="ghost"` rather than a hand-rolled `<button>`:
   it is already transparent + muted with a `var(--border)` outline at rest and

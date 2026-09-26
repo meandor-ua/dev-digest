@@ -16,6 +16,7 @@ row (e.g. a `server/**/routes.ts` file gets both its module row and the
 | `client/**/*.test.tsx`, `client/**/*.test.ts` | client | + `react-testing-library` |
 | `server/src/modules/**`, `server/src/adapters/**`, `server/src/platform/**` | server | `onion-architecture`, `fastify-best-practices` |
 | `server/**/routes.ts` | server | + `zod` |
+| `server/src/prompts/**`, or a `server/src/modules/**` file calling `completeStructured` | server | + `llm-feature-module` |
 | `server/src/db/schema/**`, `server/src/db/migrations/**` | server | `drizzle-orm-patterns`, `postgresql-table-design` |
 | `reviewer-core/**` | reviewer-core AND server | `onion-architecture` (purity rule only), `zod`, `typescript-expert` |
 | `e2e/specs/*.flow.json` | e2e | convention check only, no review skill fits JSON flow files |
@@ -37,10 +38,15 @@ None needs LLM judgement. Each one names its own tier below — some are
 blockers, several are should-fix; don't promote a should-fix to a blocker
 just because it was found deterministically.
 
-- **Applied migration touched.** Any changed path under
-  `server/src/db/migrations/` -> blocker. Migrations are add-only; a diff
-  inside an existing migration file means one already applied is being
-  hand-edited.
+- **Applied migration touched.** A path under `server/src/db/migrations/`
+  whose `--name-status` is `M`, `D` or `R` on a `NNNN_*.sql` or
+  `meta/NNNN_snapshot.json` that exists on `main` -> blocker. Migrations are
+  add-only; a diff inside an existing migration file means one already
+  applied is being hand-edited. **Not** findings: newly added (`A` /
+  untracked) migration + snapshot files, and `meta/_journal.json` gaining
+  entries — that is what `drizzle-kit generate` produces for every new
+  migration. A new `ADD COLUMN … NOT NULL` without a `DEFAULT` on a table
+  that may already hold rows is a should-fix (it fails on a non-empty DB).
 - **Vendor copy edited on one side only.** AGENTS.md requires
   `server/src/vendor/**` and `client/src/vendor/**` to be hand-edited in
   lockstep. Check this **per changed file, not by diffing the trees**:

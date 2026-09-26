@@ -100,7 +100,7 @@ export class SkillsService {
     // catching newly-introduced dangerous content.
     const effectiveBody = patch.body !== undefined ? patch.body : existing.body;
     const injection = detectInjection(effectiveBody);
-    let isDangerous = injection.isDangerous;
+    const isDangerous = injection.isDangerous;
 
     // Dangerous skills cannot be enabled. An explicit attempt to enable one is
     // rejected outright; otherwise force-disable regardless of what `patch`

@@ -9,6 +9,14 @@ Preview/Stats tabs, skill import).
 
 ## Codebase Patterns
 
+- **2026-09-26** — Every failed mutation is already toasted by the global
+  `MutationCache.onError` (`client/src/lib/providers.tsx:41-43`); a caller's
+  own `onError: (err) => toast.error(err.message || fallback)` repeats the
+  same text. The toast store now drops an exact (kind + message) repeat that
+  is still on screen (`client/src/lib/toast.tsx:63`, `toast.test.tsx`), so
+  such callers show one toast. In new code, don't add a local error toast at
+  all unless it says something the API message doesn't (e.g. SkillsTab's
+  "Couldn’t save skills. Reverted.").
 - **2026-09-25** — The vendored `Badge` (`@devdigest/ui`) has no `title` prop
   — wrap it in a plain `<span title="...">` instead of passing `title`
   through, or TS rejects the extra prop. No dedicated "orange/disabled" color
@@ -50,8 +58,8 @@ Preview/Stats tabs, skill import).
   must be `position: fixed` from the trigger's `getBoundingClientRect()` —
   it has no offset parent any more, so the in-place `position: absolute` +
   `top: calc(100% + 6px)` styling silently lands at the top of the page.
-  Evidence: `client/src/vendor/ui/kit/Dropdown.tsx:78-100`,
-  `client/src/vendor/ui/kit/Dropdown.test.tsx:87-90`.
+  Evidence: `client/src/vendor/ui/kit/Dropdown.tsx:127-143`,
+  `client/src/vendor/ui/kit/Dropdown.test.tsx:100-123`.
 - **2026-09-20** — `client/next-env.d.ts` is Next-generated and its
   `routes.d.ts` reference flips between `./.next/...` and `./.next-e2e/...`
   depending on which run last touched it (`scripts/e2e.sh` sets
@@ -88,6 +96,19 @@ Preview/Stats tabs, skill import).
 
 ## What Doesn't Work
 
+- **2026-09-26** — A create-skill form must hide/disable its "Enabled" control
+  whenever the skill will be saved with `source != "manual"` — the server
+  enforces vetting unconditionally (`SkillsService.create`,
+  `server/src/modules/skills/service.ts`: `source === 'manual' ? input.enabled
+  : false`), so a user-facing toggle for a non-manual create path is dead UI:
+  the value is silently discarded on save, with no error. Found in the
+  Conventions "Create skill from conventions" modal, which always submits
+  `source: "extracted"` but still rendered an editable Enabled toggle. Fixed
+  by replacing the toggle with a static notice (matching the pattern the main
+  Skills `CreateSkillModal` already uses for imported content). Evidence:
+  `client/src/app/repos/[repoId]/conventions/_components/CreateSkillModal/CreateSkillModal.tsx`,
+  `server/src/modules/skills/service.ts:54-56`,
+  `server/specs/README.md:114` ("Vetting: non-manual skills always disabled on creation").
 - **2026-09-24** — `queryClient.removeQueries({ queryKey })` does NOT make a
   still-mounted `useQuery` observer for that key refetch or error — it just
   wipes the cache entry, so the component keeps rendering its last-known

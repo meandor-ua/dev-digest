@@ -104,7 +104,8 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `09-pr-list-actions` | PR list → the Actions column's labelled Run Review (ghost) trigger opens its body-portaled menu without navigating the row; "Configure agents…" leaves for `/agents` |
 | `10-timeline-commit-row` | PR #482 → Agent runs tab → Timeline renders the seeded commit row (git-commit icon + short sha) painted with the accent token |
 | `11-pr-brief` | PR #482 → Overview tab renders the PR BRIEF card (verdict, findings count, summary, PR SCORE) above the DESCRIPTION |
-| `12-agent-detail` | `/agents` → open Security Reviewer → five-tab editor: Config form, Skills lists the 2 seeded linked skills ("1 of 2 enabled"), repo-scoped Stats shows the seeded runs (Total runs / Run history), Evals + CI placeholders |
+| `12-agent-detail` | `/agents` → open Security Reviewer → five-tab editor: Config form, Skills lists the 2 seeded linked skills ("2 of 14 linked" over every workspace skill), repo-scoped Stats shows the seeded runs (Total runs / Run history), Evals + CI placeholders |
+| `13-conventions` | PR list → sidebar Conventions link → `/repos/<id>/conventions` heading + empty state with "Run scan" (no scan is triggered — that's a model call) |
 
 ---
 

@@ -80,7 +80,8 @@ instead.
 - **2026-09-20** — Locally-authored skills in `.claude/skills/<name>/` use
   frontmatter of **exactly two keys** — `name` (kebab-case, identical to the
   directory) and `description` — with no `version`, `allowed-tools`, or
-  `metadata`. A skill's version therefore lives in the SKILL.md body and its
+  `metadata`. One deliberate exception: a user-invoked-only dispatcher adds
+  `disable-model-invocation: true` (`pr-self-review/SKILL.md:3`). A skill's version therefore lives in the SKILL.md body and its
   README, never in frontmatter. Body idiom: rationale paragraph → topical
   `##` sections → tables and fenced templates → a closing `| Don't | Do |`
   table, prose wrapped ~76 cols. Anthropic's own cap is 500 body lines with
@@ -129,7 +130,7 @@ instead.
   the two numbers equal. No tooling checks either limit — `claude plugin
   validate` is syntax-only and `/skill-doctor` reports usage — so the audit
   one-liner must also print `len(d.encode())` and `d.isascii()`. Evidence:
-  `.claude/skills/pr-self-review/SKILL.md:3` (853 chars / 853 bytes, ASCII,
+  `.claude/skills/pr-self-review/SKILL.md:4` (853 chars / 853 bytes, ASCII,
   written to this rule).
 
 ## What Doesn't Work
@@ -281,7 +282,12 @@ instead.
   no raw row-type import) and `server/src/modules/agents/helpers.ts:3,12`;
   `.claude/skills/onion-architecture/SKILL.md:244-248` (V2/V5 baseline),
   `.claude/skills/onion-architecture/enforcement.md:8-9` (enforcement
-  explicitly deferred).
+  explicitly deferred). **Update 2026-09-26:** `SkillsService` has since moved
+  to ports (`constructor(private deps: SkillsServiceDeps)`,
+  `server/src/modules/skills/service.ts:39`) — it is now the local R6
+  exemplar, so a *new* service taking the whole `Container` (e.g.
+  `ConventionsService`) has a same-codebase clean pattern to follow; still
+  `should-fix`, not `blocker`.
 
 ## Session Notes
 

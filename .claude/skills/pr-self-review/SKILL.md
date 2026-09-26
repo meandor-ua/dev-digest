@@ -80,6 +80,17 @@ Two things are deliberate, not omissions:
   already run in `server-integration.yml`; a plain `pnpm test` would try to
   spin up testcontainers mid-review.
 
+**Optional, when Docker is reachable** (`docker info` succeeds): also run
+the touched server modules' `*.it.test.ts` files — the unit gate can't see a
+stale integration test, and on this repo one sat red on a branch unnoticed
+because only the unit gate ran. If testcontainers reports "Could not find a
+working container runtime strategy", prefix the command with
+`DOCKER_HOST=unix://$HOME/.orbstack/run/docker.sock` (see
+`server/insights/INSIGHTS.md`). Likewise, when the change touches
+`server/src/db/seed.ts`, `e2e/specs/**`, or UI text a flow waits for, run
+`./scripts/e2e.sh` from the root. Report either as `skipped (no Docker)`
+rather than silently omitting it; a failure there is a blocker like any gate.
+
 A gate failure is a **blocker**, full stop, no LLM judgement involved — use
 the finding schema in [severity.md](severity.md) with `skill:
 "deterministic-gate"`. If a command fails with an esbuild CPU-architecture

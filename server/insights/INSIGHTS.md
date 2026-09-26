@@ -106,8 +106,50 @@ you, so the next agent/session doesn't relearn it.
   `server/src/adapters/remote-text/index.ts:109` (`assertAllowedUrl`), `:127`
   (`guardedLookup`), `:169`/`:186` (`request`/`readBody`).
 
+- **2026-09-26** — `drizzle-kit generate` prompts interactively ("created or
+  renamed from another column?") whenever one migration both drops and adds
+  columns on the same table, and this prompt cannot be answered non-interactively
+  in this sandbox — piping input via `printf`/`yes`/`script -q` all hang or get
+  ignored (the `prompts` library needs a real raw-mode TTY). Split the schema
+  edit into two purely-additive-then-purely-subtractive steps (add the new
+  columns first, generate; then remove the old column, generate again) so each
+  `generate` call has no rename ambiguity and exits non-interactively. Produces
+  two migration files instead of one — acceptable, don't hand-edit drizzle-kit's
+  generated `meta/*_snapshot.json` to merge them. Evidence:
+  `server/src/db/migrations/0013_cynical_wasp.sql`,
+  `server/src/db/migrations/0014_crazy_forge.sql` (the conventions-table
+  category/status/rationale/evidence_line migration).
+- **2026-09-26** — An OpenAI-compatible structured-output schema (`completeStructured`,
+  used via OpenRouter too) rejects/warns on any Zod field that is `.optional()`
+  without also being `.nullable()` — "all fields must be required" for strict
+  JSON-schema mode. Prefer making the field plain-required over
+  `.optional().nullable()` when the model can always produce *some* value (a
+  best-guess integer, etc.) — simpler and avoids a `| null` in the parsed type.
+  Evidence: `server/src/modules/conventions/service.ts:43` (`occurrences`),
+  hit via a real OpenRouter/DeepSeek call during live verification, not a test.
+
 ## Codebase Patterns
 
+- **2026-09-26** — The Conventions Extractor (`server/src/modules/conventions/`)
+  is a SAMPLE (code) → PROPOSE (one structured LLM call) → VERIFY (code, the
+  "evidence gate") pipeline: the model never gets to write a citation that
+  isn't checked. `verifyCandidate()` resolves the claimed path (exact, or a
+  UNIQUE suffix match only — ambiguity drops the candidate), re-finds the
+  snippet in the ACTUAL sampled file content case/whitespace-insensitively
+  nearest the claimed line, corrects a wrong line number, and stores the
+  SOURCE file's line as the snippet — never the model's own text. This is the
+  same shape any future "model proposes, code grounds against real files"
+  feature should reuse. Evidence:
+  `server/src/modules/conventions/helpers.ts:129` (`verifyCandidate`).
+- **2026-09-26** — `pnpm db:seed` can read a real repo file into a seeded
+  skill's `body` (the `deprecation-policy` skill, source `imported_url`, is
+  `docs/skills/deprecation-policy.md` read via `readFileSync` +
+  `fileURLToPath(import.meta.url)`-relative path) — a clean way to seed an
+  "imported-origin" skill that's actually reviewable/editable as a normal repo
+  file, instead of inlining a long markdown body as a JS string literal.
+  Read it lazily inside `seed()`, never at module load — see the What
+  Doesn't Work entry on `seed.ts` being imported by the API at boot.
+  Evidence: `server/src/db/seed.ts:33` (`readDeprecationPolicyBody`).
 - **2026-09-22** — `pnpm db:seed` upserts demo skills and agents by name and
   inserts links with `onConflictDoNothing`. Re-running it after testing the
   Skills delete button on the live DB restores the deleted demo skills and
@@ -121,7 +163,7 @@ you, so the next agent/session doesn't relearn it.
   same as every other lazily-built adapter. This is the onion-architecture
   skill's "R7 — every external system sits behind a port" applied one layer
   deeper: the port's own implementation can compose a second port instead of
-  talking to fs/DB directly. Evidence: `server/src/adapters/project-docs/index.ts:29`,
+  talking to fs/DB directly. Evidence: `server/src/adapters/project-docs/index.ts:35`,
   `server/src/platform/container.ts` (`get projectDocs()`).
 - **2026-09-21** — Agent stats (`GET /agents/stats`, `GET /agents/:id/stats`)
   aggregate over the agent's `status='done'` runs whose PR is in the given repo,
@@ -175,8 +217,46 @@ you, so the next agent/session doesn't relearn it.
   (`skills/repository.ts`), never from the link itself. Evidence:
   `server/src/modules/reviews/run-executor.ts` (`ActiveSkillLink`),
   `server/src/modules/skills/repository.ts` (`listWithStats`/`stats`).
+- **2026-09-26** — Convention evidence (`evidence_snippet`,
+  `evidence_line`/`evidence_line_end`) is NOT user-editable: it is real code
+  sliced from the file, so `PatchConventionBody` accepts only
+  `rule`/`rationale`/`status`. Zod strips extra keys silently, so a body with
+  evidence keys plus `rule` → 200 with the evidence unchanged, while a body
+  with ONLY stripped keys (or `{}`) → 422 via the schema's `.refine` —
+  without it Drizzle's `.set({})` throws "No values to set" → 500. Both
+  guarded in `test/conventions.it.test.ts`. Evidence:
+  `server/src/modules/conventions/routes.ts:14`.
+- **2026-09-26** — Convention evidence can span several CONSECUTIVE lines:
+  `verifyCandidate` matches each non-blank snippet line in order
+  (blank file lines skipped, capped at `MAX_SNIPPET_LINES`), prefers the run
+  matching the most lines, then the one nearest the claimed line, and
+  truncates an unmatched (invented) tail instead of dropping the candidate.
+  The stored snippet is the dedented file slice, with its range in
+  `evidence_line`..`evidence_line_end` (migration 0015). Rows from before
+  0015 have a NULL end, so the DTO falls back to `evidence_line`. A
+  `N\t` gutter copied from the sample text is stripped before matching.
+  Evidence: `server/src/modules/conventions/helpers.ts:82`, `:97`, `:208`
+  (`toConventionDto`).
 
 ## What Doesn't Work
+
+- **2026-09-26** — Never do file I/O at module top level in `src/db/seed.ts`:
+  `src/adapters/auth/local.ts:5` imports it for `DEFAULT_WORKSPACE_NAME` /
+  `SYSTEM_USER_EMAIL`, so everything at its top level runs on every API boot,
+  not just `pnpm db:seed`. A top-level `readFileSync` of a
+  `import.meta.url`-relative path works under `tsx`, but a `pnpm build`
+  output (`rootDir: ".."` → `dist/server/src/db/`) resolves it to a
+  nonexistent path and the server dies with ENOENT before listening. Tests and
+  dev never show it. Evidence: `server/src/db/seed.ts:33`
+  (`readDeprecationPolicyBody`, now called inside `seed()`).
+- **2026-09-26** — Don't hand-roll `` `<untrusted>\n${text}\n</untrusted>` ``
+  around repo content. A sampled file containing `</untrusted>` closes the
+  delimiter early and whatever follows reads as instructions. Use
+  `wrapUntrusted(label, text)` (`platform/prompt.ts` → reviewer-core), which
+  escapes the closing tag. Guarded by the "cannot close the <untrusted>
+  delimiter" case in `test/conventions.it.test.ts`. Evidence:
+  `server/src/modules/conventions/service.ts:140`,
+  `reviewer-core/src/prompt.ts:41`.
 
 - **2026-09-22** — Don't wrap imported (non-`manual`) skills with
   `wrapUntrusted` in the prompt. `INJECTION_GUARD` tells the model to ignore
@@ -328,9 +408,10 @@ you, so the next agent/session doesn't relearn it.
   `repo: typeof schema.repos.$inferSelect` with `RepoRef` in `buildContextDocs`
   only; `executeRuns` and `runOneAgent` in the same file still take the raw
   Drizzle row type. Grep the whole file for the exact type pattern before
-  considering a row-type-leak fix complete. Evidence:
-  `server/src/modules/reviews/run-executor.ts:68`, `:163` (still raw), vs.
-  `:421` (fixed to `RepoRef`).
+  considering a row-type-leak fix complete. (Both siblings were fixed in the
+  follow-up `41d0599`; the lesson stands.) Evidence:
+  `server/src/modules/reviews/run-executor.ts:68`, `:163`, `:421` (all
+  `RepoRef` now).
 
 ## Session Notes
 
@@ -356,6 +437,21 @@ you, so the next agent/session doesn't relearn it.
   `insights/INSIGHTS.md`'s R5 entry updated to match).
 - Not done: the plan's manual control experiments (real LLM run with/without the
   Test Quality skills) — needs the app running with an API key.
+
+### 2026-09-26
+- Built the Conventions Extractor end to end (L02 finalization): schema +
+  migration, contracts (both vendor copies), SAMPLE/PROPOSE/VERIFY service,
+  5 routes, unit + integration tests. Verified live against a real repo clone
+  (`meandor-ua/dev-digest`) through OpenRouter/DeepSeek — 12 grounded
+  candidates, 0 ungrounded, re-scan correctly preserved an accepted decision
+  as a dropped duplicate.
+- Added the API Contract Reviewer's 4th/5th skills (`Semver Discipline
+  Rubric`, `Deprecation Policy`) with good/bad code examples each, and gave
+  the two pre-existing ones the same treatment — satisfies the "≥1 imported-
+  origin skill on a new agent" + "4 skills w/ examples" course criteria.
+- Client: repo-scoped `/repos/:repoId/conventions` page + card + create-skill
+  modal. (A Skills-grid preview Drawer and a `SkillCard` version badge
+  originally listed here are not in the code as of 2026-09-26.)
 
 ## Open Questions
 

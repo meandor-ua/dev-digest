@@ -109,6 +109,8 @@
     "saveError": "Couldn’t save skills. Reverted.",
     "disabledLabel": "Disabled",
     "globallyDisabled": "Disabled globally — won’t be injected until enabled",
+    "needsVettingLabel": "Needs vetting",
+    "needsVettingTitle": "Untrusted source — vet before enabling",
     "dangerousLabel": "Dangerous",
     "globallyDangerous": "Contains suspicious patterns — remove malicious content before enabling",
     "dragHandle": "Drag to reorder {name}",

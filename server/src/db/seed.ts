@@ -1,4 +1,7 @@
 import 'dotenv/config';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { createDb, type Db } from './client.js';
 import * as t from './schema.js';
 import { eq, and, or, isNull } from 'drizzle-orm';
@@ -14,6 +17,25 @@ import { PR_482_PATCHES, patchStats } from './seed-patches.js';
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
 const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
+
+/**
+ * The `deprecation-policy` skill's body is authored as a real repo file
+ * (`docs/skills/deprecation-policy.md`) and seeded as if it had come through
+ * the skill-import path (source `imported_url`) — an imported-origin skill
+ * linked to the API Contract Reviewer, matching how a maintainer would
+ * actually bring it in via the Skills Lab "Import" tab.
+ *
+ * Read lazily inside `seed()`, never at module load: `adapters/auth/local.ts`
+ * imports this module for its constants, so a top-level read would run on
+ * every API boot — and from a `dist/` build the source-relative path doesn't
+ * exist, crashing the server with ENOENT.
+ */
+function readDeprecationPolicyBody(): string {
+  return readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'docs', 'skills', 'deprecation-policy.md'),
+    'utf8',
+  );
+}
 
 /**
  * Seed the starter's demo data. Idempotent: re-running upserts the default
@@ -303,13 +325,68 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       name: 'API Breaking Change Rubric',
       type: 'rubric',
       description: 'Flag breaking changes in route signatures, response payloads, or query parameters.',
-      body: 'Any modification to existing public API route parameters, status codes, request schemas, or response schemas must be backwards-compatible or explicitly versioned. Flag removed fields or newly required parameters as CRITICAL.',
+      body: [
+        'Any modification to existing public API route parameters, status codes, request schemas, or response schemas must be backwards-compatible or explicitly versioned. Flag removed fields or newly required parameters as CRITICAL.',
+        '',
+        'Good: adding a new OPTIONAL field to a response schema, or a new optional query param with a default.',
+        '```ts',
+        'const PullRequestDto = z.object({ id: z.string(), title: z.string(), draft: z.boolean().optional() });',
+        '```',
+        '',
+        'Bad: renaming or removing an existing field, or turning an optional request field into a required one — both break every existing caller with no warning.',
+        '```ts',
+        '// title -> name silently renamed; any client reading `title` now gets undefined.',
+        'const PullRequestDto = z.object({ id: z.string(), name: z.string() });',
+        '```',
+      ].join('\n'),
     },
     {
       name: 'REST Contract Versioning Convention',
       type: 'convention',
       description: 'Require a versioned route or a deprecation path for any incompatible contract change.',
-      body: 'Treat every existing route, its zod request schema and its response shape as a published contract. An incompatible change must ship as a new route or version, or keep the old field working alongside the new one with a deprecation note. Additive changes (new optional input, new response field) are allowed. Status codes of existing routes never change silently.',
+      body: [
+        'Treat every existing route, its zod request schema and its response shape as a published contract. An incompatible change must ship as a new route or version, or keep the old field working alongside the new one with a deprecation note. Additive changes (new optional input, new response field) are allowed. Status codes of existing routes never change silently.',
+        '',
+        'Good: an incompatible change ships as a new route, with the old one kept serving unchanged.',
+        '```ts',
+        "app.get('/v2/repos/:id/pulls', ...); // new shape",
+        "app.get('/repos/:id/pulls', ...);    // v1 untouched, still served",
+        '```',
+        '',
+        'Bad: the same route silently starts returning a different status code or shape for existing clients.',
+        '```ts',
+        "// was 200 with { pulls: [...] }; now 200 with a bare array — every existing",
+        '// client destructuring `.pulls` breaks with no version bump.',
+        "app.get('/repos/:id/pulls', async (req) => pulls);",
+        '```',
+      ].join('\n'),
+    },
+    {
+      name: 'Semver Discipline Rubric',
+      type: 'rubric',
+      description: 'Score whether a contract change is labeled and shipped at the right semver level.',
+      body: [
+        'Classify every API-visible change as PATCH (bugfix, no shape change), MINOR (additive, backwards-compatible), or MAJOR (breaking). Flag a PR whose actual change is MAJOR but is not called out as one in the PR description — that mismatch is CRITICAL regardless of the code change itself.',
+        '',
+        'Good: an additive field is called out as MINOR-safe in the PR description and ships without touching existing fields.',
+        '```ts',
+        '// PR description: "MINOR — adds optional `assignee` to the response, no existing field touched."',
+        'const PullRequestDto = z.object({ id: z.string(), assignee: z.string().nullable().optional() });',
+        '```',
+        '',
+        'Bad: a required field is added to a request schema with no semver callout — every existing caller now 422s.',
+        '```ts',
+        '// no PR description callout; this is a MAJOR change disguised as a small diff.',
+        'const CreatePrBody = z.object({ title: z.string(), reviewerId: z.string() }); // reviewerId now required',
+        '```',
+      ].join('\n'),
+    },
+    {
+      name: 'Deprecation Policy',
+      type: 'convention',
+      source: 'imported_url',
+      description: 'Retire a field, route, or status code only through a deprecation window — never silently.',
+      body: readDeprecationPolicyBody(),
     },
   ];
   for (const sk of seedSkills) {
@@ -367,6 +444,8 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     { agent: 'Test Quality Reviewer', skill: 'Test Coverage Nudge', order: 3 },
     { agent: 'API Contract Reviewer', skill: 'API Breaking Change Rubric', order: 0 },
     { agent: 'API Contract Reviewer', skill: 'REST Contract Versioning Convention', order: 1 },
+    { agent: 'API Contract Reviewer', skill: 'Semver Discipline Rubric', order: 2 },
+    { agent: 'API Contract Reviewer', skill: 'Deprecation Policy', order: 3 },
   ];
   for (const l of skillLinks) {
     await db

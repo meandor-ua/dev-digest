@@ -29,6 +29,7 @@ do-not-touch section in the root `AGENTS.md`). The `Local` set is mirrored in
 | [onion-architecture](onion-architecture/SKILL.md) | Local | Decide which server layer every file belongs to — inward-only dependencies, ports vs adapters, no Drizzle/rows above the repository, service DI |
 | [pr-self-review](pr-self-review/SKILL.md) | Local | Pre-PR dispatcher: resolve the diff, run deterministic gates, fan out to the matching review skills per package, merge into one verdict |
 | [client-i18n-and-tests](client-i18n-and-tests/SKILL.md) | Local | Ship a client feature: next-intl message files (merge, t.rich, plurals, missing-key test), accessible names for the vendored kit, and this repo's vitest/RTL harness |
+| [llm-feature-module](llm-feature-module/SKILL.md) | Local | Server feature built on one structured LLM call — prompt template, FEATURE_MODELS, strict schema, `wrapUntrusted`, grounding gate, rate limit, client timeout, mock-LLM tests |
 
 ## What Are Skills?
 
@@ -50,8 +51,10 @@ inventory.
 ## Creating New Skills
 
 Every skill has a `SKILL.md` (required) — frontmatter of exactly `name`
-(kebab-case, identical to the directory) and `description`, then the rules.
-Some skills have nothing else; larger ones add files as below.
+(kebab-case, identical to the directory) and `description`, then the rules
+(a user-invoked-only workflow may add `disable-model-invocation: true`, as
+`pr-self-review` does). Some skills have nothing else; larger ones add files
+as below.
 
 Beyond that, two patterns are in use, both fine — pick by size:
 

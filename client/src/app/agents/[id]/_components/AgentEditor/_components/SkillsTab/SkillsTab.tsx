@@ -127,6 +127,10 @@ export function SkillsTab({ agentId }: { agentId: string }) {
                         onUnlink={() => unlink(sk.skill_id)}
                         isGloballyDisabled={!(skillsById.get(sk.skill_id)?.enabled ?? true)}
                         isDangerous={skillsById.get(sk.skill_id)?.is_dangerous ?? false}
+                        needsVetting={
+                          skillsById.get(sk.skill_id)?.source !== "manual" &&
+                          !(skillsById.get(sk.skill_id)?.enabled ?? true)
+                        }
                       />
                     ))}
                   </div>
@@ -153,12 +157,14 @@ function LinkedSkillRow({
   onUnlink,
   isGloballyDisabled,
   isDangerous,
+  needsVetting,
 }: {
   skill: AgentSkillItem;
   draggable: boolean;
   onUnlink: () => void;
   isGloballyDisabled: boolean;
   isDangerous: boolean;
+  needsVetting: boolean;
 }) {
   const t = useTranslations("agents");
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -192,12 +198,20 @@ function LinkedSkillRow({
           </Badge>
         </span>
       )}
-      {isGloballyDisabled && (
-        <span title={t("skills.globallyDisabled")}>
+      {needsVetting ? (
+        <span title={t("skills.needsVettingTitle")}>
           <Badge color="var(--warn)" bg="var(--warn-bg)" style={s.disabledBadge}>
-            {t("skills.disabledLabel")}
+            {t("skills.needsVettingLabel")}
           </Badge>
         </span>
+      ) : (
+        isGloballyDisabled && (
+          <span title={t("skills.globallyDisabled")}>
+            <Badge color="var(--warn)" bg="var(--warn-bg)" style={s.disabledBadge}>
+              {t("skills.disabledLabel")}
+            </Badge>
+          </span>
+        )
       )}
       <span style={s.badge(color)}>{skill.type}</span>
     </div>
@@ -209,6 +223,7 @@ function UnlinkedSkillRow({ skill, onLink }: { skill: SkillWithStats; onLink: ()
   const color = SKILL_TYPE_COLOR[skill.type as SkillType];
   const isGloballyDisabled = !skill.enabled;
   const isDangerous = skill.is_dangerous;
+  const needsVetting = skill.source !== "manual" && !skill.enabled;
   const cannotLink = isGloballyDisabled || isDangerous;
   return (
     <div style={s.row(false)}>
@@ -217,7 +232,15 @@ function UnlinkedSkillRow({ skill, onLink }: { skill: SkillWithStats; onLink: ()
       </span>
       <span
         style={cannotLink ? s.disabledCheckbox : undefined}
-        title={isDangerous ? t("skills.globallyDangerous") : isGloballyDisabled ? t("skills.globallyDisabled") : undefined}
+        title={
+          isDangerous
+            ? t("skills.globallyDangerous")
+            : needsVetting
+              ? t("skills.needsVettingTitle")
+              : isGloballyDisabled
+                ? t("skills.globallyDisabled")
+                : undefined
+        }
       >
         <Checkbox
           checked={false}
@@ -235,12 +258,20 @@ function UnlinkedSkillRow({ skill, onLink }: { skill: SkillWithStats; onLink: ()
           </Badge>
         </span>
       )}
-      {isGloballyDisabled && (
-        <span title={t("skills.globallyDisabled")}>
+      {needsVetting ? (
+        <span title={t("skills.needsVettingTitle")}>
           <Badge color="var(--warn)" bg="var(--warn-bg)" style={s.disabledBadge}>
-            {t("skills.disabledLabel")}
+            {t("skills.needsVettingLabel")}
           </Badge>
         </span>
+      ) : (
+        isGloballyDisabled && (
+          <span title={t("skills.globallyDisabled")}>
+            <Badge color="var(--warn)" bg="var(--warn-bg)" style={s.disabledBadge}>
+              {t("skills.disabledLabel")}
+            </Badge>
+          </span>
+        )
       )}
       <span style={s.badge(color)}>{skill.type}</span>
     </div>

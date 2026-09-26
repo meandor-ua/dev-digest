@@ -28,11 +28,13 @@ flowchart TD
   PULLS --> PR["/pulls/:number<br/>review detail<br/>(overview · diff · findings)"]
 
   AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config)"]
+  CONV["/repos/:repoId/conventions<br/>Conventions Extractor"]
   SETTINGS["/settings/:section<br/>API keys · models"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
   PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
   AGENTS -->|"/agents · /agents/:id"| API
+  CONV -->|"GET /repos/:id/conventions · POST …/extract · …/skill<br/>PATCH·DELETE /conventions/:id · POST /skills"| API
   SETTINGS -->|"/settings · /providers"| API
 ```
 

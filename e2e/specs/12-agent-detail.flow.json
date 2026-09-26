@@ -1,6 +1,6 @@
 {
   "name": "Agent editor: the five tabs render for a seeded agent",
-  "description": "From /agents, opening the seeded Security Reviewer card lands on the five-tab editor (Config · Skills · Evals · Stats · CI). Config shows the settings form; Skills lists the agent's two seeded linked skills with the '1 of 2 enabled' count (Lethal Trifecta Guard enabled, Error Handling Convention disabled); Stats is repo-scoped to the seeded demo repo and shows the agent's 4 seeded runs (Total runs / Run history / Source), and View trace opens the shared run-trace drawer on a seeded trace; Evals and CI are deterministic placeholders. Read-only seeded data (no model call). Assumes a freshly-seeded DB (hermetic stack).",
+  "description": "From /agents, opening the seeded Security Reviewer card lands on the five-tab editor (Config · Skills · Evals · Stats · CI). Config shows the settings form; Skills lists the agent's two seeded linked skills (Lethal Trifecta Guard, Error Handling Convention) with the '2 of 14 linked' count over all 14 seeded workspace skills; tab clicks use --exact because each AgentCard is role=button and its accessible name (e.g. '… 2 skills …') would otherwise substring-match the 'Skills' tab; Stats is repo-scoped to the seeded demo repo and shows the agent's 4 seeded runs (Total runs / Run history / Source), and View trace opens the shared run-trace drawer on a seeded trace; Evals and CI are deterministic placeholders. Read-only seeded data (no model call). Assumes a freshly-seeded DB (hermetic stack).",
   "steps": [
     {
       "cmd": [
@@ -73,7 +73,8 @@
         "button",
         "click",
         "--name",
-        "Skills"
+        "Skills",
+        "--exact"
       ],
       "label": "switch to the Skills tab"
     },
@@ -97,9 +98,9 @@
       "cmd": [
         "wait",
         "--text",
-        "1 of 2 enabled"
+        "2 of 14 linked"
       ],
-      "label": "the enabled-count reflects the seeded links"
+      "label": "the linked-count reflects the seeded links over every workspace skill"
     },
     {
       "cmd": [
@@ -108,7 +109,8 @@
         "button",
         "click",
         "--name",
-        "Evals"
+        "Evals",
+        "--exact"
       ],
       "label": "switch to the Evals tab"
     },
@@ -127,7 +129,8 @@
         "button",
         "click",
         "--name",
-        "CI"
+        "CI",
+        "--exact"
       ],
       "label": "switch to the CI tab"
     },
@@ -146,7 +149,8 @@
         "button",
         "click",
         "--name",
-        "Stats"
+        "Stats",
+        "--exact"
       ],
       "label": "switch to the Stats tab"
     },

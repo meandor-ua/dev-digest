@@ -77,18 +77,28 @@ d('seed: demo PR #482 is reviewable (Testcontainers pg)', () => {
     expect(links.find((l) => l.source === 'imported_url')?.name).toBe('Test Coverage Nudge');
   });
 
-  it('seeds API Contract Reviewer with its two contract skills, in order', async () => {
+  it('seeds API Contract Reviewer with its four contract skills, in order, each with a good/bad example', async () => {
     const { db } = pg.handle;
     const [agent] = await db.select().from(t.agents).where(eq(t.agents.name, 'API Contract Reviewer'));
     const links = await db
-      .select({ name: t.skills.name, order: t.agentSkills.order })
+      .select({ name: t.skills.name, order: t.agentSkills.order, body: t.skills.body, source: t.skills.source })
       .from(t.agentSkills)
       .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
       .where(eq(t.agentSkills.agentId, agent!.id));
-    expect(links.sort((a, b) => a.order - b.order).map((l) => l.name)).toEqual([
+    const sorted = links.sort((a, b) => a.order - b.order);
+    expect(sorted.map((l) => l.name)).toEqual([
       'API Breaking Change Rubric',
       'REST Contract Versioning Convention',
+      'Semver Discipline Rubric',
+      'Deprecation Policy',
     ]);
+    for (const link of sorted) {
+      expect(link.body).toMatch(/```/); // every skill carries a good/bad code example
+    }
+    // The deprecation-policy skill is brought in through the import path
+    // (source `imported_url`), not authored manually — criterion: at least
+    // one imported-origin skill linked to a new agent.
+    expect(sorted.find((l) => l.name === 'Deprecation Policy')?.source).toBe('imported_url');
   });
 
   it('re-seeding does not duplicate agent_runs (idempotent)', async () => {

@@ -202,3 +202,24 @@ export function useSetAgentSkills(id: string) {
     },
   });
 }
+
+/**
+ * Additively links ONE skill to an agent (POST /agents/:id/skills with a
+ * single skill_id) — unlike `useSetAgentSkills`, which replaces the whole
+ * set, this never touches the agent's other links. Used by the Conventions
+ * Extractor's "Create skill" flow to attach the newly created skill.
+ */
+export function useLinkAgentSkill(agentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (skillId: string) =>
+      api.post<AgentSkillItem[]>(`/agents/${agentId}/skills`, { skill_id: skillId }),
+    onSuccess: (data) => {
+      qc.setQueryData(["agent-skills", agentId], data);
+      qc.invalidateQueries({ queryKey: ["agent-card-stats"] });
+      qc.invalidateQueries({ queryKey: ["agent-stats"] });
+      qc.invalidateQueries({ queryKey: ["skills"] });
+      qc.invalidateQueries({ queryKey: ["skill-stats"] });
+    },
+  });
+}

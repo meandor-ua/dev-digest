@@ -445,7 +445,12 @@ d('Skills CRUD, version snapshotting, restore & stats', () => {
       payload: { url: 'https://example.com/preview.md' },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ name: 'Preview Rule', body: '# Preview Rule\nBody text.' });
+    // The preview keeps the provenance frontmatter (saved as v1, cut on the next save).
+    expect(res.json()).toEqual({
+      name: 'Preview Rule',
+      description: '',
+      body: '---\nexternal_skill_imported_from: https://example.com/preview.md\n---\n# Preview Rule\nBody text.',
+    });
     const after = (await app.inject({ method: 'GET', url: '/skills' })).json().length;
     expect(after).toBe(before);
 
