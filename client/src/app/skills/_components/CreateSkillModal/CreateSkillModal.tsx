@@ -58,7 +58,24 @@ export function CreateSkillModal({
   // URL prefills them and kept across tab switches, so `source`/`enabled` on
   // submit reflect where the content came from — not which tab is open.
   const [origin, setOrigin] = React.useState<"manual" | "imported">("manual");
+
+  // Which of Name/Description currently hold a value an import put there (as
+  // opposed to one the user typed or had ready before importing). File import
+  // resolves each field as: form value > file frontmatter > code fallback —
+  // so only an empty or import-filled field gets replaced (e.g. switching
+  // between files of one archive), never one the user owns.
+  const importFilled = React.useRef({ name: false, description: false });
+  const editName = (value: string) => {
+    importFilled.current.name = false;
+    setName(value);
+  };
+  const editDescription = (value: string) => {
+    importFilled.current.description = false;
+    setDescription(value);
+  };
+
   const startBlank = () => {
+    importFilled.current = { name: false, description: false };
     setName("");
     setDescription("");
     setBody("");
@@ -76,8 +93,18 @@ export function CreateSkillModal({
     const item = files[idx];
     if (!item) return;
     const parsed = parseSkillMarkdown(item.content, item.filename);
-    setName(parsed.name);
-    setDescription(parsed.description || t("create.file.importedDescription", { filename: item.filename }));
+    // Functional updaters read the live form value (the user may type while
+    // an archive is still extracting). Idempotent under StrictMode's double
+    // call: once a field is import-filled, the second call just replaces it.
+    const fillField = (field: "name" | "description", fromFile: string) => (prev: string) => {
+      if (prev.trim() && !importFilled.current[field]) return prev;
+      importFilled.current[field] = true;
+      return fromFile;
+    };
+    setName(fillField("name", parsed.name));
+    setDescription(
+      fillField("description", parsed.description || t("create.file.importedDescription", { filename: item.filename })),
+    );
     setBody(parsed.body);
     setRawBody(item.content);
     setOrigin("imported");
@@ -204,6 +231,9 @@ export function CreateSkillModal({
 
     previewMutation.mutate(importUrl.trim(), {
       onSuccess: (preview) => {
+        // URL import: the fetched file's frontmatter wins over the form, then
+        // the server/translated fallback — unlike file import (applyExtracted).
+        importFilled.current = { name: true, description: true };
         setName(preview.name);
         setDescription(preview.description || t("create.url.importedDescription", { url: importUrl.trim() }));
         setBody(stripFrontmatter(preview.body));
@@ -327,7 +357,7 @@ export function CreateSkillModal({
               <label style={s.label}>{t("create.scratch.name")}</label>
               <TextInput
                 value={name}
-                onChange={setName}
+                onChange={editName}
                 placeholder={t("create.scratch.namePlaceholder")}
                 aria-label={t("create.scratch.name")}
               />
@@ -338,7 +368,7 @@ export function CreateSkillModal({
               <label style={s.label}>{t("create.scratch.description")}</label>
               <TextInput
                 value={description}
-                onChange={setDescription}
+                onChange={editDescription}
                 placeholder={t("create.scratch.descriptionPlaceholder")}
                 aria-label={t("create.scratch.description")}
               />

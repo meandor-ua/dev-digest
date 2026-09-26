@@ -279,6 +279,64 @@ describe("CreateSkillModal", () => {
     );
   });
 
+  it("file import keeps Name/Description the user filled in before importing", async () => {
+    extractMarkdownFiles.mockResolvedValue([
+      { filename: "SKILL.md", content: "---\nname: file-name\ndescription: File desc.\n---\n# Rules\nbody" },
+    ]);
+    renderModal("import");
+    type("Skill Name", "My Name");
+    type("Directive Description", "My desc.");
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "SKILL.md")] } });
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Skill Body (Markdown)" })).toHaveValue("# Rules\nbody"));
+
+    expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("My Name");
+    expect(screen.getByRole("textbox", { name: "Directive Description" })).toHaveValue("My desc.");
+  });
+
+  it("file import fills only the empty fields — frontmatter first, then the code fallback", async () => {
+    extractMarkdownFiles.mockResolvedValue([{ filename: "SKILL.md", content: "---\nname: file-name\n---\n# Rules\nbody" }]);
+    renderModal("import");
+    type("Skill Name", "My Name");
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "SKILL.md")] } });
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "Directive Description" })).toHaveValue("Imported from SKILL.md"),
+    );
+    expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("My Name");
+  });
+
+  it("switching archive entries replaces import-filled fields but keeps ones the user edited", async () => {
+    extractMarkdownFiles.mockResolvedValue([
+      { filename: "pkg/SKILL.md", content: "---\nname: first\ndescription: First desc.\n---\nbody" },
+      { filename: "pkg/other.md", content: "---\nname: second\ndescription: Second desc.\n---\nbody" },
+    ]);
+    renderModal("import");
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["x"], "pkg.zip")] } });
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("first"));
+    type("Directive Description", "Edited desc.");
+    fireEvent.click(screen.getByRole("button", { name: "pkg/other.md" }));
+
+    expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("second");
+    expect(screen.getByRole("textbox", { name: "Directive Description" })).toHaveValue("Edited desc.");
+  });
+
+  it("URL import prefers the fetched file's name/description over values typed earlier", () => {
+    previewMutate.mockImplementation((_url, opts) =>
+      opts.onSuccess({ name: "Fetched Rule", description: "Fetched desc.", body: "# Fetched Rule\nbody" }),
+    );
+    renderModal("scratch");
+    type("Skill Name", "Typed");
+    type("Directive Description", "Typed desc.");
+    fireEvent.click(screen.getByRole("button", { name: messages.create.modal.url }));
+    type(messages.create.url.label, "https://example.com/rule.md");
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(messages.create.url.fetch) }));
+
+    expect(screen.getByRole("textbox", { name: "Skill Name" })).toHaveValue("Fetched Rule");
+    expect(screen.getByRole("textbox", { name: "Directive Description" })).toHaveValue("Fetched desc.");
+  });
+
   it("shows extraction failures as translated copy keyed by the error code", async () => {
     extractMarkdownFiles.mockRejectedValue(new ExtractError("tooManyEntries", "english only", { max: 50 }));
     renderModal("import");

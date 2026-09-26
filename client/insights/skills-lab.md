@@ -135,6 +135,18 @@ the package's `insights/INSIGHTS.md`.
   which gave two save controls, and users expected it to cancel. Keep it one
   save button per edit form. Evidence:
   `client/src/app/repos/[repoId]/conventions/_components/ConventionCard/ConventionCard.tsx:83`.
+- **2026-09-26** — The two import paths fill Name/Description in a different
+  order of priority. File import (.md/.zip) uses the form value first, then
+  the file's frontmatter, then the code fallback (heading/filename, or the
+  "Imported from …" text). URL import uses the fetched frontmatter first,
+  then the fallback, and it overwrites the form. The `importFilled` ref
+  records which fields an import filled, so choosing another archive entry
+  replaces those fields but keeps any field the user typed. Every user edit
+  must go through `editName`/`editDescription`, which clear that flag. A
+  plain `setName` call on an input would let the next file import overwrite
+  what the user typed. Evidence:
+  `client/src/app/skills/_components/CreateSkillModal/CreateSkillModal.tsx:67`
+  (ref), `:99` (`fillField`), `:236` (URL path).
 
 ## What Doesn't Work
 
