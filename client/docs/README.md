@@ -10,7 +10,7 @@ primitives) are NOT real npm packages — there's no monorepo workspace, no
 plain TypeScript trees under `src/vendor/shared` and `src/vendor/ui`,
 imported via `tsconfig.json` path aliases. `@devdigest/shared` is meant to
 stay byte-identical to `server`'s copy of the same contracts (hand-edit both,
-then `diff` — see root `CLAUDE.md`'s do-not-touch section); `@devdigest/ui`
+then `diff` — see root `AGENTS.md`'s do-not-touch section); `@devdigest/ui`
 has no second copy anywhere in the repo, so it's safe to hand-edit directly
 (confirmed by grepping for a server-side `vendor/ui` — none exists; UI
 primitives are a client-only concern).
@@ -22,7 +22,7 @@ colocated with that route's `page.tsx`, so a reviewer can delete or move a
 route without hunting for orphaned files elsewhere. Anything used by *more
 than one route* — `run-cost-badge/`, `findings-by-severity/` — moves to
 `src/components/<name>/` (kebab-case) instead. This distinction is easy to
-get backwards; see the `client/INSIGHTS.md` entry on this.
+get backwards; see the `client/insights/INSIGHTS.md` entry on this.
 
 ## The severity-findings popover: the first portal in this codebase
 
@@ -38,6 +38,17 @@ tradeoff: hover/click/outside-click detection has to check both the trigger
 element's ref AND the portaled panel's ref (`FindingsBySeverityBadge.tsx`),
 since they're no longer DOM-nested — a single `ref.contains()` check (as
 `Dropdown.tsx` uses) isn't enough once a portal is involved.
+
+`Dropdown`'s own `portal` mode (the PR list's Run Review menu) follows the same
+approach, plus one more rule: **a portaled menu must fit the viewport**.
+It closes on any scroll outside itself, because it's fixed at a rect measured
+once. So an item hanging below the fold could never be clicked: reaching it
+scrolls the page, which closes the menu first. This broke e2e flow 09 once
+five seeded agents pushed "Configure agents…" off-screen. `portalPosition()`
+(`vendor/ui/kit/Dropdown.tsx`) therefore opens the menu below the trigger with
+its `maxHeight` capped to the room left, or flips it above when there's clearly
+more room there. A long list then scrolls **inside** the menu, which never
+closes it.
 
 ## Two different "which findings count" rules on purpose
 

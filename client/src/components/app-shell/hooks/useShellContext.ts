@@ -8,6 +8,7 @@ import { type ShellContext } from "@devdigest/ui";
 import { useTheme } from "../../../lib/theme";
 import { useActiveRepo } from "../../../lib/repo-context";
 import { usePulls, useDeleteRepo, useWorkspace } from "../../../lib/hooks";
+import { useToast } from "../../../lib/toast";
 import { activeKeyFor, toShellRepo } from "../helpers";
 
 interface ShellContextOptions {
@@ -19,7 +20,12 @@ interface ShellContextOptions {
  * list/active repo (mapped to the shell shape), theme, PR count, and the repo
  * selection / add / removal actions.
  */
-export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): ShellContext {
+export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): {
+  ctx: ShellContext;
+  pendingRemoveRepo: { id: string; name: string } | null;
+  confirmRemoveRepo: () => void;
+  cancelRemoveRepo: () => void;
+} {
   const t = useTranslations("shell");
   const pathname = usePathname() ?? "/";
   const router = useRouter();
@@ -28,6 +34,8 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
   const { data: pulls } = usePulls(repoId);
   const { data: workspace } = useWorkspace();
   const deleteRepo = useDeleteRepo();
+  const toast = useToast();
+  const [pendingRemoveId, setPendingRemoveId] = React.useState<string | null>(null);
 
   const onSelectRepo = React.useCallback(
     (id: string) => {
@@ -39,26 +47,31 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
 
   const onAddRepo = React.useCallback(() => router.push("/onboarding"), [router]);
 
-  const onRemoveRepo = React.useCallback(
-    (id: string) => {
-      const target = repos.find((r) => r.id === id);
-      const ok = window.confirm(
-        t("removeRepo.confirm", { name: target?.full_name ?? t("removeRepo.fallbackName") }),
-      );
-      if (!ok) return;
-      deleteRepo.mutate(id, {
-        onSuccess: () => {
-          if (repoId === id) {
-            const next = repos.find((r) => r.id !== id);
-            router.push(next ? `/repos/${next.id}/pulls` : "/onboarding");
-          }
-        },
-      });
-    },
-    [repos, repoId, t, deleteRepo, router],
-  );
+  const onRemoveRepo = React.useCallback((id: string) => setPendingRemoveId(id), []);
 
-  return React.useMemo<ShellContext>(
+  const pendingTarget = pendingRemoveId ? repos.find((r) => r.id === pendingRemoveId) : undefined;
+  const pendingRemoveRepo = pendingRemoveId
+    ? { id: pendingRemoveId, name: pendingTarget?.full_name ?? t("removeRepo.fallbackName") }
+    : null;
+
+  const confirmRemoveRepo = React.useCallback(() => {
+    const id = pendingRemoveId;
+    setPendingRemoveId(null);
+    if (!id) return;
+    deleteRepo.mutate(id, {
+      onSuccess: () => {
+        toast.success(t("removeRepo.deleteSuccess", { name: pendingTarget?.full_name ?? t("removeRepo.fallbackName") }));
+        if (repoId === id) {
+          const next = repos.find((r) => r.id !== id);
+          router.push(next ? `/repos/${next.id}/pulls` : "/onboarding");
+        }
+      },
+    });
+  }, [pendingRemoveId, repos, repoId, deleteRepo, pendingTarget, router, t, toast]);
+
+  const cancelRemoveRepo = React.useCallback(() => setPendingRemoveId(null), []);
+
+  const ctx = React.useMemo<ShellContext>(
     () => ({
       Link,
       activeKey: activeKeyFor(pathname),
@@ -93,4 +106,6 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
       workspace,
     ],
   );
+
+  return { ctx, pendingRemoveRepo, confirmRemoveRepo, cancelRemoveRepo };
 }

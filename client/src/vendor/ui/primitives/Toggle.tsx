@@ -4,16 +4,22 @@ export function Toggle({
   on,
   onChange,
   size = 18,
+  disabled = false,
 }: {
   on: boolean;
-  onChange: (v: boolean) => void;
+  onChange?: (v: boolean) => void;
   size?: number;
+  /** Renders dimmed and blocks clicks (native `disabled` — no click event
+   *  reaches `onClick` at all, so `onChange` can safely stay undefined). */
+  disabled?: boolean;
 }) {
   return (
     <button
-      onClick={() => onChange(!on)}
+      type="button"
+      onClick={() => onChange?.(!on)}
       role="switch"
       aria-checked={on}
+      disabled={disabled}
       style={{
         width: size * 1.85,
         height: size + 4,
@@ -23,6 +29,8 @@ export function Toggle({
         background: on ? "var(--accent)" : "var(--border-strong)",
         transition: "background .15s",
         position: "relative",
+        opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? "not-allowed" : "pointer",
       }}
     >
       <span

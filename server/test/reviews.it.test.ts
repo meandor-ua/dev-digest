@@ -4,7 +4,13 @@ import { waitForPrRuns } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
-import { MockLLMProvider, MockEmbedder, MockGitClient, MockGitHubClient } from '../src/adapters/mocks.js';
+import {
+  MockLLMProvider,
+  MockEmbedder,
+  MockGitClient,
+  MockGitHubClient,
+  MockProjectDocsAdapter,
+} from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Review } from '@devdigest/shared';
@@ -602,6 +608,202 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(runs[0]!.error).toContain('changes no files');
     expect(runs[0]!.error).not.toContain('token');
     expect(llm.calls.filter((c) => c.method !== 'listModels')).toHaveLength(0);
+
+    await app.close();
+  });
+  it('injects only vetted (enabled) skills into the prompt, in link order', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: { embedder: new MockEmbedder(), git: new MockGitClient({ diff: DIFF }), llm: { openai: llm } },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = await makeAgent(app, 'Sec-skills');
+    const mkSkill = async (name: string, body: string, source: 'manual' | 'imported_url' = 'manual') =>
+      (await app.inject({ method: 'POST', url: '/skills', payload: { name, type: 'rubric', body, source } })).json();
+    const second = await mkSkill('Second', 'RULE-SECOND');
+    const first = await mkSkill('First', 'RULE-FIRST');
+    const unvetted = await mkSkill('Unvetted', 'RULE-UNVETTED', 'imported_url'); // stored disabled
+    expect(unvetted.enabled).toBe(false);
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${agent.id}/skills`,
+      payload: { skill_ids: [first.id, unvetted.id, second.id] },
+    });
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+
+    const prompt = llm.calls
+      .filter((c) => c.method === 'completeStructured')
+      .map((c) => JSON.stringify((c.req as { messages: unknown }).messages))
+      .join('\n');
+    expect(prompt).toContain('## Skills / rules');
+    expect(prompt).toContain('RULE-FIRST');
+    expect(prompt).toContain('RULE-SECOND');
+    expect(prompt.indexOf('RULE-FIRST')).toBeLessThan(prompt.indexOf('RULE-SECOND'));
+    expect(prompt).not.toContain('RULE-UNVETTED');
+
+    await app.close();
+  });
+
+  it("injects an enabled skill's attached context docs under ## Project context", async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: DIFF }),
+        llm: { openai: llm },
+        projectDocs: new MockProjectDocsAdapter({
+          docs: [{ path: 'docs/README.md', dir: 'docs', category: 'docs' }],
+          files: { 'docs/README.md': 'PROJECT-DOC-CONTENT' },
+        }),
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = await makeAgent(app, 'Sec-context');
+    const skill = (
+      await app.inject({ method: 'POST', url: '/skills', payload: { name: 'With docs', type: 'rubric', body: 'RULE' } })
+    ).json();
+    await app.inject({
+      method: 'PUT',
+      url: `/skills/${skill.id}/context`,
+      payload: { paths: ['docs/README.md'] },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${agent.id}/skills`,
+      payload: { skill_ids: [skill.id] },
+    });
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+
+    const prompt = llm.calls
+      .filter((c) => c.method === 'completeStructured')
+      .map((c) => JSON.stringify((c.req as { messages: unknown }).messages))
+      .join('\n');
+    expect(prompt).toContain('## Project context');
+    expect(prompt).toContain('PROJECT-DOC-CONTENT');
+    // The enabled skill lands as its own named block
+    expect(prompt).toContain('### Skill: With docs\\nRULE');
+    const log = (await app.inject({ method: 'GET', url: `/runs/${runs[0]!.id}/trace` })).json().log as Array<{ msg: string }>;
+    expect(log.some((l) => l.msg.includes('• With docs (rubric'))).toBe(true);
+
+    await app.close();
+  });
+
+  it('skips an attached doc that is missing from the clone, without failing the run', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: DIFF }),
+        llm: { openai: llm },
+        // `docs` lists the path (so it's a "known" doc) but `files` has no entry
+        // for it — same shape as a doc renamed/deleted since the skill attached it.
+        projectDocs: new MockProjectDocsAdapter({
+          docs: [{ path: 'docs/gone.md', dir: 'docs', category: 'docs' }],
+          files: {},
+        }),
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = await makeAgent(app, 'Sec-context-missing');
+    const skill = (
+      await app.inject({ method: 'POST', url: '/skills', payload: { name: 'Missing doc', type: 'rubric', body: 'RULE' } })
+    ).json();
+    await app.inject({
+      method: 'PUT',
+      url: `/skills/${skill.id}/context`,
+      payload: { paths: ['docs/gone.md'] },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${agent.id}/skills`,
+      payload: { skill_ids: [skill.id] },
+    });
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+
+    const prompt = llm.calls
+      .filter((c) => c.method === 'completeStructured')
+      .map((c) => JSON.stringify((c.req as { messages: unknown }).messages))
+      .join('\n');
+    expect(prompt).not.toContain('## Project context');
+    // The gap is logged by path, never silent (also covers the 64 KB size cap,
+    // which reaches run-executor the same way: readMany just omits the doc).
+    const log = (await app.inject({ method: 'GET', url: `/runs/${runs[0]!.id}/trace` })).json().log as Array<{
+      msg: string;
+    }>;
+    expect(
+      log.some((l) => l.msg.includes('Context: skipped 1 doc(s)') && l.msg.includes('docs/gone.md')),
+    ).toBe(true);
+
+    await app.close();
+  });
+
+  it('a globally-disabled skill contributes no context docs', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: DIFF }),
+        llm: { openai: llm },
+        projectDocs: new MockProjectDocsAdapter({
+          docs: [{ path: 'docs/README.md', dir: 'docs', category: 'docs' }],
+          files: { 'docs/README.md': 'SHOULD-NOT-APPEAR' },
+        }),
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const agent = await makeAgent(app, 'Sec-context-disabled');
+    // imported_url skills land unvetted (disabled) until someone enables them —
+    // that's what keeps a linked skill out of prompt assembly.
+    const skill = (
+      await app.inject({
+        method: 'POST',
+        url: '/skills',
+        payload: { name: 'Disabled skill', type: 'rubric', body: 'RULE', source: 'imported_url' },
+      })
+    ).json();
+    expect(skill.enabled).toBe(false);
+    await app.inject({
+      method: 'PUT',
+      url: `/skills/${skill.id}/context`,
+      payload: { paths: ['docs/README.md'] },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${agent.id}/skills`,
+      payload: { skill_ids: [skill.id] },
+    });
+
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    expect(runs[0]!.status).toBe('done');
+
+    const prompt = llm.calls
+      .filter((c) => c.method === 'completeStructured')
+      .map((c) => JSON.stringify((c.req as { messages: unknown }).messages))
+      .join('\n');
+    expect(prompt).not.toContain('## Project context');
+    expect(prompt).not.toContain('SHOULD-NOT-APPEAR');
+    // A disabled skill is named as skipped in the run log, never attached
+    const log = (await app.inject({ method: 'GET', url: `/runs/${runs[0]!.id}/trace` })).json().log as Array<{ msg: string }>;
+    expect(log.some((l) => l.msg.includes('skipped (disabled): Disabled skill'))).toBe(true);
+    expect(log.some((l) => l.msg.includes('• Disabled skill'))).toBe(false);
 
     await app.close();
   });

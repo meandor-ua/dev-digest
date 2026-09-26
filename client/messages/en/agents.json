@@ -1,7 +1,15 @@
 {
   "card": {
     "noDescription": "No description",
-    "skillCount": "{count} skills"
+    "skillCount": "{count, plural, one {# skill} other {# skills}}",
+    "runs": "{count, plural, one {# run} other {# runs}}",
+    "scorePct": "{score}%",
+    "avgCost": "{cost} avg",
+    "noValue": "—",
+    "deleteTitle": "Delete agent",
+    "confirmDelete": "Delete agent \"{name}\"? This cannot be undone.",
+    "deleteSuccess": "Deleted agent \"{name}\"",
+    "deleteError": "Failed to delete agent"
   },
   "list": {
     "breadcrumbLab": "Skills Lab",
@@ -84,14 +92,64 @@
     "repoIntelHint": "Inject repo context (repo skeleton, callers of changed symbols, and a 'high blast-radius' note) into this agent's review prompt. On by default. Turning it off sends only the diff — useful for cheap models or self-contained PRs.",
     "save": "Save agent",
     "saving": "Saving…",
+    "cancel": "Cancel",
     "saved": "Saved (v{version})",
-    "savedToast": "Agent saved (v{version})"
+    "savedToast": "Agent saved (v{version})",
+    "dangerZoneTitle": "Delete agent",
+    "dangerZoneBody": "Permanently remove this agent and its configuration."
   },
   "skills": {
     "title": "Skills",
-    "enabledCount": "{linked} of {total} enabled",
+    "linkedCount": "{linked} of {total} linked",
     "filterPlaceholder": "Filter skills…",
-    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Toggle to attach."
+    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Check a skill below to link it to this agent.",
+    "filterActiveHint": "Clear the filter to reorder skills.",
+    "empty": "No skills in this workspace yet.",
+    "noMatch": "No skills match your filter.",
+    "saveError": "Couldn’t save skills. Reverted.",
+    "disabledLabel": "Disabled",
+    "globallyDisabled": "Disabled globally — won’t be injected until enabled",
+    "needsVettingLabel": "Needs vetting",
+    "needsVettingTitle": "Untrusted source — vet before enabling",
+    "dangerousLabel": "Dangerous",
+    "globallyDangerous": "Contains suspicious patterns — remove malicious content before enabling",
+    "dragHandle": "Drag to reorder {name}",
+    "filterLabel": "Filter skills",
+    "link": "Link {name} to this agent",
+    "unlink": "Unlink {name} from this agent"
+  },
+  "empty": {
+    "evalsTitle": "No evals yet",
+    "evalsBody": "Evaluation runs for this agent will appear here.",
+    "ciTitle": "No CI activity yet",
+    "ciBody": "Continuous-integration reviews for this agent will appear here."
+  },
+  "stats": {
+    "noRepo": "Select a repo to see this agent’s stats.",
+    "noData": "No data yet",
+    "totalRuns": "Total runs",
+    "avgCost": "Avg cost / run",
+    "avgDuration": "Avg duration",
+    "avgScore": "Avg score",
+    "costTrend": "{delta} vs. earlier",
+    "mostUsedSkills": "Most-used skills",
+    "mostPulledMemory": "Most-pulled memory",
+    "mostPulledMemoryEmpty": "Memory pulls aren’t recorded per run yet.",
+    "findingsBySeverity": "Findings by severity",
+    "findingsByCategory": "Findings by category",
+    "runHistory": "Run history",
+    "viewTrace": "View trace",
+    "noTrace": "No trace",
+    "cols": {
+      "run": "Run",
+      "pr": "PR",
+      "when": "When",
+      "tokens": "Tokens",
+      "cost": "Cost",
+      "findings": "Findings",
+      "source": "Source",
+      "trace": "Trace"
+    }
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."

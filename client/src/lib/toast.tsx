@@ -5,7 +5,7 @@
 
 import React from "react";
 
-type ToastKind = "success" | "error" | "info";
+type ToastKind = "success" | "error" | "info" | "danger";
 interface Toast {
   id: number;
   kind: ToastKind;
@@ -17,6 +17,10 @@ interface ToastApi {
   success: (m: string) => void;
   error: (m: string) => void;
   info: (m: string) => void;
+  /** Same layout as `success`/`info`, but styled with a red border and
+   *  background — used for non-failure notices that still demand attention
+   *  (e.g. "saved, but this skill is dangerous and was disabled"). */
+  danger: (m: string) => void;
 }
 
 const ToastCtx = React.createContext<ToastApi | null>(null);
@@ -36,12 +40,14 @@ export const notify = {
   success: (m: string) => activePusher?.(m, "success"),
   error: (m: string) => activePusher?.(m, "error"),
   info: (m: string) => activePusher?.(m, "info"),
+  danger: (m: string) => activePusher?.(m, "danger"),
 };
 
 const COLORS: Record<ToastKind, { bg: string; border: string; icon: string }> = {
   success: { bg: "var(--ok-bg, #052e1c)", border: "var(--ok)", icon: "✓" },
   error: { bg: "var(--crit-bg, #2e0a0a)", border: "var(--crit)", icon: "✕" },
   info: { bg: "var(--bg-elevated)", border: "var(--border-strong)", icon: "ℹ" },
+  danger: { bg: "var(--crit-bg, #2e0a0a)", border: "var(--crit)", icon: "⚠" },
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -50,7 +56,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const push = React.useCallback((message: string, kind: ToastKind = "info") => {
     const id = seq.current++;
-    setItems((prev) => [...prev, { id, kind, message }]);
+    // Drop an exact repeat of a toast still on screen. A failed mutation is
+    // toasted by the global MutationCache.onError (providers.tsx) AND often by
+    // the caller's own `onError` with the same `err.message` — without this,
+    // every such error shows twice.
+    setItems((prev) =>
+      prev.some((t) => t.kind === kind && t.message === message) ? prev : [...prev, { id, kind, message }],
+    );
     // auto-dismiss after 4s
     setTimeout(() => setItems((prev) => prev.filter((t) => t.id !== id)), 4000);
   }, []);
@@ -61,6 +73,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       success: (m) => push(m, "success"),
       error: (m) => push(m, "error"),
       info: (m) => push(m, "info"),
+      danger: (m) => push(m, "danger"),
     }),
     [push],
   );

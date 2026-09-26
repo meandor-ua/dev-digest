@@ -36,6 +36,29 @@ env:
   E2E_BASE_URL: http://localhost:3000
 
 jobs:
+  # Static checks for the runner itself. Cheap and stack-free, so it fails fast
+  # before the Docker/Postgres/Next build below.
+  checks:
+    name: typecheck + lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
   e2e:
     name: browser flows
     runs-on: ubuntu-latest
@@ -82,9 +105,9 @@ jobs:
       - name: Start API (:3001)
         working-directory: server
         run: |
-          # tsx directly (not `pnpm start`): the committed package.json's start
-          # is `node dist/server.js`, which would need a build first. tsx runs
-          # the TS entrypoint as dev does. (server/package.json is skip-worktree.)
+          # tsx directly (not `pnpm start`): package.json's start is
+          # `node dist/server.js`, which would need a build first. tsx runs
+          # the TS entrypoint as dev does.
           nohup pnpm exec tsx src/server.ts > "$RUNNER_TEMP/api.log" 2>&1 &
           echo "waiting for API /health…"
           for i in $(seq 1 30); do

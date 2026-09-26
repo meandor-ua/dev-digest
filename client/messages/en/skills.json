@@ -2,78 +2,37 @@
   "page": {
     "crumbLab": "Skills Lab",
     "crumbSkills": "Skills",
-    "heading": "Skills",
     "addSkill": "Add Skill",
+    "subtitle": "Reusable instructions for your AI reviewers.",
     "searchPlaceholder": "Search skills…",
-    "loadError": "Could not load skills.",
-    "menu": {
-      "fromFile": "Import from file",
-      "fromUrl": "Import from URL",
-      "community": "Search community skills…"
-    },
+    "loadError": "Could not load skills",
     "empty": {
-      "title": "No skills yet",
-      "body": "Import a skill from a file, a URL, or the community catalog.",
-      "cta": "Import from file"
-    },
-    "selectPrompt": {
-      "title": "Select a skill",
-      "body": "Pick a skill on the left to preview its body."
+      "title": "No skills found",
+      "body": "Create a skill from scratch or import markdown rules from an archive."
     }
   },
   "detail": {
-    "crumbSkill": "Skill",
-    "back": "← All skills",
+    "header": "Skill",
+    "disabled": "disabled",
+    "dangerousNotice": "Dangerous skill — contains suspicious patterns",
+    "dangerousWarning": "This skill contains patterns commonly used in prompt injection or code injection attacks. Suspicious patterns detected:",
+    "delete": "Delete",
+    "confirmDelete": "Delete skill \"{name}\"? This will unlink it from all agents.",
+    "deleteSuccess": "Deleted skill \"{name}\"",
+    "deleteError": "Failed to delete skill",
     "loadError": "Could not load this skill.",
+    "runOnEvals": "Run on evals",
+    "runOnEvalsTitle": "Not available yet",
     "notFound": {
-      "title": "Skill not found",
       "body": "It may have been deleted."
     }
-  },
-  "drawer": {
-    "title": "Add a skill",
-    "subtitle": "Import from a file, a URL, or search vetted community skills",
-    "tabs": {
-      "file": "From file",
-      "url": "From URL",
-      "community": "Community"
-    },
-    "importFailed": "Import failed"
-  },
-  "file": {
-    "nameLabel": "Skill name",
-    "nameHint": "Optional — derived from the first heading if blank.",
-    "namePlaceholder": "pr-quality-rubric",
-    "bodyLabel": "Skill body (Markdown)",
-    "bodyHint": "Pasted content is wrapped as untrusted data — never executed as instructions.",
-    "bodyPlaceholder": "# Rule\nDescribe the rule…",
-    "importing": "Importing…",
-    "import": "Import skill",
-    "success": "Imported \"{name}\" (stored as untrusted data)."
-  },
-  "url": {
-    "label": "Skill URL",
-    "hint": "Fetched server-side, stored as untrusted, and left disabled until vetted.",
-    "placeholder": "https://example.com/skills/security.md",
-    "fetching": "Fetching…",
-    "import": "Import from URL",
-    "success": "Imported \"{name}\". Disabled until you vet + enable it."
-  },
-  "community": {
-    "searchPlaceholder": "Search community skills (e.g. security)…",
-    "allLanguages": "All languages",
-    "loadError": "Could not load community skills",
-    "retry": "Retry",
-    "noMatch": {
-      "title": "No matching skills",
-      "body": "Try a different search term."
-    },
-    "importing": "Importing…",
-    "import": "Import"
   },
   "listItem": {
     "needsVetting": "needs vetting",
     "vettingTitle": "Untrusted source — vet before enabling",
+    "dangerousSkill": "dangerous skill",
+    "dangerousTitle": "This skill contains suspicious patterns that may indicate prompt injection or code injection attempts",
+    "deleteTitle": "Delete skill",
     "type": {
       "rubric": "rubric",
       "convention": "convention",
@@ -85,17 +44,190 @@
       "extracted": "Extracted",
       "community": "Community",
       "imported_url": "Imported"
+    },
+    "stats": {
+      "agents": "{count, plural, one {# agent} other {# agents}}",
+      "pull": "{pct}% pull",
+      "accept": "{pct}% accept"
     }
   },
   "preview": {
-    "untrustedBadge": "untrusted source",
-    "enabled": "Enabled",
-    "disabled": "Disabled",
+    "title": "Preview",
+    "subtitle": "Rendered as the reviewing agent receives it.",
+    "draftBadge": "Unsaved draft — previewing your edits",
+    "restore": "Restore v{version}",
+    "untrustedNotice": "This skill came from an external source. Read its body before enabling it — once enabled, it is injected into agent prompts as instructions.",
+    "dangerousNotice": "This skill contains suspicious patterns commonly used in prompt injection attempts. Remove the malicious content to enable this skill."
+  },
+  "typeOptions": {
+    "rubric": "Rubric (Scoring & edge cases)",
+    "convention": "Convention (Repo standards & rules)",
+    "security": "Security (Vulnerabilities & guards)",
+    "custom": "Custom (Domain-specific instructions)"
+  },
+  "config": {
+    "configTitle": "Configuration",
+    "nameLabel": "Name",
+    "typeLabel": "Type",
+    "descriptionLabel": "Description",
+    "descriptionHint": "Summarize what this skill instructs the reviewing LLM to do",
+    "bodyLabel": "Skill body",
     "save": "Save",
-    "edit": "Edit",
-    "untrustedNotice": "This skill came from an untrusted source. Its body is stored as data (delimiter-wrapped) and must be vetted before it is enabled for an agent.",
-    "bodyLabel": "Skill body (Markdown)",
-    "bodyHint": "Saving a changed body creates a new immutable version.",
-    "version": "v{version}"
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "enabledLabel": "Enabled",
+    "unsaved": "Unsaved",
+    "changeNoteLabel": "Change note (optional)",
+    "changeNoteHint": "Shown on this save's row in Version history",
+    "changeNotePlaceholder": "What changed and why…",
+    "saved": "Skill saved (v{version})",
+    "saveFailed": "Failed to update skill",
+    "saveDangerous": "Skill saved (v{version}) but is dangerous — remove suspicious patterns to enable",
+    "saveFailedDangerous": "Failed to update skill. Cannot enable skills with dangerous content.",
+    "savedNote": "Saved (v{version})",
+    "dangerZoneTitle": "Delete this skill",
+    "dangerZoneBody": "Unlinks it from every agent. This cannot be undone.",
+    "tokens": "{count, plural, one {# token} other {# tokens}}"
+  },
+  "stats": {
+    "usedBy": "USED BY",
+    "pullFrequency": "PULL FREQUENCY",
+    "acceptRate": "ACCEPT RATE",
+    "findings": "FINDINGS (30D)",
+    "agentsUsing": "Agents Using This Skill",
+    "noAgents": "No agents are currently linked to this skill.",
+    "findingsByCategory": "Findings by Category",
+    "noFindings": "No findings generated yet.",
+    "loadError": "Could not load skill statistics",
+    "loadErrorBody": "Usage metrics could not be retrieved from the server.",
+    "agentsUnit": "{count, plural, one {agent} other {agents}}",
+    "open": "Open"
+  },
+  "versions": {
+    "title": "Version history",
+    "subtitle": "Every save snapshots the body — restore any earlier version at any time.",
+    "currentBadge": "Current",
+    "diff": "Diff",
+    "diffFrom": "Changes from v{version}",
+    "diffInitial": "Initial version",
+    "restore": "Restore",
+    "savedBodyFallback": "Saved body",
+    "noHistory": "No version history",
+    "noHistoryBody": "Modifying and saving the skill body will record version snapshots.",
+    "restoreSuccess": "Restored skill body from v{version} (now v{updated})",
+    "restoreError": "Failed to restore version",
+    "count": "{count, plural, one {# version} other {# versions}}"
+  },
+  "context": {
+    "heading": "Project context to use",
+    "subtitle": "Any agent using this skill inherits these documents.",
+    "attachedCount": "{count, plural, one {# attached} other {# attached}}",
+    "filterPlaceholder": "Filter docs…",
+    "dragHandle": "Reorder",
+    "preview": "Preview document",
+    "noRepo": "Select a repo",
+    "noRepoBody": "Choose a repo to browse its project docs.",
+    "empty": "No project docs found",
+    "emptyBody": "This repo has no specs/, docs/, or insights/ files yet.",
+    "noMatch": "No docs match \"{query}\"",
+    "category": {
+      "specs": "specs",
+      "docs": "docs",
+      "insights": "insights"
+    },
+    "serializesAs": "Serializes as",
+    "previewLoadError": "Could not load this document.",
+    "saveError": "Failed to update attached docs",
+    "loadError": "Could not load project context",
+    "missing": "not in this repo"
+  },
+  "evals": {
+    "empty": "Eval cases aren't available yet",
+    "emptyBody": "Run eval cases against this skill's rubric to track precision and recall over time."
+  },
+  "column": {
+    "heading": "Skills",
+    "add": "Add Skill",
+    "addScratch": "Create from scratch",
+    "addImport": "Import from file (.md/.zip)",
+    "addUrl": "Import from URL",
+    "search": "Search skills…",
+    "emptyTitle": "No matching skills",
+    "emptyBody": "Try another search term",
+    "emptyNoSkills": "No skills yet",
+    "emptyNoSkillsBody": "Create or import a skill to get started.",
+    "discardConfirm": "You have unsaved changes to this skill. Discard them?",
+    "toggleError": "Failed to update skill"
+  },
+  "editor": {
+    "tabs": {
+      "config": "Config",
+      "context": "Context",
+      "preview": "Preview",
+      "evals": "Evals",
+      "stats": "Stats",
+      "versions": "Versions"
+    }
+  },
+  "create": {
+    "modal": {
+      "title": "Add Skill",
+      "scratch": "Create from scratch",
+      "import": "Import from file (.md / .zip)",
+      "url": "From URL"
+    },
+    "scratch": {
+      "name": "Skill Name",
+      "namePlaceholder": "e.g. Test Completeness & Edge Cases Rubric",
+      "description": "Directive Description",
+      "descriptionPlaceholder": "Brief directive summarizing what this rule enforces",
+      "type": "Skill Type",
+      "body": "Skill Body (Markdown)",
+      "bodyPlaceholder": "# Rule\nDescribe the instructions and criteria for the LLM reviewer...",
+      "tokens": "~{count} tokens",
+      "create": "Create Skill",
+      "creating": "Creating...",
+      "import": "Import Skill",
+      "cancel": "Cancel",
+      "errors": {
+        "nameRequired": "Skill name is required",
+        "bodyRequired": "Skill body is required",
+        "createFailed": "Failed to create skill",
+        "dangerousContent": "This skill contains suspicious patterns that indicate possible injection attempts. Remove them before saving.",
+        "importFailed": "Failed to import skill from URL"
+      },
+      "success": "Created skill \"{name}\"",
+      "importedNotice": "This content was imported — it will be saved disabled until you vet and enable it.",
+      "startBlank": "Start blank"
+    },
+    "file": {
+      "dropzone": "Click or drag .md or .zip archive here",
+      "extracting": "Extracting...",
+      "hint": "Extracts only markdown (.md) rule blocks. Discards all executable scripts safely.",
+      "success": "Extracted {count} markdown file(s)",
+      "extractFailed": "Failed to extract markdown from file",
+      "importedDescription": "Imported from {filename}",
+      "errors": {
+        "uploadTooLarge": "File exceeds the 5 MB upload limit.",
+        "entryTooLarge": "\"{name}\" exceeds the 256 KB limit.",
+        "unsupportedType": "Unsupported file type. Upload a .md file or a .zip archive.",
+        "binary": "\"{name}\" is binary, not Markdown.",
+        "invalidZip": "Not a valid .zip archive.",
+        "corruptZip": "Corrupt .zip archive.",
+        "tooManyEntries": "Archive has more than {max} Markdown files.",
+        "noMarkdown": "No Markdown (.md) files found in the archive."
+      },
+      "createSuccess": "Imported \"{name}\" — disabled until you vet and enable it."
+    },
+    "url": {
+      "label": "Skill URL",
+      "hint": "Fetched server-side over https from public hosts only. Preview and edit before saving — saved disabled until you vet and enable it.",
+      "placeholder": "https://example.com/skills/security.md",
+      "fetch": "Fetch",
+      "fetching": "Fetching…",
+      "urlRequired": "URL is required",
+      "importedDescription": "Imported from {url}",
+      "success": "Imported \"{name}\". Disabled until you vet + enable it."
+    }
   }
 }

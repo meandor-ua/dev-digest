@@ -1,0 +1,120 @@
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import type { Agent } from "@devdigest/shared";
+import messages from "../../../../../../../../messages/en/agents.json";
+import commonMessages from "../../../../../../../../messages/en/common.json";
+import { ToastProvider } from "@/lib/toast";
+
+const { mutate, deleteMutate, push } = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  deleteMutate: vi.fn(),
+  push: vi.fn(),
+}));
+
+vi.mock("@/lib/hooks/agents", () => ({
+  useUpdateAgent: () => ({ mutate, isPending: false, isSuccess: false, data: undefined }),
+  useDeleteAgent: () => ({ mutate: deleteMutate, isPending: false }),
+  useProviderModels: () => ({ data: [{ id: "gpt-4.1", provider: "openai" }] }),
+}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+
+import { ConfigTab } from "./ConfigTab";
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+const AGENT: Agent = {
+  id: "ag1",
+  name: "Security Reviewer",
+  description: "Flags secrets and injection",
+  provider: "openai",
+  model: "gpt-4.1",
+  system_prompt: "You are a security reviewer.",
+  output_schema: null,
+  strategy: "single-pass",
+  ci_fail_on: "critical",
+  repo_intel: true,
+  enabled: true,
+  version: 1,
+};
+
+const wrap = (agent: Agent) => (
+  <NextIntlClientProvider locale="en" messages={{ agents: messages, common: commonMessages }}>
+    <ToastProvider>
+      <ConfigTab agent={agent} />
+    </ToastProvider>
+  </NextIntlClientProvider>
+);
+
+function renderTab(agent: Agent = AGENT) {
+  return render(wrap(agent));
+}
+
+describe("ConfigTab Cancel", () => {
+  it("hides Cancel until the form is dirty, then reverts on click", () => {
+    renderTab();
+    // Clean form: no Cancel button.
+    expect(screen.queryByText("Cancel")).not.toBeInTheDocument();
+
+    const name = screen.getByDisplayValue("Security Reviewer") as HTMLInputElement;
+    fireEvent.change(name, { target: { value: "Security Reviewer X" } });
+
+    // Dirty: Cancel appears.
+    const cancel = screen.getByText("Cancel");
+    expect(cancel).toBeInTheDocument();
+
+    fireEvent.click(cancel);
+
+    // Reverted to baseline; Cancel disappears again.
+    expect(screen.getByDisplayValue("Security Reviewer")).toBeInTheDocument();
+    expect(screen.queryByText("Cancel")).not.toBeInTheDocument();
+  });
+});
+
+describe("ConfigTab draft", () => {
+  it("rebases onto an outside change without showing Cancel, and Save sends only edited fields", () => {
+    const { rerender } = renderTab();
+    fireEvent.change(screen.getByDisplayValue("Security Reviewer"), { target: { value: "Renamed" } });
+
+    // The agent is disabled elsewhere (e.g. the rail toggle) while the tab stays mounted.
+    rerender(wrap({ ...AGENT, enabled: false }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Save agent/ }));
+    // Only the user's edit is sent — the stale `enabled: true` is not re-sent.
+    expect(mutate).toHaveBeenCalledWith({ id: "ag1", patch: { name: "Renamed" } }, expect.anything());
+  });
+
+  it("an outside change alone leaves the form clean: no Cancel, Save disabled", () => {
+    const { rerender } = renderTab();
+    rerender(wrap({ ...AGENT, enabled: false }));
+    expect(screen.queryByText("Cancel")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Save agent/ })).toBeDisabled();
+  });
+});
+
+describe("ConfigTab deletion", () => {
+  it("deletes the agent, confirms with a dialog, and returns to the agent list", () => {
+    deleteMutate.mockImplementation((_id, opts) => opts.onSuccess());
+    renderTab();
+
+    fireEvent.click(screen.getByRole("button", { name: messages.card.deleteTitle }));
+    expect(screen.getByText('Delete agent "Security Reviewer"? This cannot be undone.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: commonMessages.actions.ok }));
+
+    expect(deleteMutate).toHaveBeenCalledWith("ag1", expect.any(Object));
+    expect(push).toHaveBeenCalledWith("/agents");
+  });
+
+  it("does not delete when the confirmation is cancelled", () => {
+    renderTab();
+
+    fireEvent.click(screen.getByRole("button", { name: messages.card.deleteTitle }));
+    fireEvent.click(screen.getByRole("button", { name: commonMessages.actions.cancel }));
+
+    expect(deleteMutate).not.toHaveBeenCalled();
+  });
+});

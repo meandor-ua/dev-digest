@@ -48,3 +48,58 @@ previously-unused `GET /workspace` endpoint; `client` gained image support on
 the shared `Avatar` primitive and a `useWorkspace()` hook. Single-local-user
 app (no per-request auth), so this is a simple singleton, not per-PR
 authorship.
+
+## Skills Context tab: doc paths, not doc content
+
+A skill's attached project-context docs (`skill_context_docs`) store the
+repo-relative **path** of each `specs/`/`docs/`/`insights/` file, never a
+copy of its text. Two reasons this is deliberate, not an oversight:
+
+1. **Freshness.** The doc is re-read from the repo's local clone at review
+   time (`server/src/modules/reviews/run-executor.ts`, via the
+   `ProjectDocsAdapter` port). A skill configured months ago against a doc
+   that has since been edited (or renamed, or deleted) automatically picks up
+   the latest version — or is silently skipped if it's gone — instead of
+   quietly injecting stale text into every future review.
+2. **No duplicated storage / no drift.** The repo clone is already the
+   source of truth (it's what gets diffed for the review itself); storing a
+   second copy of doc content in Postgres would mean two places that could
+   disagree, with no mechanism to reconcile them.
+
+The cost of this choice: a doc that isn't in the repo clone (never cloned,
+or since renamed/deleted) can't be previewed or injected. The clone's content
+is repo-controlled, so each doc is capped at 64 KB. Anything larger is refused
+by the preview and skipped (and logged) at review time, instead of blowing the
+model's context window. The review-time
+reader skips it without failing the run; the Context tab keeps the row as
+"not in this repo" so it can be unchecked; the eye preview
+(`GET /skills/context/doc`) answers 422 for a path the clone doesn't list. See
+`server/specs/README.md`'s "Project context" section for the adapter and
+injection contract, and `client/specs/README.md`'s "Skills editor — tabs"
+for the Context tab UI.
+
+## Agents editor: five tabs + repo-scoped stats
+
+The Agents editor (`client/src/app/agents/[id]/`) grew from a single Config
+form into a five-tab studio (Config · Skills · Evals · Stats · CI) with a
+richer left rail. Two rationales worth keeping:
+
+- **Why per-PR-then-mean, and why repo-scoped.** An agent's `avg_score` /
+  `avg_cost_usd` (Agents-column cards and the Stats tab) average *per PR first,
+  then across PRs*, over only the DONE runs whose PR is in the active repo. A
+  PR that gets re-reviewed a dozen times would otherwise dominate a naive mean;
+  scoping to the active repo (`useActiveRepo()`, since the agents route has no
+  `:repoId`) keeps "how good is this agent *here*" honest. The exact rules live
+  once in `server/src/modules/agents/stats.ts` and are mirrored in
+  `specs/README.md` "Agent stats".
+- **Why linking is binary, not per-link `enabled`.** The Skills tab shows
+  every workspace skill — linked ones on top (drag-to-reorder), unlinked ones
+  below (checkbox-only, not draggable) — so there's no need to "detach without
+  losing position": a skill is either linked (a row exists) or it isn't, and
+  `order` alone carries the drag position. The **skill's own** `skills.enabled`
+  (global vetted state) already gates prompt assembly and usage stats — a
+  globally-disabled skill can stay linked (keeps its order, is still
+  draggable) and is flagged with an orange "Disabled" label in the Skills tab.
+  `POST /agents/:id/skills` replaces the whole linked set in
+  one optimistic call from an ordered `skill_ids` list, and guards workspace
+  ownership so an agent can't link another workspace's skill.

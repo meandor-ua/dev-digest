@@ -1,33 +1,55 @@
-/* AgentCard — model chip, skills count, enabled toggle. Stats are an A5 mount;
-   we render the provider/model + skill count here. */
+/* AgentCard — name + enabled toggle, description, model chip + skills count,
+   and a stats line (runs · avg score · avg cost) when card stats are available.
+   Delete is owned by the caller (onDelete/deleting) so it can confirm, toast,
+   and redirect away from a just-deleted agent's own editor page. */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon, Badge, Toggle } from "@devdigest/ui";
-import type { Agent } from "@devdigest/shared";
-import { useDeleteAgent } from "../../../../lib/hooks/agents";
-import { modelColor } from "./helpers";
+import type { Agent, AgentCardStats } from "@devdigest/shared";
+import { formatCost } from "../../../../lib/cost";
+import { modelColor, scoreColor } from "./helpers";
 import { s } from "./styles";
 
 export function AgentCard({
   ag,
   active,
-  skillCount,
+  stats,
   onClick,
   onToggle,
+  onDelete,
+  deleting = false,
 }: {
   ag: Agent;
   active?: boolean;
-  skillCount?: number;
+  stats?: AgentCardStats;
   onClick?: () => void;
   onToggle?: (enabled: boolean) => void;
+  onDelete?: () => void;
+  deleting?: boolean;
 }) {
   const t = useTranslations("agents");
-  const del = useDeleteAgent();
   const color = modelColor(ag.model);
+  const skillCount = stats?.skills_count;
   return (
-    <div onClick={onClick} style={s.card(!!active, ag.enabled)}>
+    <div
+      onClick={onClick}
+      style={s.card(!!active, ag.enabled)}
+      data-testid={`agent-card-${ag.id}`}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        // Only keys pressed on the card itself — Enter/Space on the nested
+        // Toggle or Delete button bubble here too, and preventDefault would
+        // cancel their own activation and navigate instead.
+        if (e.target !== e.currentTarget) return;
+        if (onClick && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    >
       <div style={s.headerRow}>
         <div style={s.iconBox}>
           <Icon.Cpu size={15} />
@@ -38,25 +60,28 @@ export function AgentCard({
             <Toggle on={ag.enabled} onChange={onToggle} size={14} />
           </div>
         )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (window.confirm(`Delete agent "${ag.name}"? This cannot be undone.`)) del.mutate(ag.id);
-          }}
-          disabled={del.isPending}
-          title="Delete agent"
-          aria-label="Delete agent"
-          style={{
-            background: "none",
-            border: "none",
-            cursor: del.isPending ? "not-allowed" : "pointer",
-            color: "var(--text-muted)",
-            display: "inline-flex",
-            padding: 4,
-          }}
-        >
-          <Icon.Trash size={14} style={del.isPending ? { animation: "ddspin 1s linear infinite" } : undefined} />
-        </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            disabled={deleting}
+            title={t("card.deleteTitle")}
+            aria-label={t("card.deleteTitle")}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: deleting ? "not-allowed" : "pointer",
+              color: "var(--text-muted)",
+              display: "inline-flex",
+              padding: 4,
+            }}
+          >
+            <Icon.Trash size={14} style={deleting ? { animation: "ddspin 1s linear infinite" } : undefined} />
+          </button>
+        )}
       </div>
       <div style={s.description}>{ag.description || t("card.noDescription")}</div>
       <div style={s.metaRow}>
@@ -69,6 +94,26 @@ export function AgentCard({
           </Badge>
         )}
       </div>
+      {stats && (
+        <div style={s.statsRow}>
+          <span className="tnum">{t("card.runs", { count: stats.runs })}</span>
+          <span style={s.dot}>·</span>
+          <span
+            className="tnum"
+            style={{ color: stats.avg_score != null ? scoreColor(stats.avg_score) : "var(--text-muted)" }}
+          >
+            {stats.avg_score != null
+              ? t("card.scorePct", { score: Math.round(stats.avg_score) })
+              : t("card.noValue")}
+          </span>
+          <span style={s.dot}>·</span>
+          <span className="tnum">
+            {stats.avg_cost_usd != null
+              ? t("card.avgCost", { cost: formatCost(stats.avg_cost_usd) })
+              : t("card.noValue")}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

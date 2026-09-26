@@ -1,15 +1,21 @@
 import type { Container } from '../../platform/container.js';
 import type {
   Agent,
-  AgentSkillLink,
+  AgentCardStats,
+  AgentRepoStats,
+  AgentSkillItem,
   AgentVersion,
   CiFailOn,
   ModelInfo,
   Provider,
   ReviewStrategy,
+  SkillType,
 } from '@devdigest/shared';
 import { AgentsRepository } from './repository.js';
 import { toAgentDto, toAgentVersionDto } from './helpers.js';
+import { buildCardStats, buildRepoStats } from './stats.js';
+import { AppError, ValidationError } from '../../platform/errors.js';
+import { SKILL_DANGEROUS_CONTENT_CODE } from '../skills/constants.js';
 
 /**
  * A2 — agents service. Business logic for the Agents tab + Agent Editor.
@@ -135,24 +141,44 @@ export class AgentsService {
     return row ? toAgentVersionDto(row) : undefined;
   }
 
-  /** Linked skills for an agent as AgentSkillLink[] (ordered). */
-  async skillLinks(agentId: string): Promise<AgentSkillLink[]> {
+  /** Linked skills for an agent as AgentSkillItem[] (ordered, with name/type). */
+  async skillLinks(agentId: string): Promise<AgentSkillItem[]> {
     const links = await this.repo.linkedSkills(agentId);
-    return links.map((l) => ({ agent_id: agentId, skill_id: l.skill.id, order: l.order }));
+    return links.map((l) => ({
+      agent_id: agentId,
+      skill_id: l.skill.id,
+      order: l.order,
+      name: l.skill.name,
+      type: l.skill.type as SkillType,
+    }));
   }
 
   /**
-   * Set / reorder the agent's linked skills. If `skillIds` is provided, replaces
-   * the whole set in that order. Returns the resulting ordered links.
+   * Set / reorder the agent's linked skills. Replaces the whole set with
+   * `items`, in the given order. Validates that every skill belongs to the
+   * agent's workspace (cross-tenant guard). Returns the resulting ordered
+   * links, or undefined when the agent isn't in this workspace.
    */
   async setSkills(
     workspaceId: string,
     agentId: string,
-    skillIds: string[],
-  ): Promise<AgentSkillLink[] | undefined> {
+    items: Array<{ skill_id: string }>,
+  ): Promise<AgentSkillItem[] | undefined> {
     const agent = await this.repo.getById(workspaceId, agentId);
     if (!agent) return undefined;
-    await this.repo.setSkills(agentId, skillIds);
+    const ids = items.map((it) => it.skill_id);
+    const owned = await this.repo.skillIdsInWorkspace(workspaceId, ids);
+    const foreign = ids.filter((id) => !owned.has(id));
+    if (foreign.length > 0) {
+      throw new ValidationError('One or more skills do not belong to this workspace', {
+        skill_ids: foreign,
+      });
+    }
+    await this.assertNoDangerousSkills(ids);
+    await this.repo.setSkills(
+      agentId,
+      items.map((it) => ({ skillId: it.skill_id })),
+    );
     return this.skillLinks(agentId);
   }
 
@@ -162,13 +188,83 @@ export class AgentsService {
     agentId: string,
     skillId: string,
     order?: number,
-  ): Promise<AgentSkillLink[] | undefined> {
+  ): Promise<AgentSkillItem[] | undefined> {
     const agent = await this.repo.getById(workspaceId, agentId);
     if (!agent) return undefined;
+    const owned = await this.repo.skillIdsInWorkspace(workspaceId, [skillId]);
+    if (!owned.has(skillId)) {
+      throw new ValidationError('Skill does not belong to this workspace', { skill_id: skillId });
+    }
+    await this.assertNoDangerousSkills([skillId]);
     const existing = await this.repo.linkedSkills(agentId);
     const resolvedOrder = order ?? existing.length;
     await this.repo.linkSkill(agentId, skillId, resolvedOrder);
     return this.skillLinks(agentId);
+  }
+
+  /**
+   * A skill flagged dangerous is unlinked the moment it's flagged (skills
+   * service) — refuse to link it back. Checked server-side because the Skills
+   * tab saves the whole ordered set from its cache, so a tab opened before the
+   * flag would otherwise silently re-link it on the next reorder/link.
+   */
+  private async assertNoDangerousSkills(skillIds: string[]): Promise<void> {
+    const dangerous = await this.repo.dangerousSkillIds(skillIds);
+    if (dangerous.size === 0) return;
+    throw new AppError(
+      SKILL_DANGEROUS_CONTENT_CODE,
+      'Cannot link a skill with dangerous content. Remove the suspicious patterns first.',
+      422,
+      { skill_ids: [...dangerous] },
+    );
+  }
+
+  /**
+   * Card stats for every agent in a workspace, scoped to `repoId` (done runs
+   * whose PR is in the repo). Agents with no such runs still get a row (0 runs,
+   * null averages) so the card renders.
+   */
+  async cardStats(workspaceId: string, repoId: string): Promise<AgentCardStats[]> {
+    const [agents, runs, skillCounts] = await Promise.all([
+      this.repo.list(workspaceId),
+      this.repo.doneRunsForRepo(workspaceId, repoId),
+      this.repo.skillCountByAgent(workspaceId),
+    ]);
+    const runsByAgent = new Map<string, typeof runs>();
+    for (const r of runs) {
+      const arr = runsByAgent.get(r.agentId) ?? [];
+      arr.push(r);
+      runsByAgent.set(r.agentId, arr);
+    }
+    return agents.map((a) =>
+      buildCardStats(a.id, skillCounts.get(a.id) ?? 0, runsByAgent.get(a.id) ?? []),
+    );
+  }
+
+  /**
+   * Full Stats-tab payload for one agent within a repo. Returns undefined when
+   * the agent isn't in this workspace (route → 404).
+   */
+  async repoStats(
+    workspaceId: string,
+    agentId: string,
+    repoId: string,
+  ): Promise<AgentRepoStats | undefined> {
+    const agent = await this.repo.getById(workspaceId, agentId);
+    if (!agent) return undefined;
+    const [runs, findings, enabledSkillNames] = await Promise.all([
+      this.repo.doneRunsForAgentRepo(agentId, repoId),
+      this.repo.findingsForAgentRepo(agentId, repoId),
+      this.repo.enabledSkillNames(agentId),
+    ]);
+    return buildRepoStats({
+      agentId,
+      repoId,
+      runs,
+      findings,
+      enabledSkillNames,
+      now: new Date(),
+    });
   }
 
   /**

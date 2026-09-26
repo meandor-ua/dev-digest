@@ -115,5 +115,10 @@
     "copyLink": "Copy a shareable link to this run",
     "openTrace": "Open run trace & logs",
     "deleteRun": "Delete run"
+  },
+  "deleteConfirm": {
+    "run": "Delete this run from history? (its logs are removed too)",
+    "review": "Delete this \"{agent}\" review run and its findings?",
+    "unknownAgent": "agent"
   }
 }

@@ -15,7 +15,7 @@ fooled by a plausible-sounding but hallucinated finding, because it never
 asks the model anything; it checks the model's claim against ground truth.
 
 The score is then **recomputed** from whatever findings survived grounding —
-`reviewer-core/CLAUDE.md`'s do-not-touch section is explicit that the
+`reviewer-core/AGENTS.md`'s do-not-touch section is explicit that the
 model's own self-reported score must never be trusted. This matters for
 every downstream consumer (`server`'s `PrMeta.score`, the findings-by-severity
 counts, the cost/score consistency assumptions in `server/docs/README.md`):

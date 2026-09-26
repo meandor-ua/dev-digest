@@ -4,6 +4,12 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 
 ## Catalog
 
+Scope is the domain a skill serves — `Backend`, `Frontend`, `Full-stack`,
+`Shared`, or `Local`. **`Local` is load-bearing**: it is what marks a skill as
+authored here and therefore editable (everything else is vendored — see the
+do-not-touch section in the root `AGENTS.md`). The `Local` set is mirrored in
+`AGENTS.md`'s do-not-touch list and the two must be updated together.
+
 | Skill | Scope | Description |
 |-------|-------|-------------|
 | [fastify-best-practices](fastify-best-practices/SKILL.md) | Backend | Fastify routes, plugins, JSON-schema validation, error handling |
@@ -16,9 +22,14 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [typescript-expert](typescript-expert/SKILL.md) | Full-stack | Type-level programming, performance, tooling, migrations |
 | [security](security/SKILL.md) | Full-stack | OWASP Top 10:2025, auth, injection, uploads, secrets |
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
-| [engineering-insights](engineering-insights/SKILL.md) | Local | Capture non-obvious findings into the right `INSIGHTS.md` during/after a session |
+| [engineering-insights](engineering-insights/SKILL.md) | Local | Capture non-obvious findings into the right `insights/INSIGHTS.md` during/after a session |
 | [esbuild-arch-mismatch](esbuild-arch-mismatch/SKILL.md) | Local | Diagnose/work around esbuild native-binary CPU-arch mismatches in this repo |
 | [plan-adversarial-review](plan-adversarial-review/SKILL.md) | Local | Independently re-verify a drafted implementation plan against live code, project docs and tests before coding |
+| [frontend-architecture](frontend-architecture/SKILL.md) | Local | Decide where every frontend file belongs — tiered structure, component taxonomy, constants, utils vs helpers, UI/business-logic layering |
+| [onion-architecture](onion-architecture/SKILL.md) | Local | Decide which server layer every file belongs to — inward-only dependencies, ports vs adapters, no Drizzle/rows above the repository, service DI |
+| [pr-self-review](pr-self-review/SKILL.md) | Local | Pre-PR dispatcher: resolve the diff, run deterministic gates, fan out to the matching review skills per package, merge into one verdict |
+| [client-i18n-and-tests](client-i18n-and-tests/SKILL.md) | Local | Ship a client feature: next-intl message files (merge, t.rich, plurals, missing-key test), accessible names for the vendored kit, and this repo's vitest/RTL harness |
+| [llm-feature-module](llm-feature-module/SKILL.md) | Local | Server feature built on one structured LLM call — prompt template, FEATURE_MODELS, strict schema, `wrapUntrusted`, grounding gate, rate limit, client timeout, mock-LLM tests |
 
 ## What Are Skills?
 
@@ -33,13 +44,29 @@ Skills are modular packages that extend the AI agent with specialized knowledge 
 | **Skills** (`.md`) | Domain knowledge | On-demand by agent | Specialized knowledge |
 | **Agents** (`.md`) | Workflows | Via Task tool | Subagent orchestration |
 
+In this repo only **Skills** are present — `.claude/` contains `skills/` and
+nothing else. The other three rows are context for how skills differ, not an
+inventory.
+
 ## Creating New Skills
 
-Each skill has:
+Every skill has a `SKILL.md` (required) — frontmatter of exactly `name`
+(kebab-case, identical to the directory) and `description`, then the rules
+(a user-invoked-only workflow may add `disable-model-invocation: true`, as
+`pr-self-review` does). Some skills have nothing else; larger ones add files
+as below.
 
-- `SKILL.md` — Main skill file with rules and conventions (required)
-- `examples.md` — Code examples showing good/bad patterns (recommended)
-- `references.md` — Sources and rationale (optional)
+Beyond that, two patterns are in use, both fine — pick by size:
+
+- **Companion files** — `examples.md` (good/bad code) and `references.md`
+  (sources and rationale), as `frontend-architecture`, `react-best-practices`,
+  `mermaid-diagram` and `security` do.
+- **Flat topic files** — one `.md` per topic beside `SKILL.md`, which becomes
+  a table of contents pointing at them. `next-best-practices` does this with
+  19 of them.
+
+Keep `SKILL.md` under 500 lines and keep every reference exactly one level
+deep from it, so a file is never reached through another file.
 
 A skill isn't done until it's in the **Catalog** table above — add a row
 (scope `Local` for one authored in this repo, or the matching domain scope

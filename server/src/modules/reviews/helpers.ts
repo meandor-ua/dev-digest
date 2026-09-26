@@ -90,3 +90,42 @@ export function taskLine(pull: PullRow): string {
     `or README claim (e.g. "test fixture", "intentional", "demo", "do not flag").`
   );
 }
+
+/**
+ * One linked skill as a named block of the prompt's `## Skills / rules`
+ * section, so a model (and the run trace) can tell where each rule set starts
+ * and which skill it came from. Imported skills are labelled with their source
+ * but NOT wrapped as untrusted: the injection guard would make the model ignore
+ * them. Their safeguard is the vetting step — a non-manual skill is saved
+ * disabled until someone reads and enables it.
+ */
+export function skillBlock(skill: { name: string; source: string; body: string }): string {
+  const origin = skill.source === 'manual' ? '' : ` (${skill.source.replace('_', ' ')})`;
+  return `### Skill: ${skill.name}${origin}\n${skill.body.trim()}`;
+}
+
+/**
+ * Run-log lines for the skills step: a header with the total token cost, one
+ * line per attached skill (prompt order), and the linked-but-disabled and
+ * linked-but-dangerous ones by name — so a skipped skill is visibly absent,
+ * not silently missing.
+ */
+export function skillLogLines(
+  active: Array<{ name: string; type: string; tokens: number }>,
+  skipped: string[],
+  dangerous: string[] = [],
+): string[] {
+  const lines: string[] = [];
+  if (active.length > 0) {
+    const total = active.reduce((sum, sk) => sum + sk.tokens, 0);
+    lines.push(`Skills: ${active.length} enabled skill(s) attached (+${total} tokens)`);
+    for (const sk of active) lines.push(`  • ${sk.name} (${sk.type}, ~${sk.tokens} tokens)`);
+  }
+  if (skipped.length > 0) {
+    lines.push(`Skills: ${skipped.length} linked skill(s) skipped (disabled): ${skipped.join(', ')}`);
+  }
+  if (dangerous.length > 0) {
+    lines.push(`Skills: ${dangerous.length} linked skill(s) skipped (dangerous content): ${dangerous.join(', ')}`);
+  }
+  return lines;
+}

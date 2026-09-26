@@ -1,4 +1,4 @@
-/* MetricCard — KPI tile: big value, signed delta, and an optional Sparkline. */
+/* MetricCard — KPI tile: big value, signed delta, and an optional Sparkline or top-right `aside` (e.g. a gauge). */
 import React from "react";
 import { Icon } from "../icons";
 import { Sparkline } from "./Sparkline";
@@ -10,6 +10,7 @@ export function MetricCard({
   color,
   trend,
   suffix,
+  aside,
 }: {
   label: string;
   value: React.ReactNode;
@@ -17,6 +18,7 @@ export function MetricCard({
   color?: string;
   trend?: number[];
   suffix?: string;
+  aside?: React.ReactNode;
 }) {
   const up = (delta ?? 0) > 0;
   const flat = delta === 0;
@@ -44,6 +46,7 @@ export function MetricCard({
           {label}
         </span>
         {trend && <Sparkline data={trend} color={color || "var(--accent)"} w={56} h={20} />}
+        {aside}
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 12 }}>
         <span className="tnum" style={{ fontSize: 32, fontWeight: 700, letterSpacing: "-0.02em" }}>

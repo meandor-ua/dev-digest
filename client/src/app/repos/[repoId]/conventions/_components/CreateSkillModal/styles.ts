@@ -1,0 +1,75 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  wrap: {
+    padding: 24,
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  } satisfies CSSProperties,
+  banner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "10px 12px",
+    borderRadius: 6,
+    background: "var(--accent-bg, var(--bg-hover))",
+    color: "var(--text-secondary)",
+    fontSize: 13,
+  } satisfies CSSProperties,
+  field: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  } satisfies CSSProperties,
+  row: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  } satisfies CSSProperties,
+  label: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--text-primary)",
+  } satisfies CSSProperties,
+  hint: {
+    fontSize: 12,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+  vettingNotice: {
+    padding: "8px 12px",
+    borderRadius: 6,
+    fontSize: 12,
+    background: "var(--warn-bg)",
+    color: "var(--warn)",
+  } satisfies CSSProperties,
+  select: {
+    width: "100%",
+    padding: "8px 12px",
+    borderRadius: 6,
+    border: "1px solid var(--border)",
+    background: "var(--bg-surface)",
+    color: "var(--text-primary)",
+    fontSize: 13,
+  } satisfies CSSProperties,
+  textarea: {
+    width: "100%",
+    minHeight: 220,
+    padding: "10px 12px",
+    borderRadius: 6,
+    border: "1px solid var(--border)",
+    background: "var(--bg-surface)",
+    color: "var(--text-primary)",
+    fontFamily: "var(--font-mono)",
+    fontSize: 12.5,
+    lineHeight: 1.5,
+    resize: "vertical",
+  } satisfies CSSProperties,
+  footer: {
+    display: "flex",
+    gap: 10,
+    justifyContent: "flex-end",
+    marginTop: 8,
+  } satisfies CSSProperties,
+};

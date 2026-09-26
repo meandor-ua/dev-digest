@@ -1,24 +1,30 @@
 ---
 name: engineering-insights
-description: Captures non-obvious engineering insights into the touched module's INSIGHTS.md (client, server, reviewer-core, e2e) or the root INSIGHTS.md for repo-wide findings. Use during a session the moment you hit something a future agent would otherwise relearn — a gotcha, a working approach, a dead-end antipattern, a codebase convention, a tool/library quirk, a recurring error+fix, or an open question — and again at session end, on "wrap up" / "retro", or when /engineering-insights is invoked. Reads the existing file first, never duplicates, writes only substantial file-grounded entries, and is strictly append-only (never overwrites).
+description: Captures non-obvious engineering insights into the touched module's insights/INSIGHTS.md (client, server, reviewer-core, e2e) or the root insights/INSIGHTS.md for repo-wide findings — or a topic file inside that package's insights/ dir once one exists for the touched area. Use during a session the moment you hit something a future agent would otherwise relearn — a gotcha, a working approach, a dead-end antipattern, a codebase convention, a tool/library quirk, a recurring error+fix, or an open question — and again at session end, on "wrap up" / "retro", or when /engineering-insights is invoked. Reads the existing file first, never duplicates, writes only substantial file-grounded entries, and is strictly append-only (never overwrites).
 ---
 
 # Engineering Insights
 
-Capture one durable engineering insight into the right `INSIGHTS.md`, so the next session doesn't relearn it. Read what's already there, add only what's new and substantial, never overwrite.
+Capture one durable engineering insight into the right file under `insights/`, so the next session doesn't relearn it. Read what's already there, add only what's new and substantial, never overwrite.
 
 ## Where to write (module routing)
 
-Write to the file of the package the work actually touched. If a feature-specific file already exists for the touched area, prefer it over the plain file — but never create one mid-session (that's a maintenance-time decision, see below):
+Every package (root, `client/`, `server/`, `reviewer-core/`, `e2e/`) keeps its
+insights under its own `insights/` directory: an `insights/INSIGHTS.md`
+overview/general file, plus zero or more topic files split out beside it
+(`insights/<topic>.md`, e.g. `client/insights/pr-review.md`). Write to the
+package the work actually touched. If a topic file already exists for the
+touched area, prefer it over the general file — but never create one
+mid-session (that's a maintenance-time decision, see below):
 
 | Work touched | File |
 |---|---|
-| client (`@devdigest/web`) | `client/INSIGHTS.md`, or `client/INSIGHTS-<feature>.md` if one already exists for the touched area |
-| server (`@devdigest/api`, incl. repo-intel) | `server/INSIGHTS.md`, or a matching `server/INSIGHTS-<feature>.md` if one exists |
-| reviewer-core (`@devdigest/reviewer-core`) | `reviewer-core/INSIGHTS.md`, or a matching feature file if one exists |
-| e2e (`@devdigest/e2e`) | `e2e/INSIGHTS.md`, or a matching feature file if one exists |
+| client (`@devdigest/web`) | `client/insights/INSIGHTS.md`, or `client/insights/<topic>.md` if one already exists for the touched area |
+| server (`@devdigest/api`, incl. repo-intel) | `server/insights/INSIGHTS.md`, or a matching `server/insights/<topic>.md` if one exists |
+| reviewer-core (`@devdigest/reviewer-core`) | `reviewer-core/insights/INSIGHTS.md`, or a matching topic file if one exists |
+| e2e (`@devdigest/e2e`) | `e2e/insights/INSIGHTS.md`, or a matching topic file if one exists |
 | spans several packages | write the relevant part to each touched package's file |
-| repo-wide, true regardless of which package you're in | root `INSIGHTS.md`, or root `INSIGHTS-<feature>.md` if one exists |
+| repo-wide, true regardless of which package you're in | root `insights/INSIGHTS.md`, or a root `insights/<topic>.md` if one exists |
 | pure root config / CI only | usually not an insight — skip it |
 
 "Spans several packages" (a task that touched multiple packages) is not the same as "repo-wide" (a fact that's true regardless of which package you're in) — the former still splits per package, the latter goes to root.
@@ -27,7 +33,7 @@ Never write insights into this SKILL.md itself.
 
 ## What counts (the 7 sections)
 
-Each `INSIGHTS.md` has fixed sections — append each entry under the right one:
+Each `insights/INSIGHTS.md` (and each topic file) has fixed sections — append each entry under the right one; a topic file only needs the sections it actually uses:
 
 - **What Works** — an approach/solution that worked here.
 - **What Doesn't Work** — dead ends and antipatterns. **Highest-value section, most often skipped — prioritize it.**
@@ -67,7 +73,7 @@ Copy this checklist and work through it:
 
 ```
 - [ ] 1. Gate check — was this session substantial?
-- [ ] 2. Read the target INSIGHTS.md
+- [ ] 2. Read the target file
 - [ ] 3. Draft ≤5 candidates, ranked by signal
 - [ ] 4. Dedup against what's already there
 - [ ] 5. Append automatically (append-only)
@@ -75,7 +81,7 @@ Copy this checklist and work through it:
 ```
 
 1. **Gate check.** Did the session produce something substantial — a problem solved, a decision made, a non-obvious discovery? If not → **write nothing** and stop.
-2. **Read first.** Open the target `INSIGHTS.md` — the touched module's file, root, or a matching feature file per the routing table above — before drafting anything.
+2. **Read first.** Open the target file — the touched module's `insights/INSIGHTS.md`, root, or a matching `insights/<topic>.md` per the routing table above (check the package's `insights/` dir listing for an existing topic file before assuming the general one) — before drafting anything.
 3. **Draft ≤5 candidates**, ranked by signal (user corrections and gotchas highest; nice-to-know patterns lowest). Each candidate = the exact proposed line + its target section + `file:line` evidence.
 4. **Dedup.** Drop any candidate already covered by an existing entry. If reality contradicts an old entry, add a new dated note that supersedes it — never edit the old one.
 5. **Append** the survivors (automatic mode — no approval prompt). If nothing substantial survives gate + dedup, write nothing.
@@ -85,12 +91,12 @@ Copy this checklist and work through it:
 
 This skill is **append-only** and must never clobber existing content:
 
-- **Re-read the target `INSIGHTS.md` immediately before writing** — its state may have changed since the session started.
-- **Insert with an anchored `Edit`** that adds the new bullet under the correct `##` heading. **Never use the `Write` tool on an existing `INSIGHTS.md`** — `Write` replaces the whole file and would destroy prior content.
+- **Re-read the target file immediately before writing** — its state may have changed since the session started.
+- **Insert with an anchored `Edit`** that adds the new bullet under the correct `##` heading. **Never use the `Write` tool on an existing `insights/INSIGHTS.md` or topic file** — `Write` replaces the whole file and would destroy prior content.
 - **Preserve verbatim** the `# Insights — ...` header, the preamble, every section heading, and every entry already in the file. New content is only ever *added*.
-- **Corrections are additive** — supersede a wrong entry with a new dated note; do not rewrite or delete the old one.
+- **Corrections are additive** — supersede a wrong entry with a new dated note; do not rewrite or delete the old one. **One exception:** if the wrong entry is still *uncommitted* (`git diff HEAD -- <file>` shows it as your own `+` lines from this branch/session), correct it in place instead — stacking "SUPERSEDES the entry above" on a never-shipped entry only leaves the next reader two contradictory bullets to reconcile.
 - **Idempotent** — if an equivalent entry already exists, skip it (no duplicate, no rewrite).
 
 ## Maintenance (not per-session)
 
-Append-only keeps files growing, so keep them lean out of band: prune monthly (drop fixed-bug, duplicate, and never-needed entries); once a file — root or module — passes ~30 high-value entries, split it by feature/subsystem into a sibling `INSIGHTS-<feature>.md` in the same directory (e.g. `server/INSIGHTS-repo-intel.md`, root `INSIGHTS-tooling.md`) rather than letting it keep growing flat; treat every `INSIGHTS*.md` as a reviewed draft — spot-check it, since an incorrect entry propagates to every future session until corrected.
+Append-only keeps files growing, so keep them lean out of band: prune monthly (drop fixed-bug, duplicate, and never-needed entries — an entry documenting a fixed bug can still be worth keeping if the *lesson* is evergreen, e.g. a recurring antipattern; drop it only when even the lesson no longer applies); once a file — root or module — passes ~30 high-value entries, split it by feature/subsystem into a sibling `insights/<topic>.md` in the same package's `insights/` directory (e.g. `server/insights/repo-intel.md`, root `insights/tooling.md`), leaving only genuinely cross-cutting entries in `insights/INSIGHTS.md` plus a one-line pointer to each topic file, rather than letting it keep growing flat; treat every file under `insights/` as a reviewed draft — spot-check it, since an incorrect entry propagates to every future session until corrected. The cheapest spot-check is a **citation audit**: for every `path:line` in the file, confirm the file exists and the named symbol is still at (or near) that line, and that the claim still holds; fix drifted line numbers in place, and drop entries whose code no longer exists unless the lesson is evergreen (then keep the lesson and re-point its evidence). Line drift is the common case — a 2026-09-26 audit found ~10 stale citations out of ~120. After a split, grep the repo for any `file:line`-style cross-reference into the file you just restructured (e.g. from another skill's examples) and update it to the new path/line — a split silently breaks any such reference otherwise.
