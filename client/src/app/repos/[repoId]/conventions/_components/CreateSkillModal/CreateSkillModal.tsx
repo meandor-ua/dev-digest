@@ -32,6 +32,7 @@ export function CreateSkillModal({
   const [type, setType] = React.useState<SkillType>("convention");
   const [body, setBody] = React.useState("");
   const [sourceCount, setSourceCount] = React.useState(0);
+  // "" = don't link: the skill is saved disabled anyway, so linking is opt-in.
   const [agentId, setAgentId] = React.useState("");
 
   const linkMutation = useLinkAgentSkill(agentId);
@@ -61,10 +62,6 @@ export function CreateSkillModal({
       .finally(() => setLoadingDraft(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  React.useEffect(() => {
-    if (!agentId && agents && agents.length > 0) setAgentId(agents[0]!.id);
-  }, [agents, agentId]);
 
   const handleCreate = () => {
     if (!name.trim() || !body.trim()) {
@@ -153,6 +150,7 @@ export function CreateSkillModal({
                   aria-label={t("modal.agent")}
                   style={s.select}
                 >
+                  <option value="">{t("modal.agentNone")}</option>
                   {agents.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name}

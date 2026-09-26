@@ -11,6 +11,7 @@ import {
 } from '../src/modules/conventions/helpers.js';
 import type { ConventionCandidate } from '@devdigest/shared';
 import { MAX_FILE_LINES, MAX_SAMPLE_CHARS } from '../src/modules/conventions/constants.js';
+import { detectInjection } from '../src/modules/skills/injection-detector.js';
 
 function raw(overrides: Partial<RawConventionCandidate> = {}): RawConventionCandidate {
   return {
@@ -273,5 +274,33 @@ describe('buildConventionSkillBody', () => {
       },
     ]);
     expect(body).toContain('````\n' + snippet + '\n````');
+  });
+
+  it('produces a body the skills injection detector accepts, even with code-shaped snippets', () => {
+    // POST /skills runs detectInjection; a flagged draft would be created
+    // disabled and un-enableable, breaking accept → create skill.
+    const snippets = [
+      "import { db } from './module.js';",
+      'const key = `${repo.owner}/${repo.name}`;',
+      '<button onClick={() => remove(id)}>{t("delete")}</button>',
+      '```sh\npnpm test\n```',
+    ];
+    const body = buildConventionSkillBody(
+      'payments-api',
+      snippets.map((evidence_snippet, i) => ({
+        id: String(i),
+        category: 'style',
+        rule: `Rule ${i}: keep the type system strict`,
+        rationale: null,
+        evidence_path: 'src/api/users.ts',
+        evidence_line: 1,
+        evidence_line_end: 1,
+        evidence_snippet,
+        confidence: 0.9,
+        status: 'accepted',
+        created_at: new Date().toISOString(),
+      })),
+    );
+    expect(detectInjection(body)).toEqual({ isDangerous: false, reasons: [] });
   });
 });

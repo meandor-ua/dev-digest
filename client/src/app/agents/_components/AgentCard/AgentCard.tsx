@@ -40,6 +40,10 @@ export function AgentCard({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
+        // Only keys pressed on the card itself — Enter/Space on the nested
+        // Toggle or Delete button bubble here too, and preventDefault would
+        // cancel their own activation and navigate instead.
+        if (e.target !== e.currentTarget) return;
         if (onClick && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onClick();
@@ -58,6 +62,7 @@ export function AgentCard({
         )}
         {onDelete && (
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onDelete();

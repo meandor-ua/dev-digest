@@ -11,6 +11,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Icon, Badge } from "@devdigest/ui";
 import type { ReviewRecord, RunSummary, Severity } from "@devdigest/shared";
 import { FindingsBySeverityBadge } from "@/components/findings-by-severity";
@@ -84,6 +85,7 @@ export function ReviewRunAccordion({
    *  the parent mirrors it into the URL's `severity` param. */
   onFilterChange?: (sev: Severity | null) => void;
 }) {
+  const t = useTranslations("prReview");
   const [open, setOpen] = React.useState(defaultOpen);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
@@ -255,7 +257,7 @@ export function ReviewRunAccordion({
       )}
       {confirmingDelete && review && (
         <ConfirmDialog
-          message={`Delete this "${review.agent_name ?? "agent"}" review run and its findings?`}
+          message={t("deleteConfirm.review", { agent: review.agent_name ?? t("deleteConfirm.unknownAgent") })}
           onConfirm={() => {
             setConfirmingDelete(false);
             del.mutate(review.id);

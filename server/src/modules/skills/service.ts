@@ -11,8 +11,13 @@ import type {
 import type { InsertSkill, UpdateSkill, SkillsServiceDeps } from './ports.js';
 import { buildImportedMarkdown, stripFrontmatter } from './helpers.js';
 import { detectInjection } from './injection-detector.js';
-import { SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX } from './constants.js';
-import { NotFoundError, ValidationError } from '../../platform/errors.js';
+import {
+  SKILL_BODY_MAX,
+  SKILL_DANGEROUS_CONTENT_CODE,
+  SKILL_DESCRIPTION_MAX,
+  SKILL_NAME_MAX,
+} from './constants.js';
+import { AppError, NotFoundError, ValidationError } from '../../platform/errors.js';
 
 export interface CreateSkillDto {
   name: string;
@@ -111,7 +116,12 @@ export class SkillsService {
     let enabled = patch.enabled;
     if (isDangerous) {
       if (patch.enabled === true) {
-        throw new ValidationError('Cannot enable a skill with dangerous content. Remove the suspicious patterns first.');
+        throw new AppError(
+          SKILL_DANGEROUS_CONTENT_CODE,
+          `Cannot enable a skill with dangerous content (${injection.reasons.join(', ')}). Remove the suspicious patterns first.`,
+          422,
+          { reasons: injection.reasons },
+        );
       }
       enabled = false;
     }

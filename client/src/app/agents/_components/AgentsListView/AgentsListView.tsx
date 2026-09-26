@@ -14,7 +14,7 @@ import { useActiveRepo } from "../../../../lib/repo-context";
 import { useToast } from "../../../../lib/toast";
 import { AgentCard } from "../AgentCard";
 import { CreateAgentModal, TEMPLATES } from "../CreateAgentModal";
-import { filterAgents } from "./helpers";
+import { filterAgents } from "../../_lib/filter-agents";
 import { s } from "./styles";
 
 export function AgentsListView() {

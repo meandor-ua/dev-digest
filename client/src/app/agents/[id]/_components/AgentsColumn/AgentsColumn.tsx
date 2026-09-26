@@ -12,7 +12,7 @@ import type { Agent } from "@devdigest/shared";
 import { Button, Dropdown, TextInput } from "@devdigest/ui";
 import { AgentCard } from "../../../_components/AgentCard";
 import { CreateAgentModal, TEMPLATES } from "../../../_components/CreateAgentModal";
-import { filterAgents } from "../../../_components/AgentsListView/helpers";
+import { filterAgents } from "../../../_lib/filter-agents";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAgents, useUpdateAgent, useDeleteAgent, useAgentCardStats } from "@/lib/hooks/agents";
 import { useActiveRepo } from "@/lib/repo-context";

@@ -96,6 +96,20 @@ Preview/Stats tabs, skill import).
 
 ## What Doesn't Work
 
+- **2026-09-26** — A clickable card (`role="button"` + `onKeyDown` that runs
+  `preventDefault(); onClick()` on Enter/Space) must ignore keys that bubble
+  up from nested controls. Stopping propagation on `onClick` alone isn't
+  enough: Enter on the nested Delete button reaches the card's keydown first,
+  and `preventDefault` cancels the button's synthesized click, so the card
+  navigates and the delete confirm never opens. Guard with
+  `if (e.target !== e.currentTarget) return;`. Evidence:
+  `client/src/app/agents/_components/AgentCard/AgentCard.tsx:46`.
+- **2026-09-26** — Don't choose an error toast by substring-matching the
+  server's English message (`message.includes("dangerous")`). Branch on
+  `ApiError.code` instead; the server sends a stable code
+  (`skill_dangerous_content`) for this case. Evidence:
+  `server/src/modules/skills/service.ts:120`,
+  `client/src/app/skills/[id]/_components/SkillEditor/_components/ConfigTab/ConfigTab.tsx:74`.
 - **2026-09-26** — A create-skill form must hide/disable its "Enabled" control
   whenever the skill will be saved with `source != "manual"` — the server
   enforces vetting unconditionally (`SkillsService.create`,

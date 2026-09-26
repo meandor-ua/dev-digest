@@ -77,6 +77,30 @@ describe("AgentCard (smoke)", () => {
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
 
+  it("activates the card with Enter/Space pressed on the card itself", () => {
+    const onClick = vi.fn();
+    renderWithIntl(<AgentCard ag={AGENT} onClick={onClick} />);
+    const card = screen.getByTestId("agent-card-ag1");
+    fireEvent.keyDown(card, { key: "Enter" });
+    fireEvent.keyDown(card, { key: " " });
+    expect(onClick).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not hijack Enter/Space from the nested delete button or toggle", () => {
+    // Regression: the card's keydown handler called preventDefault + onClick
+    // for keys bubbling from nested controls, so keyboard delete navigated away.
+    const onClick = vi.fn();
+    renderWithIntl(<AgentCard ag={AGENT} onClick={onClick} onToggle={vi.fn()} onDelete={vi.fn()} />);
+    const del = screen.getByRole("button", { name: "Delete agent" });
+    const toggle = screen.getByRole("switch");
+    const enterOnDelete = fireEvent.keyDown(del, { key: "Enter" });
+    const spaceOnToggle = fireEvent.keyDown(toggle, { key: " " });
+    expect(onClick).not.toHaveBeenCalled();
+    // fireEvent returns false when the event was preventDefault-ed.
+    expect(enterOnDelete).toBe(true);
+    expect(spaceOnToggle).toBe(true);
+  });
+
   it("disables the delete button while deleting", () => {
     renderWithIntl(<AgentCard ag={AGENT} onDelete={vi.fn()} deleting />);
     expect(screen.getByRole("button", { name: "Delete agent" })).toBeDisabled();

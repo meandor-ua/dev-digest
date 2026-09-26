@@ -6,6 +6,7 @@ import type { Skill } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/skills.json";
 import commonMessages from "../../../../../../../../messages/en/common.json";
 import { ToastProvider } from "../../../../../../../lib/toast";
+import { ApiError } from "../../../../../../../lib/api";
 
 const { updateMutate, deleteMutate, routerPush } = vi.hoisted(() => ({
   updateMutate: vi.fn(),
@@ -87,6 +88,27 @@ describe("ConfigTab", () => {
       { id: "sk1", patch: { body: "# New rule" } }, // only what changed
       expect.anything(),
     );
+  });
+
+  it("shows the dangerous-content toast by API error code, not by message text", async () => {
+    updateMutate.mockImplementation((_vars, opts) =>
+      opts.onError(new ApiError("Refused (ignore previous instructions).", 422, "skill_dangerous_content")),
+    );
+    renderTab(MANUAL);
+    fireEvent.change(body(), { target: { value: "# New rule" } });
+    fireEvent.click(save());
+    expect(await screen.findByText(messages.config.saveFailedDangerous)).toBeInTheDocument();
+  });
+
+  it("shows the server message for other errors, even if it mentions 'dangerous'", async () => {
+    updateMutate.mockImplementation((_vars, opts) =>
+      opts.onError(new ApiError("Body contains a dangerous amount of whitespace", 422, "validation_error")),
+    );
+    renderTab(MANUAL);
+    fireEvent.change(body(), { target: { value: "# New rule" } });
+    fireEvent.click(save());
+    expect(await screen.findByText("Body contains a dangerous amount of whitespace")).toBeInTheDocument();
+    expect(screen.queryByText(messages.config.saveFailedDangerous)).not.toBeInTheDocument();
   });
 
   it("does not allow saving an empty body", () => {

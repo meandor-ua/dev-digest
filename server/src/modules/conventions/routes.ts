@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { ConventionStatus } from '@devdigest/shared';
+import { ConventionStatus, type Provider } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { NotFoundError } from '../../platform/errors.js';
+import { resolveFeatureModel } from '../settings/feature-models.js';
+import { ConventionsRepository } from './repository.js';
 import { ConventionsService } from './service.js';
 import { EXTRACT_RATE_LIMIT } from './constants.js';
 
@@ -32,7 +34,15 @@ const PatchConventionBody = z
 export default async function conventionsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
-  const service = new ConventionsService(container);
+  const service = new ConventionsService({
+    conventions: new ConventionsRepository(container.db),
+    repos: container.reposRepo,
+    repoIntel: container.repoIntel,
+    resolveLlm: async (workspaceId) => {
+      const { provider, model } = await resolveFeatureModel(container, workspaceId, 'conventions');
+      return { llm: await container.llm(provider as Provider), model };
+    },
+  });
 
   app.get('/repos/:id/conventions', { schema: { params: IdParams } }, async (req) => {
     const { workspaceId } = await getContext(app.container, req);

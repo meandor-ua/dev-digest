@@ -4,20 +4,16 @@ import {
   type ConventionCandidate,
   type ConventionExtractResult,
   type ConventionSkillDraft,
-  type Provider,
 } from '@devdigest/shared';
-import type { Container } from '../../platform/container.js';
 import { NotFoundError, ValidationError } from '../../platform/errors.js';
-import { resolveFeatureModel } from '../settings/feature-models.js';
 import { renderPrompt } from '../../platform/prompts.js';
 import { wrapUntrusted } from '../../platform/prompt.js';
-import { ConventionsRepository, type PatchConvention } from './repository.js';
+import type { ConventionsServiceDeps, PatchConvention } from './ports.js';
 import {
   buildConventionSkillBody,
   buildSampleText,
   dedupeCandidates,
   readClone,
-  toConventionDto,
   truncateFile,
   verifyCandidate,
   type SampledFile,
@@ -50,15 +46,14 @@ const ExtractionSchema = z.object({
 });
 
 export class ConventionsService {
-  private repo: ConventionsRepository;
+  constructor(private deps: ConventionsServiceDeps) {}
 
-  constructor(private container: Container) {
-    this.repo = new ConventionsRepository(container.db);
+  private get repo() {
+    return this.deps.conventions;
   }
 
   async list(workspaceId: string, repoId: string): Promise<ConventionCandidate[]> {
-    const rows = await this.repo.listByRepo(workspaceId, repoId);
-    return rows.map(toConventionDto);
+    return this.repo.listByRepo(workspaceId, repoId);
   }
 
   async patch(
@@ -66,8 +61,7 @@ export class ConventionsService {
     id: string,
     patch: PatchConvention,
   ): Promise<ConventionCandidate | undefined> {
-    const row = await this.repo.patch(workspaceId, id, patch);
-    return row ? toConventionDto(row) : undefined;
+    return this.repo.patch(workspaceId, id, patch);
   }
 
   async delete(workspaceId: string, id: string): Promise<boolean> {
@@ -76,11 +70,10 @@ export class ConventionsService {
 
   /** Un-persisted skill draft merged from the repo's accepted conventions. */
   async draftSkill(workspaceId: string, repoId: string): Promise<ConventionSkillDraft> {
-    const repo = await this.container.reposRepo.getById(workspaceId, repoId);
+    const repo = await this.deps.repos.getById(workspaceId, repoId);
     if (!repo) throw new NotFoundError('Repo not found');
-    const rows = await this.repo.listAccepted(workspaceId, repoId);
-    if (rows.length === 0) throw new ValidationError('No accepted conventions to build a skill from');
-    const accepted = rows.map(toConventionDto);
+    const accepted = await this.repo.listAccepted(workspaceId, repoId);
+    if (accepted.length === 0) throw new ValidationError('No accepted conventions to build a skill from');
     return {
       name: `${repo.name}-conventions`,
       description: `${accepted.length} house conventions extracted from ${repo.fullName}`,
@@ -95,7 +88,7 @@ export class ConventionsService {
    * rows survive a re-scan untouched.
    */
   async extract(workspaceId: string, repoId: string): Promise<ConventionExtractResult> {
-    const repo = await this.container.reposRepo.getById(workspaceId, repoId);
+    const repo = await this.deps.repos.getById(workspaceId, repoId);
     if (!repo) throw new NotFoundError('Repo not found');
     if (!repo.clonePath) {
       throw new ValidationError('Clone and index this repo before extracting conventions');
@@ -105,7 +98,7 @@ export class ConventionsService {
     const configFiles = await Promise.all(
       CONFIG_WISHLIST.map(async (path) => ({ path, content: await readClone(repo.clonePath!, path) })),
     );
-    const rankedPaths = await this.container.repoIntel.getConventionSamples(repoId, RANKED_SAMPLE_COUNT);
+    const rankedPaths = await this.deps.repoIntel.getConventionSamples(repoId, RANKED_SAMPLE_COUNT);
     const rankedFiles = await Promise.all(
       rankedPaths.map(async (path) => ({ path, content: await readClone(repo.clonePath!, path) })),
     );
@@ -121,8 +114,7 @@ export class ConventionsService {
     const sampleText = buildSampleText(sampled);
 
     // PROPOSE — one structured call.
-    const { provider, model } = await resolveFeatureModel(this.container, workspaceId, 'conventions');
-    const llm = await this.container.llm(provider as Provider);
+    const { llm, model } = await this.deps.resolveLlm(workspaceId);
     const systemPrompt = await renderPrompt('conventions.system.md', {
       cap: String(CANDIDATE_CAP),
       maxSnippetLines: String(MAX_SNIPPET_LINES),
@@ -158,10 +150,10 @@ export class ConventionsService {
     const decided = await this.repo.listDecidedRuleTexts(workspaceId, repoId);
     const { kept, droppedDuplicate } = dedupeCandidates(verified, decided);
 
-    const rows = await this.repo.replacePending(workspaceId, repoId, kept);
+    const candidates = await this.repo.replacePending(workspaceId, repoId, kept);
 
     return {
-      candidates: rows.map(toConventionDto),
+      candidates,
       proposed: proposed.length,
       dropped_ungrounded: droppedUngrounded,
       dropped_duplicate: droppedDuplicate,

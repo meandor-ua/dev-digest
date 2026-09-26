@@ -2,29 +2,41 @@ import { and, eq, ne } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { ConventionRow } from '../../db/rows.js';
-import type { ConventionStatus } from '@devdigest/shared';
+import type { ConventionCandidate } from '@devdigest/shared';
 import type { VerifiedCandidate } from './helpers.js';
+import type { ConventionsStore, PatchConvention } from './ports.js';
 
-export interface PatchConvention {
-  rule?: string;
-  rationale?: string | null;
-  status?: ConventionStatus;
+function toConventionDto(row: ConventionRow): ConventionCandidate {
+  return {
+    id: row.id,
+    category: row.category,
+    rule: row.rule,
+    rationale: row.rationale ?? null,
+    evidence_path: row.evidencePath ?? '',
+    evidence_line: row.evidenceLine ?? null,
+    evidence_line_end: row.evidenceLineEnd ?? row.evidenceLine ?? null,
+    evidence_snippet: row.evidenceSnippet ?? '',
+    confidence: row.confidence ?? 0,
+    status: row.status,
+    created_at: row.createdAt.toISOString(),
+  };
 }
 
 /** Drizzle-backed store for the `conventions` table (onion R5 — rows in, DTOs out). */
-export class ConventionsRepository {
+export class ConventionsRepository implements ConventionsStore {
   constructor(private db: Db) {}
 
-  async listByRepo(workspaceId: string, repoId: string): Promise<ConventionRow[]> {
-    return this.db
+  async listByRepo(workspaceId: string, repoId: string): Promise<ConventionCandidate[]> {
+    const rows = await this.db
       .select()
       .from(t.conventions)
       .where(and(eq(t.conventions.workspaceId, workspaceId), eq(t.conventions.repoId, repoId)))
       .orderBy(t.conventions.createdAt);
+    return rows.map(toConventionDto);
   }
 
-  async listAccepted(workspaceId: string, repoId: string): Promise<ConventionRow[]> {
-    return this.db
+  async listAccepted(workspaceId: string, repoId: string): Promise<ConventionCandidate[]> {
+    const rows = await this.db
       .select()
       .from(t.conventions)
       .where(
@@ -34,6 +46,7 @@ export class ConventionsRepository {
           eq(t.conventions.status, 'accepted'),
         ),
       );
+    return rows.map(toConventionDto);
   }
 
   /** Rule text of every already-decided (accepted or rejected) candidate — never re-litigated on a re-scan. */
@@ -51,12 +64,12 @@ export class ConventionsRepository {
     return rows.map((r) => r.rule);
   }
 
-  async getById(workspaceId: string, id: string): Promise<ConventionRow | undefined> {
+  async getById(workspaceId: string, id: string): Promise<ConventionCandidate | undefined> {
     const [row] = await this.db
       .select()
       .from(t.conventions)
       .where(and(eq(t.conventions.workspaceId, workspaceId), eq(t.conventions.id, id)));
-    return row;
+    return row ? toConventionDto(row) : undefined;
   }
 
   /**
@@ -68,8 +81,8 @@ export class ConventionsRepository {
     workspaceId: string,
     repoId: string,
     candidates: VerifiedCandidate[],
-  ): Promise<ConventionRow[]> {
-    return this.db.transaction(async (tx) => {
+  ): Promise<ConventionCandidate[]> {
+    const rows = await this.db.transaction(async (tx) => {
       await tx
         .delete(t.conventions)
         .where(
@@ -98,15 +111,20 @@ export class ConventionsRepository {
         )
         .returning();
     });
+    return rows.map(toConventionDto);
   }
 
-  async patch(workspaceId: string, id: string, patch: PatchConvention): Promise<ConventionRow | undefined> {
+  async patch(
+    workspaceId: string,
+    id: string,
+    patch: PatchConvention,
+  ): Promise<ConventionCandidate | undefined> {
     const [row] = await this.db
       .update(t.conventions)
       .set(patch)
       .where(and(eq(t.conventions.workspaceId, workspaceId), eq(t.conventions.id, id)))
       .returning();
-    return row;
+    return row ? toConventionDto(row) : undefined;
   }
 
   async deleteById(workspaceId: string, id: string): Promise<boolean> {

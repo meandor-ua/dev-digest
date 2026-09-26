@@ -69,6 +69,7 @@ describe("CreateSkillModal", () => {
     const { onClose } = renderModal();
     const bodyField = await screen.findByLabelText("Skill body");
     fireEvent.change(bodyField, { target: { value: "# edited body" } });
+    fireEvent.change(screen.getByLabelText("Link to agent"), { target: { value: "a1" } });
     fireEvent.click(screen.getByRole("button", { name: "Create skill" }));
 
     expect(createMutate).toHaveBeenCalledWith(
@@ -76,6 +77,19 @@ describe("CreateSkillModal", () => {
       expect.anything(),
     );
     expect(linkMutate).toHaveBeenCalledWith("sk-1", expect.anything());
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("does not link to any agent by default", async () => {
+    createMutate.mockImplementation((_v: unknown, opts: { onSuccess: (s: { id: string; name: string }) => void }) =>
+      opts.onSuccess({ id: "sk-1", name: DRAFT.name }),
+    );
+    const { onClose } = renderModal();
+    expect(await screen.findByLabelText("Link to agent")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: "Create skill" }));
+
+    expect(createMutate).toHaveBeenCalled();
+    expect(linkMutate).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
   });
 

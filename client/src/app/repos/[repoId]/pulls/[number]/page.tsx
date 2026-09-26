@@ -7,6 +7,7 @@
 
 import React from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Skeleton, ErrorState } from "@devdigest/ui";
 import { AppShell } from "../../../../../components/app-shell";
 import { RepoNotFound } from "@/components/repo-not-found";
@@ -35,6 +36,7 @@ import type { FindingRecord, Severity } from "@devdigest/shared";
 const SEVERITIES: Severity[] = ["CRITICAL", "WARNING", "SUGGESTION"];
 
 export default function PRDetailPage() {
+  const t = useTranslations("prReview");
   const params = useParams<{ repoId: string; number: string }>();
   const search = useSearchParams();
   const router = useRouter();
@@ -251,7 +253,7 @@ export default function PRDetailPage() {
       )}
       {pendingDeleteRunId && (
         <ConfirmDialog
-          message="Delete this run from history? (its logs are removed too)"
+          message={t("deleteConfirm.run")}
           onConfirm={() => {
             const id = pendingDeleteRunId;
             setPendingDeleteRunId(null);

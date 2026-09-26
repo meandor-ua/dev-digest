@@ -51,6 +51,7 @@
     "type": "Type",
     "vettingNotice": "Saved disabled until you vet and enable it.",
     "agent": "Link to agent",
+    "agentNone": "Don't link",
     "body": "Skill body",
     "tokens": "{count} tokens",
     "cancel": "Cancel",

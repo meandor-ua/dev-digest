@@ -240,6 +240,19 @@ you, so the next agent/session doesn't relearn it.
 
 ## What Doesn't Work
 
+- **2026-09-26** — Don't add an unbounded keyword regex to the skill injection
+  detector (`/(?:system|eval|shell)/i`, `/\${.*?}/`, `on(?:click)=`). Every
+  skill save re-runs it, and a hit force-disables the skill AND deletes all of
+  its `agent_skills` links (`unlinkFromAgents`). The old `/system/` matched the
+  seeded "true system behavior" body, so renaming that skill silently unlinked
+  it from Test Quality Reviewer. Keep the two groups apart:
+  directive/hidden-content patterns scan the whole body (a directive inside a
+  code fence still reaches the model), while code-shaped patterns scan prose
+  only, with fences and inline code stripped. Skill bodies are joined into the
+  prompt verbatim with no `{{}}` interpolation (`reviewer-core/src/prompt.ts:99`),
+  and convention-drafted skills always embed real code snippets inside
+  ```` fences. Evidence: `server/src/modules/skills/injection-detector.ts:26`,
+  `:73`, `:110`.
 - **2026-09-26** — Never do file I/O at module top level in `src/db/seed.ts`:
   `src/adapters/auth/local.ts:5` imports it for `DEFAULT_WORKSPACE_NAME` /
   `SYSTEM_USER_EMAIL`, so everything at its top level runs on every API boot,

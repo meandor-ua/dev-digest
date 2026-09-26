@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ConventionCandidate, ConventionCategory } from '@devdigest/shared';
-import type { ConventionRow } from '../../db/rows.js';
 import {
   MAX_FILE_CHARS,
   MAX_FILE_LINES,
@@ -195,22 +194,6 @@ export function dedupeCandidates(
     kept.push(c);
   }
   return { kept, droppedDuplicate };
-}
-
-export function toConventionDto(row: ConventionRow): ConventionCandidate {
-  return {
-    id: row.id,
-    category: row.category,
-    rule: row.rule,
-    rationale: row.rationale ?? null,
-    evidence_path: row.evidencePath ?? '',
-    evidence_line: row.evidenceLine ?? null,
-    evidence_line_end: row.evidenceLineEnd ?? row.evidenceLine ?? null,
-    evidence_snippet: row.evidenceSnippet ?? '',
-    confidence: row.confidence ?? 0,
-    status: row.status,
-    created_at: row.createdAt.toISOString(),
-  };
 }
 
 function slugifyRule(rule: string): string {

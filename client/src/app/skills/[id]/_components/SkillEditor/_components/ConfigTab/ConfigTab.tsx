@@ -8,11 +8,13 @@ import type { Skill, SkillType } from "@devdigest/shared";
 import { SKILL_TYPES } from "@/lib/skill-type";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useUpdateSkill, useDeleteSkill } from "@/lib/hooks/skills";
+import { ApiError } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import { estimateTokens } from "@/lib/tokens";
 import { s } from "./styles";
 import { draftPatch, type SkillDraft, type SkillDraftState } from "./draft";
 import { markdownLineKinds } from "./highlight";
+import { SKILL_DANGEROUS_CONTENT_CODE } from "./constants";
 
 /** Filename shown in the editor header — lowercase, dash-joined, `.md`-suffixed. */
 function slugify(name: string): string {
@@ -69,11 +71,10 @@ export function ConfigTab({ skill, state }: { skill: Skill; state: SkillDraftSta
           setChangeNote("");
         },
         onError: (err) => {
-          const message = (err as Error).message || t("config.saveFailed");
-          if (message.includes("dangerous")) {
+          if (err instanceof ApiError && err.code === SKILL_DANGEROUS_CONTENT_CODE) {
             toast.error(t("config.saveFailedDangerous"));
           } else {
-            toast.error(message);
+            toast.error((err as Error).message || t("config.saveFailed"));
           }
         },
       },

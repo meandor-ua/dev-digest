@@ -2,83 +2,132 @@
  * Detects common prompt injection patterns in skill body Markdown.
  * Checks for patterns that could allow adversarial code injection into
  * agent instructions or image encoding attacks.
+ *
+ * Two groups, scanned differently:
+ * - DIRECTIVE_PATTERNS target the LLM itself (instruction overrides, hidden
+ *   markers, control characters, encoded payloads) and are scanned over the
+ *   WHOLE body — a directive inside a code fence still reaches the model.
+ * - CODE_SHAPED_PATTERNS (templates, escapes, eval calls, HTML) are only
+ *   suspicious as prose, so they're scanned with fenced blocks and inline code
+ *   spans removed. Skill bodies are joined into the reviewer prompt verbatim
+ *   (reviewer-core/src/prompt.ts) with no template interpolation, so a
+ *   `${x}` or `onClick=` inside a code sample is inert — and convention-drafted
+ *   skills embed real code snippets that would otherwise always trip these.
+ *
+ * Every pattern is word-bounded: an unbounded /system/ flags "type system",
+ * and a flagged skill is force-disabled and unlinked from its agents.
  */
 
-/**
- * Common injection patterns to detect:
- * - Prompt injection directives (ignore previous, override, system prompt)
- * - Image encoding (base64, data URIs that could be rendered)
- * - Suspicious embedding/escaping techniques
- * - Control sequences and template injection
- */
-const INJECTION_PATTERNS = [
+interface InjectionPattern {
+  label: string;
+  re: RegExp;
+}
+
+const DIRECTIVE_PATTERNS: InjectionPattern[] = [
   // Prompt injection attempts. `\s+` already tolerates any run of whitespace
   // (multiple spaces, tabs, newlines) between words — the direction word
   // (previous/above/prior/earlier) is what must be enumerated explicitly.
-  /ignore\s+(?:all\s+)?(?:previous|above|prior|earlier)\s+(?:instructions|prompts?|directions?)/i,
-  /(?:forget|disregard|override)\s+(?:all\s+)?(?:previous|above|prior|earlier)?\s*(?:instructions|context|rules)/i,
-  /your\s+new\s+(?:instructions?|system\s+prompt|directive|role)/i,
-  /you\s+are\s+now/i,
-  /respond\s+(?:only\s+)?(?:with|as|like)\s+(?:a|an|the)\s+(?:system|admin)/i,
-  /(?:end|finished?\s+with)\s+(?:skill|rule|instruction)s?/i,
+  {
+    label: 'ignore previous instructions',
+    re: /\bignore\s+(?:all\s+)?(?:the\s+)?(?:previous|above|prior|earlier)\s+(?:instructions|prompts?|directions?)\b/i,
+  },
+  {
+    label: 'disregard previous instructions',
+    re: /\b(?:forget|disregard)\s+(?:all\s+)?(?:the\s+)?(?:(?:previous|above|prior|earlier)\s+)?(?:instructions|context|rules)\b/i,
+  },
+  {
+    label: 'override previous instructions',
+    re: /\boverride\s+(?:all\s+)?(?:the\s+)?(?:previous|above|prior|earlier)\s+(?:instructions|context|rules)\b/i,
+  },
+  {
+    label: 'role reassignment',
+    re: /\byour\s+new\s+(?:instructions?|system\s+prompt|directive|role)\b/i,
+  },
+  { label: 'role reassignment', re: /\byou\s+are\s+now\b/i },
+  {
+    label: 'impersonate system',
+    re: /\brespond\s+(?:only\s+)?(?:with|as|like)\s+(?:a|an|the)\s+(?:system|admin)\b/i,
+  },
+  {
+    label: 'fake end-of-instructions marker',
+    re: /\b(?:end|finished?\s+with)\s+(?:of\s+)?(?:the\s+)?(?:skill|rules?|instructions?)\b/i,
+  },
+  {
+    label: 'hidden system prompt heading',
+    re: /###?\s*(?:System|Admin|Root|Hidden|Secret)\s*(?:Instructions?|Prompt|Commands?)\b/i,
+  },
+  {
+    label: 'hidden HTML comment directive',
+    re: /<!--[\s\S]*?(?:SYSTEM|ADMIN|SECRET|HIDDEN)[\s\S]*?-->/,
+  },
 
-  // Image encoding and data URIs
-  /data:image\/(?:png|jpg|jpeg|gif|svg\+xml)/i,
-  /base64[,:\s]*(?:\w+\/\w+)?[,:\s]*[A-Za-z0-9+/=]{20,}/,
-  /\[!\[.*?\]\(data:/i, // Markdown image with data URI
+  // Control characters
+  { label: 'control characters', re: /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/ },
 
-  // Template injection and code injection
-  /\${.*?}/,  // Template literals/injection
-  /\{\{.*?\}\}/,  // Handlebars/Jinja-like templates
-  /<%[\s\S]*?%>/,  // ERB/JSP tags
-  /\[\[.*?\]\]/,  // Wiki/Obsidian style commands
+  // Image encoding, data URIs, encoded payloads
+  { label: 'data URI image', re: /data:image\/(?:png|jpg|jpeg|gif|svg\+xml)/i },
+  { label: 'markdown image with data URI', re: /\[!\[.*?\]\(data:/i },
+  { label: 'base64 payload', re: /\bbase64[,:\s]*(?:\w+\/\w+)?[,:\s]*[A-Za-z0-9+/=]{40,}/ },
+];
 
-  // Control characters and escape sequences
-  /\\x[0-9a-fA-F]{2}/,  // Hex escape
-  /\\u[0-9a-fA-F]{4}/,  // Unicode escape
-  /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/,  // Control characters
+const CODE_SHAPED_PATTERNS: InjectionPattern[] = [
+  // Template injection
+  { label: 'template placeholder', re: /\$\{[^}\n]*\}/ },
+  { label: 'template placeholder', re: /\{\{[^}\n]*\}\}/ },
+  { label: 'template placeholder', re: /<%[\s\S]*?%>/ },
+  { label: 'wiki-style command', re: /\[\[[^\]\n]*\]\]/ },
+
+  // Escape sequences
+  { label: 'escape sequence', re: /\\x[0-9a-fA-F]{2}/ },
+  { label: 'escape sequence', re: /\\u[0-9a-fA-F]{4}/ },
 
   // Suspicious command patterns
-  /(?:execute|eval|system|shell|bash|sh\s+\()/i,
-  /(?:load|import|require|include)\s+.*(?:script|module|code)/i,
-  /(?:fetch|curl|wget|download)\s+(?:from|url)/i,
+  { label: 'code execution call', re: /\b(?:eval|exec|execSync|spawn|system|popen)\s*\(/ },
+  {
+    label: 'shell command directive',
+    re: /\b(?:execute|run)\s+(?:the\s+following\s+|this\s+)?(?:shell|bash|terminal)\s+commands?\b/i,
+  },
+  {
+    label: 'remote script load',
+    re: /\b(?:load|import|require|include)\s+(?:and\s+(?:run|execute)\s+)?(?:a\s+|the\s+|this\s+)?(?:remote|external)\s+(?:script|module|code)\b/i,
+  },
+  { label: 'remote download', re: /\b(?:curl|wget)\s+(?:-\S+\s+)*https?:\/\//i },
+  { label: 'remote download', re: /\b(?:fetch|download)\s+(?:and\s+(?:run|execute)\b|from\s+https?:\/\/)/i },
 
   // Markdown/HTML injection
-  /<script[\s\S]*?<\/script>/i,
-  /javascript:/i,
-  /on(?:load|error|click|mouse\w+)=/i,
-  /<iframe/i,
-  /<object\b/i,
-  /<embed\b/i,
-
-  // Base64 data that looks like encoded instructions
-  /base64[:\s]*[A-Za-z0-9+/=]{100,}/,
-
-  // Suspicious prompt markers
-  /###?\s*(?:System|Admin|Root|Hidden|Secret)\s*(?:Instructions?|Prompt|Commands?)/i,
-  /(?:<!--.*?-->).*?(?:SYSTEM|ADMIN|SECRET|HIDDEN)/i,  // Hidden HTML comments
+  { label: 'script tag', re: /<script\b/i },
+  { label: 'javascript: URL', re: /\bjavascript:/i },
+  { label: 'inline event handler', re: /\bon(?:load|error|click|mouse\w+)\s*=\s*["']/i },
+  { label: 'embedded frame', re: /<(?:iframe|object|embed)\b/i },
 ];
+
+/**
+ * Fenced blocks and inline code spans. A fence opens at line start and closes
+ * only on a line holding the same fence, so a ```` fence wrapping a snippet
+ * that itself contains ``` (conventions/helpers.ts fenceFor) stays one block;
+ * an unclosed fence runs to EOF, as in Markdown.
+ */
+const FENCED_CODE = /^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^[ \t]*\1[ \t]*$|(?![\s\S]))/gm;
+const INLINE_CODE = /`[^`\n]*`/g;
+
+function stripCode(body: string): string {
+  return body.replace(FENCED_CODE, ' ').replace(INLINE_CODE, ' ');
+}
 
 export function detectInjection(body: string): {
   isDangerous: boolean;
-  patterns: string[];
+  /** Human-readable labels of the matched pattern groups, deduped. */
+  reasons: string[];
 } {
-  const patterns: string[] = [];
+  const reasons = new Set<string>();
+  const prose = stripCode(body);
 
-  for (const pattern of INJECTION_PATTERNS) {
-    if (pattern.test(body)) {
-      // Extract a readable pattern description
-      const desc = pattern.source.substring(0, 50);
-      if (!patterns.includes(desc)) {
-        patterns.push(desc);
-      }
-      // Early exit after finding 5 patterns to avoid excessive overhead
-      if (patterns.length >= 5) break;
-    }
+  for (const { label, re } of DIRECTIVE_PATTERNS) {
+    if (re.test(body)) reasons.add(label);
+  }
+  for (const { label, re } of CODE_SHAPED_PATTERNS) {
+    if (re.test(prose)) reasons.add(label);
   }
 
-  return {
-    isDangerous: patterns.length > 0,
-    patterns,
-  };
+  return { isDangerous: reasons.size > 0, reasons: [...reasons] };
 }
