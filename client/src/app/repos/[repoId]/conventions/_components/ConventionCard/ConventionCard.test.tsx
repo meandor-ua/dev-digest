@@ -142,7 +142,7 @@ describe("ConventionCard", () => {
     });
   });
 
-  it("keeps edit and delete visible while editing; a second Edit click saves", () => {
+  it("keeps edit and delete visible while editing; a second Edit click discards", () => {
     const onDelete = vi.fn();
     const onSave = vi.fn();
     renderWithIntl(
@@ -160,8 +160,31 @@ describe("ConventionCard", () => {
     expect(onDelete).toHaveBeenCalledTimes(1);
     fireEvent.change(screen.getByLabelText("Rule"), { target: { value: "Prefer await" } });
     fireEvent.click(screen.getByLabelText("Edit"));
-    expect(onSave).toHaveBeenCalledWith({ rule: "Prefer await", rationale: null });
+    expect(onSave).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Rule")).not.toBeInTheDocument();
+    expect(screen.getByText(CANDIDATE.rule)).toBeInTheDocument();
+  });
+
+  it("Cancel discards the edit without saving", () => {
+    const onSave = vi.fn();
+    renderWithIntl(
+      <ConventionCard
+        candidate={CANDIDATE}
+        evidenceUrl={null}
+        onAccept={vi.fn()}
+        onReject={vi.fn()}
+        onSave={onSave}
+        onDelete={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Edit"));
+    fireEvent.change(screen.getByLabelText("Rule"), { target: { value: "Prefer await" } });
+    fireEvent.click(screen.getByLabelText("Cancel"));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByText(CANDIDATE.rule)).toBeInTheDocument();
+    // Re-entering edit mode starts from the saved rule, not the discarded draft.
+    fireEvent.click(screen.getByLabelText("Edit"));
+    expect(screen.getByLabelText("Rule")).toHaveValue(CANDIDATE.rule);
   });
 
   it("does not save an empty rule and stays in edit mode", () => {

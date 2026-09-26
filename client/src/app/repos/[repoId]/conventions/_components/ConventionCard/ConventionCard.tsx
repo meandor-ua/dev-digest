@@ -79,7 +79,8 @@ export function ConventionCard({
           icon="Edit"
           label={t("card.edit")}
           active={editing}
-          onClick={editing ? save : startEdit}
+          // Saving is the footer Save button's job; toggling the pencil off discards.
+          onClick={editing ? () => setEditing(false) : startEdit}
         />
         <IconBtn icon="Trash" label={t("card.delete")} onClick={onDelete} danger />
       </div>

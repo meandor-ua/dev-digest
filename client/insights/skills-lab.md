@@ -122,6 +122,19 @@ the package's `insights/INSIGHTS.md`.
   orange as "Disabled") taking priority so a row shows one or the other, never
   both. Any future per-skill status badge added to one of these two views
   should be checked against the other for the same gap.
+- **2026-09-26** — `ConventionCard`'s confidence bar has 3 colour bands that
+  copy the extraction prompt's bands (`server/src/prompts/conventions.system.md:28-33`):
+  ≥85 `--ok` green, 60–84 `--warn` orange, <60 `--text-muted` grey. Grey is
+  on purpose: <0.6 means "a single strong example", which is thinner evidence
+  but not a warning. Don't make it orange. If you change the prompt bands,
+  change `CONFIDENCE_HIGH_PCT`/`CONFIDENCE_MEDIUM_PCT` too. Evidence:
+  `client/src/app/repos/[repoId]/conventions/constants.ts:3`.
+- **2026-09-26** — On `ConventionCard`, only the footer ✓ saves an edit.
+  Pressing the header pencil a second time discards the draft, the same as
+  the footer ✕. Before this change, the second pencil press also saved,
+  which gave two save controls, and users expected it to cancel. Keep it one
+  save button per edit form. Evidence:
+  `client/src/app/repos/[repoId]/conventions/_components/ConventionCard/ConventionCard.tsx:83`.
 
 ## What Doesn't Work
 
